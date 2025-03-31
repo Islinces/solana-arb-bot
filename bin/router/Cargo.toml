@@ -1,0 +1,22 @@
+[package]
+name = "router"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+doctest = false
+
+[dependencies]
+dex = { path = "../../lib/dex", version = "0.0.1" }
+raydium-amm = { path = "../../lib/raydium-amm", version = "0.0.1" }
+raydium-clmm = { path = "../../lib/raydium-clmm", version = "0.0.1" }
+solana-program = "1.16.27"
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+uint = { workspace = true }
+log = { workspace = true }
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+anyhow = { workspace = true }
+spl-token-2022 = { workspace = true }
+arrayref = { workspace = true }

@@ -1,0 +1,10 @@
+target/
+
+# eclipse ignore
+.settings/
+.project
+.classpath
+.factorypath
+
+# vs code
+.vscode/
