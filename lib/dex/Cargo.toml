@@ -8,12 +8,3 @@ doctest = false
 
 [dependencies]
 solana-program = {workspace = true}
-solana-client = {workspace = true}
-solana-sdk = {workspace = true}
-uint = {workspace = true}
-log = {workspace = true}
-anchor-lang = {workspace = true}
-anchor-spl = {workspace = true}
-anyhow = {workspace = true}
-spl-token-2022 = {workspace = true}
-arrayref = {workspace = true}

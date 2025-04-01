@@ -56,10 +56,10 @@ impl Routing {
                     .get(pool_id)
                     .unwrap()
                     .quote(amount_in, input_mint);
-                println!(
-                    "pool_id : {:?}, output_mint : {:?}，amount_in : {:?}, amount_out : {:?}",
-                    pool_id, output_mint, amount_in, amount_out
-                );
+                // println!(
+                //     "pool_id : {:?}, output_mint : {:?}，amount_in : {:?}, amount_out : {:?}",
+                //     pool_id, output_mint, amount_in, amount_out
+                // );
                 if amount_out == u64::MIN {
                     continue;
                 }
@@ -76,10 +76,10 @@ impl Routing {
                             .get(next_pool_id)
                             .unwrap()
                             .quote(amount_out, *output_mint);
-                        println!(
-                            "child step, next_pool_id : {:?}, output_mint : {:?}，amount_in : {:?}, amount_out : {:?}",
-                            next_pool_id, next_mint, amount_out,next_amount_out
-                        );
+                        // println!(
+                        //     "child step, next_pool_id : {:?}, output_mint : {:?}，amount_in : {:?}, amount_out : {:?}",
+                        //     next_pool_id, next_mint, amount_out,next_amount_out
+                        // );
                         if next_amount_out == u64::MIN || next_amount_out <= amount_in {
                             continue;
                         }
@@ -105,19 +105,19 @@ impl Routing {
                         }
                     }
                 }
-                println!("best_child_route_step : {:?}", best_child_route_step);
+                // println!("best_child_route_step : {:?}", best_child_route_step);
                 match best_child_route_step {
                     None => continue,
                     Some(_) => {}
                 }
-                println!("previous route step : {:#?}", route_step);
-                println!(
-                    "current route step : {:#?}",
-                    vec![
-                        RouteStep::new(input_mint, *pool_id, amount_in, amount_out),
-                        best_child_route_step.unwrap()
-                    ]
-                );
+                // println!("previous route step : {:#?}", route_step);
+                // println!(
+                //     "current route step : {:#?}",
+                //     vec![
+                //         RouteStep::new(input_mint, *pool_id, amount_in, amount_out),
+                //         best_child_route_step.unwrap()
+                //     ]
+                // );
                 match route_step {
                     None => {
                         route_step = Some(vec![
