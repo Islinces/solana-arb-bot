@@ -149,122 +149,89 @@ impl Routing {
         changed_pool: Option<Pubkey>,
     ) -> Option<(RouteStep, RouteStep)> {
         if let Some(edges) = self.mint_edge.get(&input_mint) {
-            let read_guard = self.pool.read().unwrap();
-            let mut path_cache_writer = self.path_cache.write().unwrap();
-            let mut route_step: Option<(RouteStep, RouteStep)> = None;
-            for (output_mint, pool_id) in edges {
-                // 尝试从缓存中获取
-                // 未命中缓存，或命中缓存且 first_pool_id 和 changed_pool 一致时删除 first_pool_id 相关的缓存
-                // TODO：何时更新pool数据？
-                let mut first_route_step =
-                    match path_cache_writer.get(&input_mint, &output_mint, amount_in, pool_id) {
-                        None => None,
-                        Some(path_cache) => match changed_pool {
-                            None => None,
-                            Some(chaned_pool_id) => {
-                                if &chaned_pool_id == pool_id {
-                                    path_cache_writer.invalidate_cache(pool_id);
-                                    None
-                                } else {
-                                    Some(path_cache)
-                                }
-                            }
-                        },
-                    };
-                let first_route_step = match first_route_step {
-                    None => {
-                        // 没有命中缓存，执行quote
-                        let amount_out = read_guard
-                            .get(pool_id)
-                            .unwrap()
-                            .quote(amount_in, input_mint);
-                        let step = RouteStep::new(input_mint, *pool_id, amount_in, amount_out);
-                        // 放入缓存
-                        path_cache_writer.insert(
-                            input_mint,
-                            *output_mint,
-                            amount_in,
-                            QuoteCacheEntry::new(*pool_id, amount_out, step.clone()),
-                        );
-                        step
-                    }
-                    Some(route_step) => route_step,
-                };
-                let next_amount_in = first_route_step.amount_out;
-                // amount_out为0，则跳过
-                if next_amount_in == u64::MIN {
-                    continue;
-                }
-                let first_pool_id = pool_id;
-                let next_input_mint = output_mint;
-                let mut second_best_route_step = None;
-                if let Some(next_edges) = self.mint_edge.get(output_mint) {
-                    for (next_out_mint, next_pool_id) in next_edges {
-                        if first_pool_id == next_pool_id || next_out_mint != &input_mint {
-                            continue;
-                        }
-                        let mut second_route_step_from_cache = match path_cache_writer.get(
-                            &next_input_mint,
-                            &next_out_mint,
-                            next_amount_in,
-                            next_pool_id,
-                        ) {
-                            None => {
-                                let next_amount_out = read_guard
-                                    .get(next_pool_id)
-                                    .unwrap()
-                                    .quote(next_amount_in, *next_input_mint);
-                                let step = RouteStep::new(
-                                    *next_input_mint,
-                                    *next_pool_id,
-                                    next_amount_in,
-                                    next_amount_out,
-                                );
-                                path_cache_writer.insert(
-                                    *next_input_mint,
-                                    *next_out_mint,
-                                    next_amount_in,
-                                    QuoteCacheEntry::new(
-                                        *next_pool_id,
-                                        next_amount_out,
-                                        step.clone(),
-                                    ),
-                                );
-                                step
-                            }
-                            Some(v) => v,
-                        };
+            // 优化点1: 分离读写锁作用域
+            let (pool_reader, mut cache_writer) =
+                (self.pool.read().unwrap(), self.path_cache.write().unwrap());
 
-                        if second_route_step_from_cache.amount_out == u64::MIN
-                            || second_route_step_from_cache.amount_out <= amount_in
-                        {
-                            continue;
+            let mut best_result = None;
+            let mut max_profit = 0;
+            if let Some(changed_pool_id) = changed_pool {
+                cache_writer.invalidate_cache(&changed_pool_id);
+            }
+            for (output_mint, pool_id) in edges.iter().filter(|(m, pool)| *m != input_mint) {
+                let first_step =
+                    match cache_writer.get(&input_mint, output_mint, amount_in, pool_id) {
+                        Some(cached) if changed_pool.map_or(true, |p| p != *pool_id) => cached,
+                        _ => {
+                            let amount_out = pool_reader.get(pool_id)?.quote(amount_in, input_mint);
+
+                            let step = RouteStep::new(input_mint, *pool_id, amount_in, amount_out);
+                            cache_writer.insert(
+                                input_mint,
+                                *output_mint,
+                                amount_in,
+                                QuoteCacheEntry::new(*pool_id, amount_out, step.clone()),
+                            );
+                            step
                         }
-                        match second_best_route_step {
-                            None => second_best_route_step = Some(second_route_step_from_cache),
-                            Some(previous) => {
-                                if previous.amount_out < second_route_step_from_cache.amount_out {
-                                    second_best_route_step = Some(second_route_step_from_cache)
-                                }
-                            }
-                        }
-                    }
-                }
-                if let None = second_best_route_step {
+                    };
+
+                if first_step.amount_out == u64::MIN {
                     continue;
                 }
-                let second_best_route_step = second_best_route_step.unwrap();
-                match route_step {
-                    None => route_step = Some((first_route_step, second_best_route_step)),
-                    Some(ref mut previous) => {
-                        let previous_final_amount_out = previous.1.amount_out;
-                        if previous_final_amount_out <= second_best_route_step.amount_out {
-                            previous.1 = second_best_route_step;
-                        }
+
+                if let Some(second_step) = self
+                    .mint_edge
+                    .get(output_mint)
+                    .iter()
+                    .flat_map(|edges| {
+                        edges
+                            .iter()
+                            .filter(|(m, pid)| m == &input_mint && pid != pool_id)
+                            .filter_map(|(_, next_pool_id)| {
+                                cache_writer
+                                    .get(
+                                        output_mint,
+                                        &input_mint,
+                                        first_step.amount_out,
+                                        next_pool_id,
+                                    )
+                                    .or_else(|| {
+                                        let amount = pool_reader
+                                            .get(next_pool_id)?
+                                            .quote(first_step.amount_out, *output_mint);
+                                        (amount > amount_in).then(|| {
+                                            let step = RouteStep::new(
+                                                *output_mint,
+                                                *next_pool_id,
+                                                first_step.amount_out,
+                                                amount,
+                                            );
+                                            cache_writer.insert(
+                                                *output_mint,
+                                                input_mint,
+                                                first_step.amount_out,
+                                                QuoteCacheEntry::new(
+                                                    *next_pool_id,
+                                                    amount,
+                                                    step.clone(),
+                                                ),
+                                            );
+                                            step
+                                        })
+                                    })
+                            })
+                            .max_by_key(|s| s.amount_out)
+                    })
+                    .next()
+                {
+                    if second_step.amount_out > max_profit {
+                        max_profit = second_step.amount_out;
+                        best_result = Some((first_step, second_step));
                     }
                 }
             }
-            return route_step;
+            return best_result;
         }
         None
     }
