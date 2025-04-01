@@ -1308,6 +1308,7 @@ name = "dex"
 version = "0.0.1"
 dependencies = [
  "solana-program",
+ "solana-sdk",
 ]
 
 [[package]]
@@ -3162,7 +3163,6 @@ dependencies = [
 name = "router"
 version = "0.0.1"
 dependencies = [
- "anchor-lang",
  "arrayref",
  "criterion",
  "dex",

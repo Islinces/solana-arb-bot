@@ -1,6 +1,8 @@
-use solana_program::pubkey::Pubkey;
-use dex::interface::Pool;
 use crate::math::{CheckedCeilDiv, SwapDirection};
+use dex::interface::Pool;
+use solana_program::example_mocks::solana_sdk::account::Account;
+use solana_program::pubkey::Pubkey;
+use dex::account_write::AccountWrite;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -142,5 +144,9 @@ impl Pool for AmmPool {
 
     fn clone_box(&self) -> Box<dyn Pool> {
         Box::new(self.clone())
+    }
+
+    fn update_data(&self, account_write: AccountWrite) {
+        todo!()
     }
 }

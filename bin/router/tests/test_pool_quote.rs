@@ -63,11 +63,14 @@ fn test_build_routing() {
         Box::new(RaydiumClmmDex::new(clmm_pools)),
     ]);
     // println!("routing : {:#?}", routing);
-    let route_step = routing.find_route(sol.0, 10_u64.pow(sol.1 as u32));
+    let route_step = routing.find_route(
+        sol.0,
+        10_u64.pow(sol.1 as u32),
+        Some(Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap()),
+    );
     if let Some(step) = route_step {
-        for (index, value) in step.iter().enumerate() {
-            println!("Step {:?} :\n {:#?}", index + 1, value);
-        }
+        println!("Step {:?} :\n {:#?}", 1, step.0);
+        println!("Step {:?} :\n {:#?}", 2, step.1);
     }
 }
 

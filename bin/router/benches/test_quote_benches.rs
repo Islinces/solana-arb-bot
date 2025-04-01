@@ -21,7 +21,7 @@ fn bench_route(c: &mut Criterion) {
             std::hint::black_box(for i in 1..=60 {
                 routing
                     .0
-                    .find_route(routing.1, 10_u64.pow(routing.2 as u32));
+                    .find_route(routing.1, 10_u64.pow(routing.2 as u32), Some(Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap()));
             });
         });
     });

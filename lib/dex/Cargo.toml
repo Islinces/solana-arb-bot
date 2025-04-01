@@ -8,3 +8,4 @@ doctest = false
 
 [dependencies]
 solana-program = {workspace = true}
+solana-sdk = { workspace = true }
