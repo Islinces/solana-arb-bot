@@ -5,7 +5,6 @@ use crate::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::utils;
 use dex::account_write::AccountWrite;
 use dex::interface::Pool;
-use solana_program::example_mocks::solana_sdk::account::Account;
 use solana_program::pubkey::Pubkey;
 use std::collections::VecDeque;
 

@@ -14,6 +14,9 @@ solana-program = "1.16.27"
 solana-client = { workspace = true }
 spl-token-2022 = { workspace = true }
 arrayref = { workspace = true }
+log = "0.4"
+env_logger = "0.10"
+rayon = "1.10"
 
 [dev-dependencies]
 criterion = "0.5"

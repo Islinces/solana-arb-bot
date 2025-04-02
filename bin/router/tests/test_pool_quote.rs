@@ -17,6 +17,7 @@ use std::str::FromStr;
 #[test]
 fn test_build_routing() {
     let mut amm_pools = Vec::<AmmPool>::new();
+    let mut clmm_pools = Vec::<ClmmPool>::new();
     let sol = (
         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
         9,
@@ -35,6 +36,7 @@ fn test_build_routing() {
         (26_324.87 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
         (3_524_576.3 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
     );
+    amm_pools.push(pool_1);
     let pool_2 = new_amm_pool(
         Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap(),
         Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
@@ -45,6 +47,7 @@ fn test_build_routing() {
         (3000.4374 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
         (430000.2 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
     );
+    amm_pools.push(pool_2);
     // println!("pool_2 amount_out : {:#?}", pool_2.quote(1000000000_u64, sol.0));
     let pool_3 = build_clmm_pool(
         RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
@@ -53,6 +56,7 @@ fn test_build_routing() {
         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
         6,
     );
+    clmm_pools.push(pool_3);
     let pool_4 = build_clmm_pool(
         RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
         Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
@@ -60,6 +64,7 @@ fn test_build_routing() {
         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
         4,
     );
+    clmm_pools.push(pool_4);
     let pool_5 = build_clmm_pool(
         RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
         Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
@@ -67,28 +72,23 @@ fn test_build_routing() {
         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
         2,
     );
-    let pool_6 = build_clmm_pool(
-        RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-        Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-        Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-        0,
-    );
-    let pool_7 = build_clmm_pool(
-        RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-        Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-        Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-        9,
-    );
-    amm_pools.push(pool_1);
-    amm_pools.push(pool_2);
-    let mut clmm_pools = Vec::<ClmmPool>::new();
-    clmm_pools.push(pool_3);
-    clmm_pools.push(pool_4);
     clmm_pools.push(pool_5);
-    clmm_pools.push(pool_6);
-    clmm_pools.push(pool_7);
+    // let pool_6 = build_clmm_pool(
+    //     RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
+    //     Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+    //     Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //     Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //     0,
+    // );
+    // clmm_pools.push(pool_6);
+    // let pool_7 = build_clmm_pool(
+    //     RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
+    //     Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+    //     Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //     Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //     9,
+    // );
+    // clmm_pools.push(pool_7);
 
     let routing = Routing::new(vec![
         Box::new(RaydiumAmmDex::new(amm_pools)),

@@ -1,7 +1,6 @@
 use dex::account_write::AccountWrite;
 use dex::interface::{Dex, Pool};
 use solana_program::pubkey::Pubkey;
-use spl_token_2022::state::Account;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -55,11 +54,7 @@ impl QuoteCache {
         let mut entry = self.cache.entry((from_mint, to_mint, amount_in));
         match entry {
             Entry::Occupied(ref mut path_caches) => {
-                path_caches.get_mut().push(path_cache_entry);
-                path_caches
-                    .get_mut()
-                    .sort_by_key(|entry| entry.timestamp_millis);
-                path_caches.get_mut().reverse();
+                path_caches.get_mut().insert(0, path_cache_entry);
             }
             Entry::Vacant(path_caches) => {
                 path_caches.insert(vec![path_cache_entry]);
@@ -112,7 +107,7 @@ impl Routing {
         let mut mint_edge = HashMap::<Pubkey, Vec<(Pubkey, Pubkey)>>::new();
         let all_pools: Vec<Box<dyn Pool>> = dexs.iter().flat_map(|dex| dex.get_pools()).collect();
         let mut pool_map = HashMap::<Pubkey, Box<dyn Pool>>::new();
-        for pool in all_pools.iter() {
+        for pool in all_pools.into_iter() {
             pool_map.insert(pool.get_pool_id(), pool.clone_box());
             match mint_edge.entry(pool.get_mint_0()) {
                 Entry::Occupied(mut value) => value
@@ -149,22 +144,17 @@ impl Routing {
         changed_pool: Option<Pubkey>,
     ) -> Option<(RouteStep, RouteStep)> {
         if let Some(edges) = self.mint_edge.get(&input_mint) {
-            // 优化点1: 分离读写锁作用域
             let (pool_reader, mut cache_writer) =
                 (self.pool.read().unwrap(), self.path_cache.write().unwrap());
 
             let mut best_result = None;
             let mut max_profit = 0;
-            if let Some(changed_pool_id) = changed_pool {
-                cache_writer.invalidate_cache(&changed_pool_id);
-            }
             for (output_mint, pool_id) in edges.iter().filter(|(m, pool)| *m != input_mint) {
                 let first_step =
                     match cache_writer.get(&input_mint, output_mint, amount_in, pool_id) {
                         Some(cached) if changed_pool.map_or(true, |p| p != *pool_id) => cached,
                         _ => {
                             let amount_out = pool_reader.get(pool_id)?.quote(amount_in, input_mint);
-
                             let step = RouteStep::new(input_mint, *pool_id, amount_in, amount_out);
                             cache_writer.insert(
                                 input_mint,
@@ -238,8 +228,10 @@ impl Routing {
 
     pub fn update_pool(&self, account_write: AccountWrite) {
         let write_guard = self.pool.write().unwrap();
+        let mut cache_write_guard = self.path_cache.write().unwrap();
         if let Some(pool) = write_guard.get(&account_write.pubkey) {
             pool.update_data(account_write);
+            cache_write_guard.invalidate_cache(&pool.get_pool_id());
         }
     }
 }

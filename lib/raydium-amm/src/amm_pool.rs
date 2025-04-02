@@ -1,8 +1,7 @@
 use crate::math::{CheckedCeilDiv, SwapDirection};
-use dex::interface::Pool;
-use solana_program::example_mocks::solana_sdk::account::Account;
-use solana_program::pubkey::Pubkey;
 use dex::account_write::AccountWrite;
+use dex::interface::Pool;
+use solana_program::pubkey::Pubkey;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -60,15 +59,15 @@ impl AmmPool {
 
 impl Pool for AmmPool {
     fn get_pool_id(&self) -> Pubkey {
-        self.pool_id.clone()
+        self.pool_id
     }
 
     fn get_mint_0(&self) -> Pubkey {
-        self.mint_0.clone()
+        self.mint_0
     }
 
     fn get_mint_1(&self) -> Pubkey {
-        self.mint_1.clone()
+        self.mint_1
     }
 
     fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> u64 {
@@ -143,7 +142,7 @@ impl Pool for AmmPool {
     }
 
     fn clone_box(&self) -> Box<dyn Pool> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 
     fn update_data(&self, account_write: AccountWrite) {
