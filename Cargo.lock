@@ -2842,6 +2842,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pump-fun"
+version = "0.0.1"
+dependencies = [
+ "dex",
+ "log",
+ "solana-program",
+ "uint",
+]
+
+[[package]]
 name = "qstring"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

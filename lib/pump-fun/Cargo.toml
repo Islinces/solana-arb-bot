@@ -1,0 +1,13 @@
+[package]
+name = "pump-fun"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+doctest = false
+
+[dependencies]
+dex = { path = "../dex", version = "0.0.1" }
+solana-program = "<1.17.0"
+uint = "0.9.5"
+log = "0.4.27"
