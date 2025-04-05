@@ -18,7 +18,7 @@ pub struct Routing {
 impl Routing {
     pub fn new(dexs: Vec<Box<dyn Dex>>) -> Routing {
         let mut mint_edge = HashMap::<Pubkey, Vec<(Pubkey, Pubkey)>>::new();
-        let all_pools: Vec<Box<dyn Pool>> = dexs.iter().flat_map(|dex| dex.get_pools()).collect();
+        let all_pools: Vec<Box<dyn Pool>> = dexs.into_iter().flat_map(|dex| dex.get_pools()).collect();
         let mut pool_map = HashMap::<Pubkey, Box<dyn Pool>>::new();
         for pool in all_pools.into_iter() {
             pool_map.insert(pool.get_pool_id(), pool.clone_box());
