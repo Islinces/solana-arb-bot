@@ -98,7 +98,7 @@ fn test_build_routing() {
     let route_step = routing.find_route(
         sol.0,
         10_u64.pow(sol.1 as u32),
-        Some(Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap()),
+        Some(Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap()),
     );
     if let Some(step) = route_step {
         println!("Step {:?} :\n {:#?}", 1, step.0);

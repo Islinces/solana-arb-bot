@@ -70,9 +70,9 @@ impl Pool for AmmPool {
         self.mint_1
     }
 
-    fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> u64 {
+    fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> Option<u64> {
         if amount_in_mint != self.mint_0 && amount_in_mint != self.mint_1 {
-            return u64::MIN;
+            return None;
         }
         let swap_direction = match amount_in_mint == self.mint_0 {
             true => SwapDirection::Coin2PC,
@@ -129,16 +129,16 @@ impl Pool for AmmPool {
         match swap_direction {
             SwapDirection::PC2Coin => {
                 if amount_out >= self.mint_0_vault {
-                    return u64::MIN;
+                    return None;
                 }
             }
             SwapDirection::Coin2PC => {
                 if amount_out >= self.mint_1_vault {
-                    return u64::MIN;
+                    return None;
                 }
             }
         }
-        amount_out
+        Some(amount_out)
     }
 
     fn clone_box(&self) -> Box<dyn Pool> {

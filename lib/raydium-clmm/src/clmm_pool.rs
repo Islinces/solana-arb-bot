@@ -95,9 +95,9 @@ impl Pool for ClmmPool {
         self.mint_1
     }
 
-    fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> u64 {
+    fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> Option<u64> {
         if amount_in_mint != self.mint_0 && amount_in_mint != self.mint_1 {
-            return u64::MIN;
+            return None;
         }
         let zero_for_one = amount_in_mint == self.mint_0;
         let mut amm_config = AmmConfig::default();
@@ -125,10 +125,10 @@ impl Pool for ClmmPool {
             &mut tick_arrays,
         );
         match result {
-            Ok((amount_out, _, _)) => amount_out,
+            Ok((amount_out, _, _)) => Some(amount_out),
             Err(e) => {
                 println!("get_out_put_amount_and_remaining_accounts error: {:?}", e);
-                u64::MIN
+                None
             }
         }
     }
