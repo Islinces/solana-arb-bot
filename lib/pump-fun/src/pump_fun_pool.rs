@@ -54,46 +54,36 @@ impl Pool for PumpFunPool {
         if amount_in_mint != self.mint_0 && amount_in_mint != self.mint_1 {
             return None;
         }
-        let mint_0_vault = u128::from(self.mint_0_vault);
-        let mint_1_vault = u128::from(self.mint_1_vault);
+        let base_vault = u128::from(self.mint_0_vault);
+        let quote_vault = u128::from(self.mint_1_vault);
         let amount_in = u128::from(amount_in);
-        if amount_in_mint == self.mint_0 {
-            let quote_amount_out = mint_1_vault.mul(amount_in).div(mint_0_vault.add(amount_in));
-            let lp_fee = quote_amount_out
-                .mul(u128::from(self.lp_fee_basis_points))
-                .checked_ceil_div(10_000)
-                .unwrap()
-                .0;
-            let protocol_fee = quote_amount_out
-                .mul(u128::from(self.protocol_fee_basis_points))
-                .checked_ceil_div(10_000)
-                .unwrap()
-                .0;
-            let mint_1_amount_out = quote_amount_out
-                .sub(lp_fee)
-                .sub(protocol_fee)
-                .try_into()
-                .unwrap_or_else(|_| {
-                    eprintln!("amount_out is too large");
-                    u64::MIN
-                });
-            Some(mint_1_amount_out)
+        let lp_fee = amount_in
+            .mul(u128::from(self.lp_fee_basis_points))
+            .checked_ceil_div(10_000)
+            .unwrap()
+            .0;
+        let protocol_fee = amount_in
+            .mul(u128::from(self.protocol_fee_basis_points))
+            .checked_ceil_div(10_000)
+            .unwrap()
+            .0;
+        let total_fee = lp_fee.add(protocol_fee);
+        let effective_amount = amount_in.sub(total_fee);
+        let amount_out = if amount_in_mint == self.mint_0 {
+            quote_vault
+                .mul(effective_amount)
+                .div(base_vault.add(effective_amount))
         } else {
-            let mint_0_vault = u128::from(self.mint_0_vault);
-            let mint_1_vault = u128::from(self.mint_1_vault);
-            let effective_quote = amount_in.mul(10_000).div(u128::from(
-                10_000 + self.lp_fee_basis_points.add(self.protocol_fee_basis_points),
-            ));
-            let mint_0_amount_out = mint_0_vault
-                .mul(effective_quote)
-                .div(mint_1_vault.add(effective_quote))
-                .try_into()
-                .unwrap_or_else(|_| {
-                    eprintln!("amount_out is too large");
-                    u64::MIN
-                });
-            Some(mint_0_amount_out)
-        }
+            base_vault
+                .mul(effective_amount)
+                .div(quote_vault.add(effective_amount))
+        };
+        let amount_out = amount_out.try_into().unwrap_or_else(|_| {
+            eprintln!("amount_out is too large");
+            u64::MIN
+        });
+        println!("total_fee: {}", total_fee);
+        Some(amount_out)
     }
 
     fn clone_box(&self) -> Box<dyn Pool> {

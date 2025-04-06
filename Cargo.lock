@@ -2847,13 +2847,11 @@ version = "0.0.1"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
- "bytemuck",
  "dex",
  "log",
  "solana-client",
  "solana-program",
  "solana-sdk",
- "spl-token-2022",
  "uint",
 ]
 

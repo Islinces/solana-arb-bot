@@ -1,4 +1,5 @@
 use anchor_lang::Discriminator;
+use anchor_spl::token::spl_token;
 use dex::interface::Pool;
 use pump_fun::pump_fun_pool::PumpFunPool;
 use pump_fun::utils::deserialize_anchor_account;
@@ -6,8 +7,8 @@ use pump_fun::{GlobalConfig, Pool as PumpPool};
 use solana_client::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
+use std::ops::Mul;
 use std::str::FromStr;
-use anchor_spl::token::spl_token;
 
 #[test]
 fn test() {
@@ -45,7 +46,7 @@ fn test_quote() {
     );
     let sol_unit = 10_u64.pow(9);
     let usdc_unit = 10_u64.pow(6);
-    let amount_in = 1 * sol_unit;
+    let amount_in = 1.mul(sol_unit);
     let amount_out = pool.quote(
         amount_in,
         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
@@ -53,8 +54,8 @@ fn test_quote() {
     if let Some(out) = amount_out {
         println!(
             "amount_in : {:?} SOL \namount_out: {:?} USDC",
-            amount_in as f64 / sol_unit as f64,
-            (out as f64) / (usdc_unit as f64)
+            amount_in ,
+            out
         )
     }
 }
