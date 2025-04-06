@@ -11,15 +11,22 @@ fn test_quote() {
         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
         1_513_490_960_000_u64,
         12_775_840_000_000_u64,
-        25_u64,
+        20_u64,
         5_u64,
     );
+    let output_mint_unit = 10_u64.pow(6);
+    let input_mint_unit = 10_u64.pow(9);
+    let amount_in = 1 * input_mint_unit;
     let amount_out = pool.quote(
-         10_u64.pow(9),
+        amount_in,
         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
     );
     if let Some(out) = amount_out {
-        println!("amount_out: {}", out)
+        println!(
+            "amount_in : {:?} SOL \namount_out: {:?} USDC",
+            amount_in / input_mint_unit,
+            (out as f64) / (output_mint_unit as f64)
+        )
     }
 }
 
