@@ -7,6 +7,7 @@ use solana_client::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use std::str::FromStr;
+use anchor_spl::token::spl_token;
 
 #[test]
 fn test() {
@@ -26,10 +27,10 @@ fn test_quote() {
         .get_multiple_accounts(&[pool.pool_base_token_account, pool.pool_quote_token_account])
         .unwrap();
     let mint_0_vault =
-        spl_token_2022::state::Account::unpack(vault_accounts[0].as_ref().unwrap().data.as_slice())
+        spl_token::state::Account::unpack(vault_accounts[0].as_ref().unwrap().data.as_slice())
             .unwrap();
     let mint_1_vault =
-        spl_token_2022::state::Account::unpack(vault_accounts[1].as_ref().unwrap().data.as_slice())
+        spl_token::state::Account::unpack(vault_accounts[1].as_ref().unwrap().data.as_slice())
             .unwrap();
     let pool = PumpFunPool::new(
         pool_id,
