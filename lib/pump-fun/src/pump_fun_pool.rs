@@ -78,12 +78,11 @@ impl Pool for PumpFunPool {
                 .mul(effective_amount)
                 .div(quote_vault.add(effective_amount))
         };
-        let amount_out = amount_out.try_into().unwrap_or_else(|_| {
+        println!("total_fee: {}", total_fee);
+        Some(amount_out.try_into().unwrap_or_else(|_| {
             eprintln!("amount_out is too large");
             u64::MIN
-        });
-        println!("total_fee: {}", total_fee);
-        Some(amount_out)
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn Pool> {
