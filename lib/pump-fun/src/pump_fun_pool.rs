@@ -1,3 +1,4 @@
+use crate::math::CheckedCeilDiv;
 use dex::account_write::AccountWrite;
 use dex::interface::Pool;
 use solana_program::pubkey::Pubkey;
@@ -55,26 +56,35 @@ impl Pool for PumpFunPool {
         }
         let mint_0_vault = u128::from(self.mint_0_vault);
         let mint_1_vault = u128::from(self.mint_1_vault);
-        let total_fee_bps = self.lp_fee_basis_points.add(self.protocol_fee_basis_points);
+        let amount_in = u128::from(amount_in);
         if amount_in_mint == self.mint_0 {
-            let denominator = 10_000.sub(total_fee_bps);
-            let raw_quote = u128::from(amount_in.mul(10_000).add(denominator - 1).div(denominator));
-            if raw_quote >= mint_1_vault {
-                return None;
-            }
-            let denominator = mint_1_vault.sub(raw_quote);
-            let amount_out = mint_0_vault
-                .mul(raw_quote)
-                .add(denominator.sub(1))
-                .div(denominator)
+            let quote_amount_out = mint_1_vault.mul(amount_in).div(mint_0_vault.add(amount_in));
+            let lp_fee = quote_amount_out
+                .mul(u128::from(self.lp_fee_basis_points))
+                .checked_ceil_div(10_000)
+                .unwrap()
+                .0;
+            let protocol_fee = quote_amount_out
+                .mul(u128::from(self.protocol_fee_basis_points))
+                .checked_ceil_div(10_000)
+                .unwrap()
+                .0;
+            let mint_1_amount_out = quote_amount_out
+                .sub(lp_fee)
+                .sub(protocol_fee)
                 .try_into()
-                .unwrap_or(u64::MIN);
-            Some(amount_out)
+                .unwrap_or_else(|_| {
+                    eprintln!("amount_out is too large");
+                    u64::MIN
+                });
+            Some(mint_1_amount_out)
         } else {
             let mint_0_vault = u128::from(self.mint_0_vault);
             let mint_1_vault = u128::from(self.mint_1_vault);
-            let effective_quote = u128::from(amount_in.mul(10_000).div(10_000 + total_fee_bps));
-            let amount_out = mint_0_vault
+            let effective_quote = amount_in.mul(10_000).div(u128::from(
+                10_000 + self.lp_fee_basis_points.add(self.protocol_fee_basis_points),
+            ));
+            let mint_0_amount_out = mint_0_vault
                 .mul(effective_quote)
                 .div(mint_1_vault.add(effective_quote))
                 .try_into()
@@ -82,7 +92,7 @@ impl Pool for PumpFunPool {
                     eprintln!("amount_out is too large");
                     u64::MIN
                 });
-            Some(amount_out)
+            Some(mint_0_amount_out)
         }
     }
 

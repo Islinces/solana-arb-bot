@@ -28,7 +28,7 @@ fn test_quote() {
     println!(
         "amount_in: {} SOL, amount_out: {}",
         1,
-        amount_out as f64 / 10_u64.pow(pool.mint_1_decimals as u32) as f64
+        amount_out.unwrap() as f64 / (10_u64.pow(pool.mint_1_decimals as u32) as f64)
     )
 }
 
