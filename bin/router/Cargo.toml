@@ -11,7 +11,7 @@ dex = { path = "../../lib/dex", version = "0.0.1" }
 raydium-amm = { path = "../../lib/raydium-amm", version = "0.0.1" }
 raydium-clmm = { path = "../../lib/raydium-clmm", version = "0.0.1" }
 pump-fun = { path = "../../lib/pump-fun", version = "0.0.1" }
-solana-program = "1.16.27"
+solana-program = {workspace = true}
 solana-client = { workspace = true }
 spl-token-2022 = { workspace = true }
 arrayref = { workspace = true }
