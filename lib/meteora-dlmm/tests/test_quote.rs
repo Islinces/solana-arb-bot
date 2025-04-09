@@ -80,7 +80,7 @@ fn build_pool() -> DlmmPool {
     );
     let left_bin_arrays = get_bin_arrays_by_swap_direction(
         lb_pair_pubkey,
-        lb_pair_state.clone(),
+        &lb_pair_state,
         bitmap_extension.as_ref(),
         true,
         3,
@@ -88,7 +88,7 @@ fn build_pool() -> DlmmPool {
     );
     let right_bin_arrays = get_bin_arrays_by_swap_direction(
         lb_pair_pubkey,
-        lb_pair_state.clone(),
+        &lb_pair_state,
         bitmap_extension.as_ref(),
         false,
         3,
@@ -132,7 +132,7 @@ fn mint_transfer_fee_config(
 
 fn get_bin_arrays_by_swap_direction(
     lb_pair_pubkey: Pubkey,
-    lb_pair_state: LbPair,
+    lb_pair_state: &LbPair,
     bitmap_extension: Option<&BinArrayBitmapExtension>,
     swap_for_y: bool,
     take: u8,
@@ -140,7 +140,7 @@ fn get_bin_arrays_by_swap_direction(
 ) -> HashMap<Pubkey, BinArray> {
     let bin_arrays_for_swap = get_bin_array_pubkeys_for_swap(
         lb_pair_pubkey,
-        &lb_pair_state,
+        lb_pair_state,
         bitmap_extension,
         swap_for_y,
         take,
