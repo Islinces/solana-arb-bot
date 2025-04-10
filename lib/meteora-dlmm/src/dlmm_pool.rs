@@ -15,6 +15,7 @@ use std::ops::Deref;
 pub struct DlmmPool {
     pub lb_pair_pubkey: Pubkey,
     pub active_id: i32,
+    // 1，5，8，10，16，80，100
     pub bin_step: u16,
     pub activation_point: u64,
     pub pair_type: u8,
@@ -23,6 +24,10 @@ pub struct DlmmPool {
     pub token_y_mint: Pubkey,
     pub bin_array_bitmap: [u64; 16],
     // parameters
+    // 0.01%*10000，0.02%*10000，0.03%*10000，0.04%*10000，0.05%*10000，
+    // 0.1%*10000，0.15%*10000，0.2%*10000，0.25%*10000，
+    // 0.3%*10000，0.4%*10000，0.6%*10000，0.8%*10000，
+    // 1%*10000，2%*10000，5%*10000，
     pub base_factor: u16,
     pub filter_period: u16,
     pub decay_period: u16,
@@ -170,7 +175,7 @@ impl Pool for DlmmPool {
         );
         match result {
             Ok(quote) => {
-                msg!("dlmm swap fee amount : {:?}", quote.fee);
+                // msg!("dlmm swap fee amount : {:?}", quote.fee);
                 Some(quote.amount_out)
             }
             Err(e) => {

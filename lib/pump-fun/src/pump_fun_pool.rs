@@ -78,7 +78,7 @@ impl Pool for PumpFunPool {
                 .mul(effective_amount)
                 .div(quote_vault.add(effective_amount))
         };
-        println!("total_fee: {}", total_fee);
+        // println!("total_fee: {}", total_fee);
         Some(amount_out.try_into().unwrap_or_else(|_| {
             eprintln!("amount_out is too large");
             u64::MIN
