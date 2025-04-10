@@ -40,9 +40,9 @@ fn test_meteora_dlmm_quote() {
 
 fn build_pool() -> DlmmPool {
     let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com".to_string());
-    let mint_x = Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
+    let mint_x = Pubkey::from_str("9gyfbPVwwZx4y1hotNSLcqXCQNpNqqz6ZRvo8yTLpump").unwrap();
     let mint_y = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-    let lb_pair_pubkey = derive_lb_pair_pda2(mint_x, mint_y, 80, 12_500).0;
+    let lb_pair_pubkey = derive_lb_pair_pda2(mint_x, mint_y, 100, 20_000).0;
     println!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
     let bitmap_extension_pubkey = derive_bin_array_bitmap_extension(lb_pair_pubkey).0;
     let clock_id = Clock::id();
