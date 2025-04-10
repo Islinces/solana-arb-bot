@@ -1,4 +1,15 @@
 use arrayref::array_ref;
+use meteora_dlmm::dlmm_pool::DlmmPool;
+use meteora_dlmm::meteora_dlmm_dex::MeteoraDlmmDex;
+use meteora_dlmm::sdk::commons::pda::{derive_bin_array_bitmap_extension, derive_lb_pair_pda2};
+use meteora_dlmm::sdk::commons::quote::get_bin_array_pubkeys_for_swap;
+use meteora_dlmm::sdk::interface::accounts::{
+    BinArray, BinArrayAccount, BinArrayBitmapExtension, BinArrayBitmapExtensionAccount, LbPair,
+    LbPairAccount,
+};
+use pump_fun::pump_fun_dex::PumpFunDex;
+use pump_fun::pump_fun_pool::PumpFunPool;
+use pump_fun::{GlobalConfig, Pool};
 use raydium_amm::amm_pool::AmmPool;
 use raydium_amm::raydium_amm_dex::RaydiumAmmDex;
 use raydium_clmm::clmm_pool::ClmmPool;
@@ -8,16 +19,25 @@ use raydium_clmm::utils::deserialize_anchor_account;
 use raydium_clmm::{config, pool};
 use router::router::Routing;
 use solana_client::rpc_client::RpcClient;
+use solana_program::clock::Clock;
+use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
-use spl_token_2022::extension::StateWithExtensions;
+use solana_program::sysvar::SysvarId;
+use solana_sdk::account::Account;
+use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
+use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::state::Mint;
 use std::alloc::*;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 #[test]
 fn test_build_routing() {
     let mut amm_pools = Vec::<AmmPool>::new();
     let mut clmm_pools = Vec::<ClmmPool>::new();
+    let mut pump_fun_pools = Vec::<PumpFunPool>::new();
+    let mut dlmm_pools = Vec::<DlmmPool>::new();
+    let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com".to_string());
     let sol = (
         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
         9,
@@ -26,73 +46,72 @@ fn test_build_routing() {
         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
         6,
     );
-    let pool_1 = new_amm_pool(
-        Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap(),
-        Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
-        sol.0,
-        usdc.0,
-        sol.1,
-        usdc.1,
-        (26_324.87 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
-        (3_524_576.3 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
-    );
-    amm_pools.push(pool_1);
-    let pool_2 = new_amm_pool(
-        Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap(),
-        Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
-        sol.0,
-        usdc.0,
-        sol.1,
-        usdc.1,
-        (3000.4374 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
-        (430000.2 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
-    );
-    amm_pools.push(pool_2);
-    // println!("pool_2 amount_out : {:#?}", pool_2.quote(1000000000_u64, sol.0));
-    let pool_3 = build_clmm_pool(
-        RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-        Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-        Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-        6,
-    );
-    clmm_pools.push(pool_3);
-    let pool_4 = build_clmm_pool(
-        RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-        Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-        Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-        4,
-    );
-    clmm_pools.push(pool_4);
-    let pool_5 = build_clmm_pool(
-        RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-        Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-        Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-        2,
-    );
-    clmm_pools.push(pool_5);
-    // let pool_6 = build_clmm_pool(
-    //     RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-    //     Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-    //     Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-    //     Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-    //     0,
-    // );
-    // clmm_pools.push(pool_6);
-    // let pool_7 = build_clmm_pool(
-    //     RpcClient::new("https://solana-rpc.publicnode.com".to_string()),
-    //     Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-    //     Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-    //     Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-    //     9,
-    // );
-    // clmm_pools.push(pool_7);
-
+    {
+        let pool_1 = new_amm_pool(
+            Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap(),
+            Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
+            sol.0,
+            usdc.0,
+            sol.1,
+            usdc.1,
+            (26_324.87 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
+            (3_524_576.3 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
+        );
+        amm_pools.push(pool_1);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap(),
+            Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
+            sol.0,
+            usdc.0,
+            sol.1,
+            usdc.1,
+            (3000.4374 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
+            (430000.2 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
+        );
+        amm_pools.push(pool_2);
+    }
+    {
+        let pool_3 = build_clmm_pool(
+            &rpc_client,
+            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            6,
+        );
+        clmm_pools.push(pool_3);
+        let pool_4 = build_clmm_pool(
+            &rpc_client,
+            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            4,
+        );
+        clmm_pools.push(pool_4);
+        let pool_5 = build_clmm_pool(
+            &rpc_client,
+            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            2,
+        );
+        clmm_pools.push(pool_5);
+    }
+    {
+        let pool_1 = build_pump_fun_pool(
+            &rpc_client,
+            Pubkey::from_str("Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v").unwrap(),
+        );
+        pump_fun_pools.push(pool_1);
+    }
+    {
+        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 12_500);
+        dlmm_pools.push(pool_1);
+    }
     let routing = Routing::new(vec![
         Box::new(RaydiumAmmDex::new(amm_pools)),
         Box::new(RaydiumClmmDex::new(clmm_pools)),
+        Box::new(PumpFunDex::new(pump_fun_pools)),
+        Box::new(MeteoraDlmmDex::new(dlmm_pools)),
     ]);
     // println!("routing : {:#?}", routing);
     let route_step = routing.find_route(
@@ -133,7 +152,7 @@ fn new_amm_pool(
 }
 
 fn build_clmm_pool(
-    rpc_client: RpcClient,
+    rpc_client: &RpcClient,
     program_id: Pubkey,
     mint_0: Pubkey,
     mint_1: Pubkey,
@@ -247,4 +266,164 @@ fn build_clmm_pool(
         one_to_zero_tick_arays: one_to_zero_tick_arrays,
         trade_fee_rate: amm_config_state.trade_fee_rate,
     }
+}
+
+fn build_pump_fun_pool(rpc_client: &RpcClient, pool_id: Pubkey) -> PumpFunPool {
+    fn global_config_pda() -> Pubkey {
+        let amm_program_id =
+            Pubkey::from_str("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA").unwrap();
+        Pubkey::find_program_address(&[b"global_config"], &amm_program_id).0
+    }
+    let accounts = vec![pool_id, global_config_pda()];
+    let accounts = rpc_client.get_multiple_accounts(&accounts).unwrap();
+    let pool =
+        pump_fun::utils::deserialize_anchor_account::<Pool>(accounts[0].as_ref().unwrap()).unwrap();
+    let global_config =
+        pump_fun::utils::deserialize_anchor_account::<GlobalConfig>(accounts[1].as_ref().unwrap())
+            .unwrap();
+    let vault_accounts = rpc_client
+        .get_multiple_accounts(&[pool.pool_base_token_account, pool.pool_quote_token_account])
+        .unwrap();
+    let mint_0_vault =
+        spl_token::state::Account::unpack(vault_accounts[0].as_ref().unwrap().data.as_slice())
+            .unwrap();
+    let mint_1_vault =
+        spl_token::state::Account::unpack(vault_accounts[1].as_ref().unwrap().data.as_slice())
+            .unwrap();
+    PumpFunPool::new(
+        pool_id,
+        pool.base_mint,
+        pool.quote_mint,
+        mint_0_vault.amount,
+        mint_1_vault.amount,
+        global_config.lp_fee_basis_points,
+        global_config.protocol_fee_basis_points,
+    )
+}
+
+fn build_dlmm_pool(
+    rpc_client: &RpcClient,
+    mint_x: Pubkey,
+    mint_y: Pubkey,
+    bin_step: u16,
+    base_factor: u16,
+) -> DlmmPool {
+    let lb_pair_pubkey = derive_lb_pair_pda2(mint_x, mint_y, bin_step, base_factor).0;
+    println!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
+    let bitmap_extension_pubkey = derive_bin_array_bitmap_extension(lb_pair_pubkey).0;
+    let clock_id = Clock::id();
+    let accounts = rpc_client
+        .get_multiple_accounts(&[
+            lb_pair_pubkey,
+            mint_x,
+            mint_y,
+            bitmap_extension_pubkey,
+            clock_id,
+        ])
+        .unwrap();
+    let [lb_pair_account, mint_x_account, mint_y_account, bitmap_extension_account, clock_account] =
+        array_ref![accounts, 0, 5];
+    let lb_pair_state = LbPairAccount::deserialize(&lb_pair_account.as_ref().unwrap().data)
+        .unwrap()
+        .0;
+    let bitmap_extension = match bitmap_extension_account {
+        None => None,
+        Some(account) => Some(
+            BinArrayBitmapExtensionAccount::deserialize(&account.data)
+                .unwrap()
+                .0,
+        ),
+    };
+    let clock: Clock =
+        bincode::deserialize(&clock_account.as_ref().unwrap().data.as_ref()).unwrap();
+    let mint_x_transfer_fee_config = mint_transfer_fee_config(
+        lb_pair_state.token_mint_x_program_flag,
+        mint_x_account.as_ref().unwrap(),
+    );
+    let mint_y_transfer_fee_config = mint_transfer_fee_config(
+        lb_pair_state.token_mint_y_program_flag,
+        mint_y_account.as_ref().unwrap(),
+    );
+    let left_bin_arrays = get_bin_arrays_by_swap_direction(
+        lb_pair_pubkey,
+        &lb_pair_state,
+        bitmap_extension.as_ref(),
+        true,
+        3,
+        &rpc_client,
+    );
+    let right_bin_arrays = get_bin_arrays_by_swap_direction(
+        lb_pair_pubkey,
+        &lb_pair_state,
+        bitmap_extension.as_ref(),
+        false,
+        3,
+        &rpc_client,
+    );
+
+    DlmmPool::new(
+        lb_pair_pubkey,
+        lb_pair_state,
+        left_bin_arrays,
+        right_bin_arrays,
+        bitmap_extension,
+        mint_x_transfer_fee_config,
+        mint_y_transfer_fee_config,
+        clock,
+    )
+}
+
+fn mint_transfer_fee_config(
+    token_mint_program_flag: u8,
+    mint_account: &Account,
+) -> Option<TransferFeeConfig> {
+    match token_mint_program_flag {
+        1 => {
+            let token_mint_data = mint_account.data.as_ref();
+            let token_mint_unpacked = StateWithExtensions::<
+                anchor_spl::token_2022::spl_token_2022::state::Mint,
+            >::unpack(token_mint_data)
+            .unwrap();
+
+            if let Ok(transfer_fee_config) =
+                token_mint_unpacked.get_extension::<TransferFeeConfig>()
+            {
+                return Some(*transfer_fee_config);
+            }
+        }
+        _ => {}
+    }
+    None
+}
+
+fn get_bin_arrays_by_swap_direction(
+    lb_pair_pubkey: Pubkey,
+    lb_pair_state: &LbPair,
+    bitmap_extension: Option<&BinArrayBitmapExtension>,
+    swap_for_y: bool,
+    take: u8,
+    rpc_client: &RpcClient,
+) -> HashMap<Pubkey, BinArray> {
+    let bin_arrays_for_swap = get_bin_array_pubkeys_for_swap(
+        lb_pair_pubkey,
+        lb_pair_state,
+        bitmap_extension,
+        swap_for_y,
+        take,
+    )
+    .unwrap();
+    rpc_client
+        .get_multiple_accounts(&bin_arrays_for_swap)
+        .unwrap()
+        .into_iter()
+        .zip(bin_arrays_for_swap.iter())
+        .map(|(account, &key)| {
+            let account = account.unwrap();
+            Some((
+                key,
+                BinArrayAccount::deserialize(account.data.as_ref()).ok()?.0,
+            ))
+        })
+        .collect::<Option<HashMap<Pubkey, BinArray>>>()
+        .unwrap()
 }

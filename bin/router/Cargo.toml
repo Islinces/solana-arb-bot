@@ -11,7 +11,8 @@ dex = { path = "../../lib/dex", version = "0.0.1" }
 raydium-amm = { path = "../../lib/raydium-amm", version = "0.0.1" }
 raydium-clmm = { path = "../../lib/raydium-clmm", version = "0.0.1" }
 pump-fun = { path = "../../lib/pump-fun", version = "0.0.1" }
-solana-program = {workspace = true}
+meteora-dlmm = { path = "../../lib/meteora-dlmm", version = "0.0.1" }
+solana-program = { workspace = true }
 solana-client = { workspace = true }
 spl-token-2022 = { workspace = true }
 arrayref = { workspace = true }
@@ -21,6 +22,10 @@ rayon = "1.10"
 
 [dev-dependencies]
 criterion = "0.5"
+spl-token = { workspace = true }
+bincode = "1.3.3"
+anchor-spl={workspace = true}
+solana-sdk={workspace = true}
 
 [[bench]]
 name = "test_quote_benches"

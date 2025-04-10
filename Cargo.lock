@@ -3281,17 +3281,22 @@ dependencies = [
 name = "router"
 version = "0.0.1"
 dependencies = [
+ "anchor-spl",
  "arrayref",
+ "bincode",
  "criterion",
  "dex",
  "env_logger 0.10.2",
  "log",
+ "meteora-dlmm",
  "pump-fun",
  "raydium-amm",
  "raydium-clmm",
  "rayon",
  "solana-client",
  "solana-program",
+ "solana-sdk",
+ "spl-token",
  "spl-token-2022 0.9.0",
 ]
 
