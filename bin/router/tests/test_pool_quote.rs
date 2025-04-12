@@ -9,6 +9,7 @@ use meteora_dlmm::sdk::interface::accounts::{
 };
 use pump_fun::pump_fun_dex::PumpFunDex;
 use pump_fun::pump_fun_pool::PumpFunPool;
+use pump_fun::{GlobalConfig, Pool as PumpPool};
 use raydium_amm::amm_pool::AmmPool;
 use raydium_amm::raydium_amm_dex::RaydiumAmmDex;
 use raydium_amm::state::{AmmInfo, Loadable};
@@ -29,17 +30,11 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::state::Mint;
 use std::alloc::*;
 use std::collections::HashMap;
+use std::ops::{Div, Mul};
 use std::str::FromStr;
-use anchor_lang::Discriminator;
-use pump_fun::{GlobalConfig, Pool as PumpPool};
 
 #[test]
 fn test_build_routing() {
-    let mut amm_pools = Vec::<AmmPool>::new();
-    let mut clmm_pools = Vec::<ClmmPool>::new();
-    let mut pump_fun_pools = Vec::<PumpFunPool>::new();
-    let mut dlmm_pools = Vec::<DlmmPool>::new();
-    let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com".to_string());
     let sol = (
         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
         9,
@@ -48,14 +43,57 @@ fn test_build_routing() {
         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
         6,
     );
+    let amount_in_mint = sol.0;
+    let amount_in = 10_u64.pow(sol.1 as u32).div(10_u64.pow(6));
+    let mut amm_pools = Vec::<AmmPool>::new();
+    let mut clmm_pools = Vec::<ClmmPool>::new();
+    let mut pump_fun_pools = Vec::<PumpFunPool>::new();
+    let mut dlmm_pools = Vec::<DlmmPool>::new();
+    let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com".to_string());
+
     {
         let pool_1 = new_amm_pool(
-            Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap(),
+            Pubkey::from_str("3gSjs6MqyHFsp8DXvaKvVUJjV7qg5itf9qmUGuhnSaWH").unwrap(),
             &rpc_client,
         );
         amm_pools.push(pool_1);
         let pool_2 = new_amm_pool(
-            Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap(),
+            Pubkey::from_str("9JZdkfK4gUtq6QzP3Pq82PjDYPW9eRtqHNtjZn23Nc51").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_2);
+        let pool_1 = new_amm_pool(
+            Pubkey::from_str("5fGDRDhRhkbiTdgww4v4wRq6HZTYeV6qyVi1PJVV9qpu").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_1);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("H2p2de3UXq42To4XA5ByCY8C2NgJzXX6nzNvxbrMESBW").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_2);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("FFhoDyFx1TvZhJHMUbU6BSi7dkrxEJucRFVYRnsb9xBy").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_2);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("8vVQ4G39TeBqiJguKPxYto6a997KQSaSwrscqxR6QtGT").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_2);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("EUvnsWhMnhY3S5EnV3tLATNRvTM2xBMWZQQguzpFNwYT").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_2);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("AbbG2aR8iNhy2prC32iDRW7pKJjzqhUtri8rV5HboHUY").unwrap(),
+            &rpc_client,
+        );
+        amm_pools.push(pool_2);
+        let pool_2 = new_amm_pool(
+            Pubkey::from_str("7s2pco2iYjNPKeN7QYaHD8ZSRb8jZgypspwg7DNkZhZJ").unwrap(),
             &rpc_client,
         );
         amm_pools.push(pool_2);
@@ -63,15 +101,27 @@ fn test_build_routing() {
     {
         let pool_3 = build_clmm_pool(
             &rpc_client,
-            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
             Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
             Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            6,
+            0,
         );
         clmm_pools.push(pool_3);
         let pool_4 = build_clmm_pool(
             &rpc_client,
-            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            1,
+        );
+        clmm_pools.push(pool_4);
+        let pool_5 = build_clmm_pool(
+            &rpc_client,
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            2,
+        );
+        clmm_pools.push(pool_5);
+        let pool_4 = build_clmm_pool(
+            &rpc_client,
             Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
             Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
             4,
@@ -79,22 +129,56 @@ fn test_build_routing() {
         clmm_pools.push(pool_4);
         let pool_5 = build_clmm_pool(
             &rpc_client,
-            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
             Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
             Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            2,
+            5,
+        );
+        clmm_pools.push(pool_5);
+        let pool_3 = build_clmm_pool(
+            &rpc_client,
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            6,
+        );
+        clmm_pools.push(pool_3);
+        let pool_5 = build_clmm_pool(
+            &rpc_client,
+            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            8,
         );
         clmm_pools.push(pool_5);
     }
     {
         let pool_1 = build_pump_fun_pool(
             &rpc_client,
-            Pubkey::from_str("Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v").unwrap(),
+            Pubkey::from_str("FJgYJ23aemGm67iNAr2dZ8H7uLZ8Y1CorPW4KehrHhtM").unwrap(),
         );
         pump_fun_pools.push(pool_1);
+        let pool_2 = build_pump_fun_pool(
+            &rpc_client,
+            Pubkey::from_str("3s5pmAP8Zaphm92gdEdwnAcj6fJCNGuS8tdVYLRwwk4c").unwrap(),
+        );
+        pump_fun_pools.push(pool_2);
+        let pool_3 = build_pump_fun_pool(
+            &rpc_client,
+            Pubkey::from_str("6ef59PhPsXgre7d8BUB2J6GGK6RM3ABek6XSR7J3Z6kX").unwrap(),
+        );
+        pump_fun_pools.push(pool_3);
+        let pool_4 = build_pump_fun_pool(
+            &rpc_client,
+            Pubkey::from_str("FBirun32CEFCQXeZCWjZVWzCs628Co3DqY3vV8u9Xhdz").unwrap(),
+        );
+        pump_fun_pools.push(pool_4);
     }
     {
         let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 12_500);
+        dlmm_pools.push(pool_1);
+        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 400, 12_500);
+        dlmm_pools.push(pool_1);
+        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 62_500);
+        dlmm_pools.push(pool_1);
+        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 2, 15_000);
         dlmm_pools.push(pool_1);
     }
     let routing = Routing::new(vec![
@@ -105,9 +189,9 @@ fn test_build_routing() {
     ]);
     // println!("routing : {:#?}", routing);
     let route_step = routing.find_route(
-        sol.0,
-        10_u64.pow(sol.1 as u32),
-        Some(Pubkey::from_str("878fWxBvXfehM1U8uJuJGrBnxrCYkmcEzNhwLV8AgBfa").unwrap()),
+        amount_in_mint,
+        amount_in,
+        Some(Pubkey::from_str("Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v").unwrap()),
     );
     if let Some(step) = route_step {
         println!("Step {:?} :\n {:#?}", 1, step.0);
@@ -145,11 +229,11 @@ fn new_amm_pool(pool_id: Pubkey, rpc_client: &RpcClient) -> AmmPool {
 
 fn build_clmm_pool(
     rpc_client: &RpcClient,
-    program_id: Pubkey,
     mint_0: Pubkey,
     mint_1: Pubkey,
     amm_config_index: u16,
 ) -> ClmmPool {
+    let program_id = Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap();
     let mut mint0 = Some(mint_0);
     let mut mint1 = Some(mint_1);
     let (amm_config_key, __bump) = Pubkey::find_program_address(
