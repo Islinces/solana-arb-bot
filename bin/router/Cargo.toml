@@ -24,8 +24,9 @@ rayon = "1.10"
 criterion = "0.5"
 spl-token = { workspace = true }
 bincode = "1.3.3"
-anchor-spl={workspace = true}
-solana-sdk={workspace = true}
+anchor-spl = { workspace = true }
+solana-sdk = { workspace = true }
+anchor-lang = { workspace = true }
 
 [[bench]]
 name = "test_quote_benches"

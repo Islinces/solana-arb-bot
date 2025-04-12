@@ -9,9 +9,9 @@ use meteora_dlmm::sdk::interface::accounts::{
 };
 use pump_fun::pump_fun_dex::PumpFunDex;
 use pump_fun::pump_fun_pool::PumpFunPool;
-use pump_fun::{GlobalConfig, Pool};
 use raydium_amm::amm_pool::AmmPool;
 use raydium_amm::raydium_amm_dex::RaydiumAmmDex;
+use raydium_amm::state::{AmmInfo, Loadable};
 use raydium_clmm::clmm_pool::ClmmPool;
 use raydium_clmm::raydium_clmm_dex::RaydiumClmmDex;
 use raydium_clmm::tickarray_bitmap_extension::TickArrayBitmapExtension;
@@ -23,13 +23,15 @@ use solana_program::clock::Clock;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_program::sysvar::SysvarId;
-use solana_sdk::account::Account;
+use solana_sdk::account::{Account, ReadableAccount};
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::state::Mint;
 use std::alloc::*;
 use std::collections::HashMap;
 use std::str::FromStr;
+use anchor_lang::Discriminator;
+use pump_fun::{GlobalConfig, Pool as PumpPool};
 
 #[test]
 fn test_build_routing() {
@@ -49,24 +51,12 @@ fn test_build_routing() {
     {
         let pool_1 = new_amm_pool(
             Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap(),
-            Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
-            sol.0,
-            usdc.0,
-            sol.1,
-            usdc.1,
-            (26_324.87 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
-            (3_524_576.3 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
+            &rpc_client,
         );
         amm_pools.push(pool_1);
         let pool_2 = new_amm_pool(
             Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap(),
-            Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
-            sol.0,
-            usdc.0,
-            sol.1,
-            usdc.1,
-            (3000.4374 * (10_u64.pow(sol.1 as u32)) as f64) as u64,
-            (430000.2 * (10_u64.pow(usdc.1 as u32)) as f64) as u64,
+            &rpc_client,
         );
         amm_pools.push(pool_2);
     }
@@ -117,7 +107,7 @@ fn test_build_routing() {
     let route_step = routing.find_route(
         sol.0,
         10_u64.pow(sol.1 as u32),
-        Some(Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap()),
+        Some(Pubkey::from_str("878fWxBvXfehM1U8uJuJGrBnxrCYkmcEzNhwLV8AgBfa").unwrap()),
     );
     if let Some(step) = route_step {
         println!("Step {:?} :\n {:#?}", 1, step.0);
@@ -125,29 +115,31 @@ fn test_build_routing() {
     }
 }
 
-fn new_amm_pool(
-    pool_id: Pubkey,
-    pool_owner: Pubkey,
-    mint_0: Pubkey,
-    mint_1: Pubkey,
-    mint_0_decimals: u8,
-    mint_1_decimals: u8,
-    mint_0_vault: u64,
-    mint_1_vault: u64,
-) -> AmmPool {
+fn new_amm_pool(pool_id: Pubkey, rpc_client: &RpcClient) -> AmmPool {
+    let account = rpc_client.get_account(&pool_id).unwrap();
+    let amm_info = AmmInfo::load_from_bytes(&account.data()).unwrap();
+    let vault_accounts = rpc_client
+        .get_multiple_accounts(&[amm_info.coin_vault, amm_info.pc_vault])
+        .unwrap();
+    let [coin_vault, pc_vault] = array_ref![vault_accounts, 0, 2];
+    println!("amm pool_id : {:?}", pool_id);
     AmmPool::new(
         pool_id,
-        pool_owner,
-        mint_0_vault,
-        mint_1_vault,
-        mint_0,
-        mint_1,
-        mint_0_decimals,
-        mint_1_decimals,
-        25,
-        10_000,
-        0,
-        0,
+        amm_info.amm_owner,
+        spl_token::state::Account::unpack(&coin_vault.as_ref().unwrap().data)
+            .unwrap()
+            .amount,
+        spl_token::state::Account::unpack(&pc_vault.as_ref().unwrap().data)
+            .unwrap()
+            .amount,
+        amm_info.coin_vault_mint,
+        amm_info.pc_vault_mint,
+        amm_info.coin_decimals as u8,
+        amm_info.pc_decimals as u8,
+        amm_info.fees.swap_fee_numerator,
+        amm_info.fees.swap_fee_denominator,
+        amm_info.state_data.need_take_pnl_coin,
+        amm_info.state_data.need_take_pnl_pc,
     )
 }
 
@@ -248,6 +240,7 @@ fn build_clmm_pool(
         &tickarray_bitmap_extension,
         false,
     );
+    println!("clmm pool_id : {}", pool_id_account.unwrap());
     ClmmPool {
         pool_id: pool_id_account.unwrap(),
         owner_id: program_id,
@@ -277,7 +270,7 @@ fn build_pump_fun_pool(rpc_client: &RpcClient, pool_id: Pubkey) -> PumpFunPool {
     let accounts = vec![pool_id, global_config_pda()];
     let accounts = rpc_client.get_multiple_accounts(&accounts).unwrap();
     let pool =
-        pump_fun::utils::deserialize_anchor_account::<Pool>(accounts[0].as_ref().unwrap()).unwrap();
+        pump_fun::utils::deserialize_anchor_account::<PumpPool>(accounts[0].as_ref().unwrap()).unwrap();
     let global_config =
         pump_fun::utils::deserialize_anchor_account::<GlobalConfig>(accounts[1].as_ref().unwrap())
             .unwrap();
@@ -290,6 +283,7 @@ fn build_pump_fun_pool(rpc_client: &RpcClient, pool_id: Pubkey) -> PumpFunPool {
     let mint_1_vault =
         spl_token::state::Account::unpack(vault_accounts[1].as_ref().unwrap().data.as_slice())
             .unwrap();
+    println!("pump func pool_id : {:?}", pool_id);
     PumpFunPool::new(
         pool_id,
         pool.base_mint,
@@ -309,7 +303,6 @@ fn build_dlmm_pool(
     base_factor: u16,
 ) -> DlmmPool {
     let lb_pair_pubkey = derive_lb_pair_pda2(mint_x, mint_y, bin_step, base_factor).0;
-    println!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
     let bitmap_extension_pubkey = derive_bin_array_bitmap_extension(lb_pair_pubkey).0;
     let clock_id = Clock::id();
     let accounts = rpc_client
@@ -360,7 +353,7 @@ fn build_dlmm_pool(
         3,
         &rpc_client,
     );
-
+    println!("dlmm pool_id : {:?}", lb_pair_pubkey);
     DlmmPool::new(
         lb_pair_pubkey,
         lb_pair_state,

@@ -8,6 +8,13 @@ doctest = false
 
 [dependencies]
 dex = { path = "../dex", version = "0.0.1" }
-solana-program = {workspace = true}
+solana-program = { workspace = true }
 uint = "0.9.5"
 log = "0.4.27"
+arrayref = { workspace = true }
+bytemuck = { workspace = true }
+serde = "1.0.193"
+safe-transmute = "0.11.2"
+num-derive = "0.3.3"
+thiserror = "1.0.51"
+num-traits = "0.2.19"
