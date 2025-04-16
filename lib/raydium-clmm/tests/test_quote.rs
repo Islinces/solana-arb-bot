@@ -88,6 +88,7 @@ fn new_clmm_pool(
     } else {
         None
     };
+    println!("tickarray_bitmap_extension: {:?}", tickarray_bitmap_extension);
     let load_accounts = vec![
         amm_config_key,
         pool_id_account.unwrap(),

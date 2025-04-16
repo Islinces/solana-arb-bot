@@ -118,7 +118,7 @@ impl Pool for ClmmPool {
             amount_in,
             None,
             zero_for_one,
-            zero_for_one,
+            true,
             &amm_config,
             &pool_state,
             &Some(self.tick_array_bitmap_extension),

@@ -298,6 +298,11 @@ pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> R
     T::try_deserialize(&mut data).map_err(Into::into)
 }
 
+pub fn deserialize_anchor_bytes<T: AccountDeserialize>(data: &[u8]) -> Result<T> {
+    let mut data: &[u8] = data;
+    T::try_deserialize(&mut data).map_err(Into::into)
+}
+
 pub fn load_cur_and_next_specify_count_tick_array(
     rpc_client: &RpcClient,
     load_count: u8,
@@ -352,6 +357,7 @@ pub fn load_cur_and_next_specify_count_tick_array(
         );
         max_array_size -= 1;
     }
+    println!("tick_array_keys : {:#?}", tick_array_keys);
     let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).unwrap();
     let mut tick_arrays = VecDeque::new();
     for tick_array in tick_array_rsps {
