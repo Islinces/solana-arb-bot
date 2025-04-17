@@ -67,8 +67,8 @@ async fn sub() -> anyhow::Result<()> {
         .unwrap()
         .subscribe_with_request(Some(generate_mint_vault_sub_request()))
         // .subscribe_with_request(None)
-        .await?;
-
+        .await.unwrap();
+    info!("connect grpc successful!");
     loop {
         tokio::select! {
             update = mint_vault_stream.next() =>{

@@ -52,8 +52,8 @@ async fn sub() -> anyhow::Result<()> {
     let (_subscribe_tx, mut stream) = client
         .as_mut()
         .unwrap()
-        // .subscribe_with_rexquest(Some(generate_pool_sub_field_request()))
-        .subscribe_with_request(None)
+        .subscribe_with_request(Some(generate_pool_sub_field_request()))
+        // .subscribe_with_request(None)
         .await?;
     let (_, mut bin_array_stream) = client
         .as_mut()
@@ -65,8 +65,8 @@ async fn sub() -> anyhow::Result<()> {
     let (_, mut bin_array_bitmap_extension_stream) = client
         .as_mut()
         .unwrap()
-        // .subscribe_with_request(Some(generate_bin_array_bitmap_sub_request()))
-        .subscribe_with_request(None)
+        .subscribe_with_request(Some(generate_bin_array_bitmap_sub_request()))
+        // .subscribe_with_request(None)
         .await?;
     info!("connect grpc successful!");
     loop {

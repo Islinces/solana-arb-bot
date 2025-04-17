@@ -33,31 +33,6 @@ use yellowstone_grpc_proto::geyser::{
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::StreamExt;
 
 #[test]
-fn test() {
-    println!(
-        "name:{:?}",
-        [
-            43, 49, 147, 96, 191, 162, 206, 203, 146, 196, 176, 164, 96, 64, 154, 15, 4, 40, 3, 63,
-            96, 19, 0, 184, 179, 252, 249, 156, 243, 96, 46, 135,
-        ]
-        .to_base58()
-    );
-    let slice: [u8; 16] = [181, 198, 153, 183, 27, 156, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    let u129 = U128::from_little_endian(slice.as_slice()).as_u128();
-    println!("price : {:?}", u129);
-    println!("price : {:?}", u128::from_le_bytes(slice));
-    println!("price : {:?}", i32::from_be_bytes([174, 175, 255, 255]));
-    println!(
-        "price : {:?}",
-        [
-            37, 174, 48, 152, 88, 209, 141, 133, 119, 93, 77, 173, 145, 178, 249, 150, 62, 61, 105,
-            219, 165, 61, 79, 226, 101, 182, 105, 158, 71, 91, 177, 25
-        ]
-        .to_base58()
-    );
-}
-
-#[test]
 fn calac_pool_state_sub_field_offset() {
     // 计算每个字段的offset和size
     let offsets = [
@@ -208,20 +183,20 @@ async fn sub() -> anyhow::Result<()> {
         .unwrap()
         .subscribe_with_request(Some(generate_pool_state_sub_field_request()))
         // .subscribe_with_request(None)
-        .await?;
+        .await.unwrap();
     let (_, mut tick_array_stream) = client
         .as_mut()
         .unwrap()
         .subscribe_with_request(Some(generate_tick_array_state_sub_request()))
         // .subscribe_with_request(None)
-        .await?;
+        .await.unwrap();
     let (_, mut tick_array_bitmap_extension_stream) = client
         .as_mut()
         .unwrap()
         .subscribe_with_request(Some(generate_tick_array_bitmap_extension_sub_request()))
         // .subscribe_with_request(None)
-        .await?;
-
+        .await.unwrap();
+    info!("connect grpc successful!");
     loop {
         tokio::select! {
             update = stream.next() =>{
