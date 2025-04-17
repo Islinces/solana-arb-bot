@@ -17,6 +17,7 @@ pub struct DlmmPool {
     pub active_id: i32,
     // 1，5，8，10，16，80，100
     pub bin_step: u16,
+    pub status: u8,
     pub activation_point: u64,
     pub pair_type: u8,
     pub activation_type: u8,
@@ -75,6 +76,7 @@ impl DlmmPool {
             lb_pair_pubkey,
             active_id: lb_pair_state.active_id,
             bin_step: lb_pair_state.bin_step,
+            status: lb_pair_state.status,
             activation_point: lb_pair_state.activation_point,
             pair_type: lb_pair_state.pair_type,
             activation_type: lb_pair_state.activation_type,

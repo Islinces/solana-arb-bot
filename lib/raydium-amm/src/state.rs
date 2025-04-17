@@ -170,7 +170,7 @@ pub struct StateData {
 
 #[cfg_attr(feature = "client", derive(Debug))]
 #[repr(C, packed)]
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub struct AmmInfo {
     /// Initialized status.
     pub status: u64,

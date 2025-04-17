@@ -1,19 +1,18 @@
-use crate::*;
+use crate::sdk::commons::constants::{BASIS_POINT_MAX, BIN_ARRAY_BITMAP_SIZE, FEE_PRECISION, MAX_BIN_ID, MAX_FEE_RATE, MIN_BIN_ID};
+use crate::sdk::conversions::activation_type::ActivationTypeWrapper;
+use crate::sdk::conversions::pair_type::PairTypeWrapper;
+use crate::sdk::conversions::status::PairStatusWrapper;
+use crate::sdk::conversions::token_program_flag::TokenProgramFlagWrapper;
+use crate::sdk::interface::accounts::LbPair;
+use crate::sdk::interface::typedefs::TokenProgramFlags;
 use anchor_spl::token::spl_token;
 use anchor_spl::token_2022::spl_token_2022;
+use anyhow::{ensure, Context, Result};
 use ruint::aliases::U1024;
 use solana_sdk::pubkey::Pubkey;
 use std::ops::Deref;
 use std::ops::Shl;
 use std::ops::Shr;
-use crate::sdk::conversions::status::PairStatusWrapper;
-use anyhow::{ensure, Context, Result};
-use crate::sdk::interface::accounts::LbPair;
-use crate::sdk::conversions::activation_type::ActivationTypeWrapper;
-use crate::sdk::commons::constants::{BASIS_POINT_MAX, BIN_ARRAY_BITMAP_SIZE, FEE_PRECISION, MAX_BIN_ID, MAX_FEE_RATE, MIN_BIN_ID};
-use crate::sdk::conversions::pair_type::PairTypeWrapper;
-use crate::sdk::conversions::token_program_flag::TokenProgramFlagWrapper;
-use crate::sdk::interface::typedefs::TokenProgramFlags;
 
 pub trait LbPairExtension {
     fn bitmap_range() -> (i32, i32);
@@ -310,39 +309,4 @@ impl LbPairExtension for LbPair {
             };
         }
     }
-}
-
-#[test]
-fn test() {
-    let bin_array_bitmap = U1024::from_limbs([
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        18_446_742_974_197_923_840_u64,
-        33_554_431_u64,
-        16_777_216_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-        0_u64,
-    ]);
-    let (min_bitmap_id, max_bitmap_id) = LbPair::bitmap_range();
-    let bitmap_range: usize = max_bitmap_id
-        .checked_sub(min_bitmap_id)
-        .context("overflow")
-        .unwrap()
-        .try_into()
-        .context("overflow")
-        .unwrap();
-    println!("bitmap_range : {:?}", bitmap_range);
-    let offset_bit_map =
-        bin_array_bitmap.shl(1023_usize.checked_sub(435).context("overflow").unwrap());
-    let i = offset_bit_map.leading_zeros();
-    println!("offset_bit_map : {:?},\nleading_zeros : {:?}", offset_bit_map, i);
 }

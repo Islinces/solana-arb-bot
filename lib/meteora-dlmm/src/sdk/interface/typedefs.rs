@@ -167,7 +167,7 @@ pub struct BinLiquidityReduction {
 }
 #[repr(C)]
 #[derive(
-    Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq, Pod, Copy, Zeroable,
+    Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq, Pod, Copy, Zeroable, Default,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Bin {

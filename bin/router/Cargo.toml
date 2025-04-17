@@ -43,3 +43,22 @@ serde_json = "1.0"
 [[bench]]
 name = "test_quote_benches"
 harness = false
+
+[[test]]
+name = "test_pool_quote"
+path = "tests/test_pool_quote.rs"
+[[test]]
+name = "test_clmm_sub"
+path = "tests/test_clmm_sub.rs"
+[[test]]
+name = "test_clmm_sub_diff"
+path = "tests/test_clmm_sub_diff.rs"
+[[test]]
+name = "test_amm_sub"
+path = "tests/test_amm_sub.rs"
+[[test]]
+name = "test_pump_fun_sub"
+path = "tests/test_pump_fun_sub.rs"
+[[test]]
+name = "test_dlmm_sub"
+path = "tests/test_dlmm_sub.rs"

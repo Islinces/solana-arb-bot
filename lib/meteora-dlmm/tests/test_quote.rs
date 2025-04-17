@@ -43,8 +43,9 @@ fn build_pool() -> DlmmPool {
     let mint_x = Pubkey::from_str("9gyfbPVwwZx4y1hotNSLcqXCQNpNqqz6ZRvo8yTLpump").unwrap();
     let mint_y = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
     let lb_pair_pubkey = derive_lb_pair_pda2(mint_x, mint_y, 100, 20_000).0;
-    println!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
     let bitmap_extension_pubkey = derive_bin_array_bitmap_extension(lb_pair_pubkey).0;
+    println!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
+    println!("bitmap_extension_pubkey : {:?}", bitmap_extension_pubkey);
     let clock_id = Clock::id();
     let accounts = rpc_client
         .get_multiple_accounts(&[
@@ -94,6 +95,8 @@ fn build_pool() -> DlmmPool {
         3,
         &rpc_client,
     );
+    println!("left bin arrays : {:?}", &left_bin_arrays.keys());
+    println!("right bin arrays : {:?}", &right_bin_arrays.keys());
 
     DlmmPool::new(
         lb_pair_pubkey,

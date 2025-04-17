@@ -5,13 +5,13 @@ use crate::sdk::extensions::bin::BinExtension;
 use crate::sdk::extensions::bin_array::BinArrayExtension;
 use crate::sdk::extensions::bin_array_bitmap::BinArrayBitmapExtExtension;
 use crate::sdk::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
-use crate::sdk::interface::typedefs::{ActivationType, Bin, PairStatus, PairType};
+use crate::sdk::interface::typedefs::{ActivationType, PairStatus, PairType};
 use crate::sdk::lb_pair::LbPairExtension;
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use anchor_spl::token_2022::spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use anyhow::Result;
 use anyhow::{ensure, Context};
-use solana_sdk::{account::Account, clock::Clock};
+use solana_sdk::clock::Clock;
 use std::{collections::HashMap, ops::Deref};
 
 #[derive(Debug)]

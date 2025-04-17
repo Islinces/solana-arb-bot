@@ -33,6 +33,7 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions, SubscribeUpdateAccount,
 };
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::StreamExt;
+use pump_fun::Pool;
 
 #[tokio::test]
 async fn main() {
@@ -61,12 +62,6 @@ async fn sub() -> anyhow::Result<()> {
     if client.is_err() {
         return Err(anyhow::Error::msg("failed to connect"));
     }
-    let (_subscribe_tx, mut stream) = client
-        .as_mut()
-        .unwrap()
-        // .subscribe_with_request(Some(generate_amm_info_sub_field_request()))
-        .subscribe_with_request(None)
-        .await?;
     let (_, mut mint_vault_stream) = client
         .as_mut()
         .unwrap()
@@ -76,30 +71,6 @@ async fn sub() -> anyhow::Result<()> {
 
     loop {
         tokio::select! {
-            update = stream.next() =>{
-                if let Some(data) = update {
-                    match data{
-                       Ok(msg) => match msg.update_oneof {
-                            Some(UpdateOneof::Account(account)) => {
-                                let account_info = &account.account.unwrap();
-                                let pubkey=&account_info.pubkey.to_base58();
-                                 let  pool_state = amm_info_from_sub_data_slice(account_info.data.as_slice());
-                                // info!("txn : {:?}, account : {:?}, data:{:?}",
-                                //     &account_info.txn_signature.to_owned().unwrap().to_base58(),pubkey,pool_state);
-                                // let amm_info = AmmInfo::load_from_bytes(&account_info.data).unwrap();
-                                info!("txn : {:?}, account : {:?}, data:{:?}",
-                                    &account_info.txn_signature.to_owned().unwrap().to_base58(),
-                                    pubkey,
-                                    pool_state
-                                );
-                            },
-                            _=>{}
-                        },
-                        _=>{}
-                    }
-
-                }
-            },
             update = mint_vault_stream.next() =>{
                 if let Some(data) = update {
                     match data{
@@ -137,12 +108,12 @@ async fn client() -> anyhow::Result<GeyserGrpcClient<impl Interceptor>> {
     })
 }
 
-fn generate_amm_info_sub_field_request() -> SubscribeRequest {
+fn generate_pump_fun_pool_sub_field_request() -> SubscribeRequest {
     let mut sub_accounts: HashMap<String, SubscribeRequestFilterAccounts> = HashMap::new();
     sub_accounts.insert(
-        "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2-account".to_string(),
+        "Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v-account".to_string(),
         SubscribeRequestFilterAccounts {
-            account: vec!["58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2".to_string()],
+            account: vec!["Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v".to_string()],
             ..Default::default()
         },
     );
@@ -197,16 +168,16 @@ fn amm_info_from_sub_data_slice(data: &[u8]) -> AmmInfo {
 fn generate_mint_vault_sub_request() -> SubscribeRequest {
     let mut account_map: HashMap<String, SubscribeRequestFilterAccounts> = HashMap::new();
     account_map.insert(
-        "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz-account".to_string(),
+        "nML7msD1MiJHxFvhv4po1u6C4KpWr64ugKqc75DMuD2-account".to_string(),
         SubscribeRequestFilterAccounts {
-            account: vec!["DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz".to_string()],
+            account: vec!["nML7msD1MiJHxFvhv4po1u6C4KpWr64ugKqc75DMuD2".to_string()],
             ..Default::default()
         },
     );
     account_map.insert(
-        "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz-account".to_string(),
+        "EjHirXt2bQd2DDNveagHHCWYzUwtY1iwNbBrV5j84e6j-account".to_string(),
         SubscribeRequestFilterAccounts {
-            account: vec!["HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz".to_string()],
+            account: vec!["EjHirXt2bQd2DDNveagHHCWYzUwtY1iwNbBrV5j84e6j".to_string()],
             ..Default::default()
         },
     );
@@ -224,7 +195,7 @@ fn generate_mint_vault_sub_request() -> SubscribeRequest {
                 offset: 64,
                 length: 8,
             },
-            // amount
+            // state
             SubscribeRequestAccountsDataSlice {
                 offset: 108,
                 length: 1,
@@ -242,41 +213,6 @@ fn mint_vault_from_sub_data_slice(data: &[u8]) -> Account {
         amount: u64::from_le_bytes(*amount),
         state: AccountState::try_from(state[0]).unwrap(),
         ..Default::default()
-    }
-}
-
-#[test]
-fn calac_pool_state_sub_field_offset() {
-    // 计算每个字段的offset和size
-    let offsets = [
-        (
-            "fees.swap_fee_numerator",
-            offset_of!(AmmInfo, fees.swap_fee_numerator),
-            size_of::<u64>(),
-        ),
-        (
-            "fees.swap_fee_denominator",
-            offset_of!(AmmInfo, fees.swap_fee_denominator),
-            size_of::<u64>(),
-        ),
-        (
-            "state_data.need_take_pnl_coin",
-            offset_of!(AmmInfo, state_data.need_take_pnl_coin),
-            size_of::<u64>(),
-        ),
-        (
-            "state_data.need_take_pnl_pc",
-            offset_of!(AmmInfo, state_data.need_take_pnl_pc),
-            size_of::<u64>(),
-        ),
-    ];
-
-    // 打印结果
-    for (field, offset, size) in offsets {
-        println!(
-            "AmmInfo \nField: {}, Offset: {} bytes, Size: {} bytes",
-            field, offset, size
-        );
     }
 }
 

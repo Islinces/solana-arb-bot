@@ -1,10 +1,10 @@
-use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-use anyhow::{ensure, Context, Result};
-use num_integer::Integer;
-use crate::sdk::interface::accounts::BinArray;
 use crate::sdk::commons::constants::MAX_BIN_PER_ARRAY;
 use crate::sdk::commons::pda::derive_bin_array_pda;
+use crate::sdk::interface::accounts::BinArray;
 use crate::sdk::interface::typedefs::Bin;
+use anyhow::{ensure, Context, Result};
+use num_integer::Integer;
+use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
 
 pub trait BinArrayExtension {
     fn is_bin_id_within_range(&self, bin_id: i32) -> Result<bool>;
