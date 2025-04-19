@@ -32,6 +32,7 @@ use std::alloc::*;
 use std::collections::HashMap;
 use std::ops::{Div, Mul};
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[test]
 fn test_build_routing() {
@@ -182,10 +183,10 @@ fn test_build_routing() {
         dlmm_pools.push(pool_1);
     }
     let routing = Routing::new(vec![
-        Box::new(RaydiumAmmDex::new(amm_pools)),
-        Box::new(RaydiumClmmDex::new(clmm_pools)),
-        Box::new(PumpFunDex::new(pump_fun_pools)),
-        Box::new(MeteoraDlmmDex::new(dlmm_pools)),
+        Arc::new(RaydiumAmmDex::new(amm_pools)),
+        Arc::new(RaydiumClmmDex::new(clmm_pools)),
+        Arc::new(PumpFunDex::new(pump_fun_pools)),
+        Arc::new(MeteoraDlmmDex::new(dlmm_pools)),
     ]);
     // println!("routing : {:#?}", routing);
     let route_step = routing.find_route(

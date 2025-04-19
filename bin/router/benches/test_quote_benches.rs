@@ -30,6 +30,7 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::state::Mint;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 fn bench_route(c: &mut Criterion) {
     let routing = test_build_routing();
@@ -128,10 +129,10 @@ fn test_build_routing() -> (Routing, Pubkey, u8) {
     }
     (
         Routing::new(vec![
-            Box::new(RaydiumAmmDex::new(amm_pools)),
-            Box::new(RaydiumClmmDex::new(clmm_pools)),
-            Box::new(PumpFunDex::new(pump_fun_pools)),
-            Box::new(MeteoraDlmmDex::new(dlmm_pools)),
+            Arc::new(RaydiumAmmDex::new(amm_pools)),
+            Arc::new(RaydiumClmmDex::new(clmm_pools)),
+            Arc::new(PumpFunDex::new(pump_fun_pools)),
+            Arc::new(MeteoraDlmmDex::new(dlmm_pools)),
         ]),
         sol.0,
         sol.1,

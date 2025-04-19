@@ -1,10 +1,11 @@
-use dex::account_write::AccountWrite;
-use dex::interface::{Dex, Pool};
+use anyhow::anyhow;
+use dex::interface::{DexInterface, DexPoolInterface};
+use log::info;
 use solana_program::pubkey::Pubkey;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 pub struct Routing {
     // key: mint
@@ -12,16 +13,20 @@ pub struct Routing {
     pub mint_edge: HashMap<Pubkey, Vec<(Pubkey, Pubkey)>>,
     // pub edge: Vec<Vec<Pubkey>>,
     // key ： 池子pubkey， value： 池子
-    pub pool: RwLock<HashMap<Pubkey, Box<dyn Pool>>>,
+    pub pool: RwLock<HashMap<Pubkey, Box<dyn DexPoolInterface>>>,
+    pub pool_size: usize,
 }
 
 impl Routing {
-    pub fn new(dexs: Vec<Box<dyn Dex>>) -> Routing {
+    pub fn from(all_dex: Vec<Arc<dyn DexInterface>>) -> Routing {
         let mut mint_edge = HashMap::<Pubkey, Vec<(Pubkey, Pubkey)>>::new();
-        let all_pools: Vec<Box<dyn Pool>> = dexs.into_iter().flat_map(|dex| dex.get_pools()).collect();
-        let mut pool_map = HashMap::<Pubkey, Box<dyn Pool>>::new();
+        let all_pools = all_dex
+            .into_iter()
+            .flat_map(|dex| dex.get_base_pools())
+            .collect::<Vec<_>>();
+        let pool_size = all_pools.len();
         for pool in all_pools.into_iter() {
-            pool_map.insert(pool.get_pool_id(), pool.clone_box());
+            // pool_map.insert(pool.get_pool_id(), pool.clone_box());
             match mint_edge.entry(pool.get_mint_0()) {
                 Entry::Occupied(mut value) => value
                     .get_mut()
@@ -41,9 +46,57 @@ impl Routing {
         }
         Self {
             mint_edge,
-            pool: RwLock::new(pool_map),
+            pool: RwLock::new(HashMap::with_capacity(pool_size)),
+            pool_size,
         }
     }
+
+    pub fn fill_snapshot(&mut self, pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
+        if let Ok(mut write_guard) = self.pool.write() {
+            let pool_id = pool.get_pool_id();
+            self.pool_size -= 1;
+            write_guard.insert(pool_id, pool);
+            Ok(pool_id)
+        } else {
+            Err(anyhow!(
+                "填充快照[{:?}]获取pool写锁失败",
+                pool.get_pool_id()
+            ))
+        }
+    }
+
+    pub fn trigger_after_update_pool(
+        &mut self,
+        pool: Box<dyn DexPoolInterface>,
+        input_mint: Pubkey,
+        amount_in: u64,
+    ) -> anyhow::Result<Pubkey> {
+        if self.pool_size != 0 {
+            return Err(anyhow!("还有{}个池子没有填充快照", self.pool_size));
+        }
+        let changed_pool = if let Ok(mut write_guard) = self.pool.write() {
+            let pool_id = pool.get_pool_id();
+            match write_guard.entry(pool_id) {
+                Entry::Occupied(mut exists_entry) => {
+                    let _ = exists_entry.get_mut().update_data(pool);
+                }
+                Entry::Vacant(un_exists_entry) => {
+                    un_exists_entry.insert(pool);
+                }
+            };
+            pool_id
+        } else {
+            return Err(anyhow!(
+                "更新池子[{:?}]失败：获取pool写锁失败",
+                pool.get_pool_id()
+            ));
+        };
+        let route_step = self.find_route(input_mint, amount_in, Some(changed_pool));
+        info!("route step : {:?}", route_step);
+        Ok(changed_pool)
+    }
+
+    pub fn triger_swap(&self) {}
 
     pub fn find_route(
         &self,
@@ -152,13 +205,6 @@ impl Routing {
                 .max_by_key(|x| x.1.amount_out);
         }
         final_route_step
-    }
-
-    pub fn update_pool(&self, account_write: AccountWrite) {
-        let write_guard = self.pool.write().unwrap();
-        if let Some(pool) = write_guard.get(&account_write.pubkey) {
-            pool.update_data(account_write);
-        }
     }
 }
 

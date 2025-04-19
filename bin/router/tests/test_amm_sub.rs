@@ -32,7 +32,7 @@ use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions, SubscribeUpdateAccount,
 };
-use yellowstone_grpc_proto::tonic::codegen::tokio_stream::StreamExt;
+use yellowstone_grpc_proto::tonic::codegen::tokio_stream::{StreamExt, StreamMap};
 
 #[tokio::test]
 async fn main() {
@@ -73,24 +73,27 @@ async fn sub() -> anyhow::Result<()> {
         .subscribe_with_request(Some(generate_mint_vault_sub_request()))
         // .subscribe_with_request(None)
         .await.unwrap();
+    let mut map = StreamMap::new();
+    map.insert("amm_info", stream);
+    map.insert("mint_vault", mint_vault_stream);
     info!("connect grpc successful!");
     loop {
         tokio::select! {
-            update = stream.next() =>{
-                if let Some(data) = update {
+            update = map.next() =>{
+                if let Some((_,data)) = update {
                     match data{
                        Ok(msg) => match msg.update_oneof {
                             Some(UpdateOneof::Account(account)) => {
                                 let account_info = &account.account.unwrap();
                                 let pubkey=&account_info.pubkey.to_base58();
-                                 let  pool_state = amm_info_from_sub_data_slice(account_info.data.as_slice());
+                                 // let  pool_state = amm_info_from_sub_data_slice(account_info.data.as_slice());
                                 // info!("txn : {:?}, account : {:?}, data:{:?}",
                                 //     &account_info.txn_signature.to_owned().unwrap().to_base58(),pubkey,pool_state);
                                 // let amm_info = AmmInfo::load_from_bytes(&account_info.data).unwrap();
                                 info!("txn : {:?}, account : {:?}, data:{:?}",
                                     &account_info.txn_signature.to_owned().unwrap().to_base58(),
                                     pubkey,
-                                    pool_state
+                                    account_info.data
                                 );
                             },
                             _=>{}
@@ -100,23 +103,23 @@ async fn sub() -> anyhow::Result<()> {
 
                 }
             },
-            update = mint_vault_stream.next() =>{
-                if let Some(data) = update {
-                    match data{
-                       Ok(msg) => match msg.update_oneof {
-                            Some(UpdateOneof::Account(account)) => {
-                                let account_info = &account.account.unwrap();
-                                let txn = &account_info.txn_signature;
-                                let pubkey=&account_info.pubkey.to_base58();
-                                let account = mint_vault_from_sub_data_slice(&account_info.data);
-                                info!("txn : {:?},pubkey:{:?}, data : {:?}",txn.to_owned().unwrap().to_base58(),pubkey,account);
-                            },
-                            _=>{}
-                        },
-                        _=>{}
-                    }
-                }
-            },
+            // update = mint_vault_stream.next() =>{
+            //     if let Some(data) = update {
+            //         match data{
+            //            Ok(msg) => match msg.update_oneof {
+            //                 Some(UpdateOneof::Account(account)) => {
+            //                     let account_info = &account.account.unwrap();
+            //                     let txn = &account_info.txn_signature;
+            //                     let pubkey=&account_info.pubkey.to_base58();
+            //                     let account = mint_vault_from_sub_data_slice(&account_info.data);
+            //                     info!("txn : {:?},pubkey:{:?}, data : {:?}",txn.to_owned().unwrap().to_base58(),pubkey,account);
+            //                 },
+            //                 _=>{}
+            //             },
+            //             _=>{}
+            //         }
+            //     }
+            // },
         }
     }
 }
@@ -249,6 +252,16 @@ fn mint_vault_from_sub_data_slice(data: &[u8]) -> Account {
 fn calac_pool_state_sub_field_offset() {
     // 计算每个字段的offset和size
     let offsets = [
+        (
+            "coin_vault_mint",
+            offset_of!(AmmInfo, coin_vault_mint),
+            size_of::<Pubkey>(),
+        ),
+        (
+            "pc_vault_mint",
+            offset_of!(AmmInfo, pc_vault_mint),
+            size_of::<Pubkey>(),
+        ),
         (
             "fees.swap_fee_numerator",
             offset_of!(AmmInfo, fees.swap_fee_numerator),

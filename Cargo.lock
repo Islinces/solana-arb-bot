@@ -1541,8 +1541,15 @@ dependencies = [
 name = "dex"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "solana-client",
  "solana-program",
  "solana-sdk",
+ "tokio",
+ "tonic 0.12.3",
+ "yellowstone-grpc-client",
+ "yellowstone-grpc-proto",
 ]
 
 [[package]]
@@ -2737,6 +2744,7 @@ dependencies = [
  "anchor-spl",
  "anyhow",
  "arrayref",
+ "async-trait",
  "bincode",
  "borsh 1.5.7",
  "bytemuck",
@@ -2747,6 +2755,7 @@ dependencies = [
  "num-traits",
  "ruint",
  "serde",
+ "solana-client",
  "solana-program",
  "solana-sdk",
  "spl-transfer-hook-interface 0.5.0",
@@ -3355,6 +3364,8 @@ version = "0.0.1"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "anyhow",
+ "async-trait",
  "dex",
  "log",
  "solana-client",
@@ -3530,17 +3541,30 @@ dependencies = [
 name = "raydium-amm"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "arrayref",
+ "async-trait",
+ "base58",
  "bytemuck",
+ "chrono",
  "dex",
+ "futures-util",
  "log",
  "num-derive 0.3.3",
  "num-traits",
  "safe-transmute",
- "serde",
+ "solana-account-decoder",
+ "solana-client",
  "solana-program",
+ "solana-sdk",
+ "spl-token",
  "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.12.3",
  "uint",
+ "yellowstone-grpc-client",
+ "yellowstone-grpc-proto",
 ]
 
 [[package]]
@@ -3551,6 +3575,7 @@ dependencies = [
  "anchor-spl",
  "anyhow",
  "arrayref",
+ "async-trait",
  "dex",
  "solana-client",
  "solana-program",
@@ -3723,6 +3748,7 @@ dependencies = [
  "serde",
  "serde-diff",
  "serde_json",
+ "solana-account-decoder",
  "solana-client",
  "solana-program",
  "solana-sdk",

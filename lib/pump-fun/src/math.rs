@@ -3,37 +3,6 @@
 #![allow(clippy::ptr_offset_with_cast)]
 #![allow(clippy::unknown_clippy_lints)]
 #![allow(clippy::manual_range_contains)]
-
-use std::{cmp::Eq, convert::identity, convert::TryInto};
-use uint::construct_uint;
-
-// construct_uint! {
-//     pub struct U256(4);
-// }
-// construct_uint! {
-//     pub struct U128(2);
-// }
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[repr(u64)]
-pub enum SwapDirection {
-    /// Input token pc, output token coin
-    PC2Coin = 1u64,
-    /// Input token coin, output token pc
-    Coin2PC = 2u64,
-}
-
-/// The direction to round.  Used for pool token to trading token conversions to
-/// avoid losing value on any deposit or withdrawal.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum RoundDirection {
-    /// Floor the value, ie. 1.9 => 1, 1.1 => 1, 1.5 => 1
-    Floor,
-    /// Ceiling the value, ie. 1.9 => 2, 1.1 => 2, 1.5 => 2
-    Ceiling,
-}
-
 /// Perform a division that does not truncate value from either side, returning
 /// the (quotient, divisor) as a tuple
 ///

@@ -1,15 +1,15 @@
-use crate::sdk::commons::quote::quote_exact_in;
 use crate::sdk::conversions::token_program_flag::TokenProgramFlagWrapper;
 use crate::sdk::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::sdk::interface::typedefs::TokenProgramFlags;
 use anchor_spl::token_2022::spl_token_2022::extension::transfer_fee::TransferFeeConfig;
-use dex::account_write::AccountWrite;
-use dex::interface::Pool;
+use dex::interface::DexPoolInterface;
 use solana_program::clock::Clock;
-use solana_program::msg;
 use solana_program::pubkey::Pubkey;
+use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Deref;
+use solana_program::msg;
+use crate::sdk::commons::quote::quote_exact_in;
 
 #[derive(Debug, Clone)]
 pub struct DlmmPool {
@@ -141,19 +141,7 @@ impl DlmmPool {
     }
 }
 
-impl Pool for DlmmPool {
-    fn get_pool_id(&self) -> Pubkey {
-        self.lb_pair_pubkey
-    }
-
-    fn get_mint_0(&self) -> Pubkey {
-        self.token_x_mint
-    }
-
-    fn get_mint_1(&self) -> Pubkey {
-        self.token_y_mint
-    }
-
+impl DexPoolInterface for DlmmPool {
     fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> Option<u64> {
         if amount_in_mint != self.token_x_mint && amount_in_mint != self.token_y_mint {
             return None;
@@ -187,11 +175,31 @@ impl Pool for DlmmPool {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn Pool> {
-        Box::new(self.clone())
+    fn get_pool_id(&self) -> Pubkey {
+        self.lb_pair_pubkey
     }
 
-    fn update_data(&self, account_write: AccountWrite) {
+    fn get_mint_0(&self) -> Pubkey {
+        self.token_x_mint
+    }
+
+    fn get_mint_1(&self) -> Pubkey {
+        self.token_y_mint
+    }
+
+    fn get_mint_0_vault(&self) -> Option<Pubkey> {
+        None
+    }
+
+    fn get_mint_1_vault(&self) -> Option<Pubkey> {
+        None
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
         todo!()
     }
 }

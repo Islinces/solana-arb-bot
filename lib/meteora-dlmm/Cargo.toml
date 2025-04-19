@@ -11,6 +11,8 @@ num-integer = "0.1.45"
 log = "0.4.27"
 arrayref = { workspace = true }
 bincode = "1.3.3"
+solana-client = { workspace = true }
+async-trait = {workspace = true}
 
 [dependencies.dex]
 path = "../dex"

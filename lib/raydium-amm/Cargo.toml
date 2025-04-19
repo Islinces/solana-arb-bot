@@ -8,13 +8,28 @@ doctest = false
 
 [dependencies]
 dex = { path = "../dex", version = "0.0.1" }
+
 solana-program = { workspace = true }
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+solana-account-decoder = { workspace = true }
+
 uint = "0.9.5"
 log = "0.4.27"
 arrayref = { workspace = true }
 bytemuck = { workspace = true }
-serde = "1.0.193"
 safe-transmute = "0.11.2"
 num-derive = "0.3.3"
 thiserror = "1.0.51"
 num-traits = "0.2.19"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = "0.1.15"
+yellowstone-grpc-client = { workspace = true }
+yellowstone-grpc-proto = { workspace = true }
+tonic = "0.12.1"
+spl-token = { workspace = true }
+base58 = { workspace = true }
+futures-util = "0.3.30"

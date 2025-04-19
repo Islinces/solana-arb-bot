@@ -3,9 +3,9 @@ use crate::pool::PoolState;
 use crate::tick_array::TickArrayState;
 use crate::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::utils;
-use dex::account_write::AccountWrite;
-use dex::interface::Pool;
+use dex::interface::DexPoolInterface;
 use solana_program::pubkey::Pubkey;
+use std::any::Any;
 use std::collections::VecDeque;
 
 #[derive(Clone, Debug)]
@@ -82,19 +82,7 @@ impl ClmmPool {
     }
 }
 
-impl Pool for ClmmPool {
-    fn get_pool_id(&self) -> Pubkey {
-        self.pool_id
-    }
-
-    fn get_mint_0(&self) -> Pubkey {
-        self.mint_0
-    }
-
-    fn get_mint_1(&self) -> Pubkey {
-        self.mint_1
-    }
-
+impl DexPoolInterface for ClmmPool {
     fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> Option<u64> {
         if amount_in_mint != self.mint_0 && amount_in_mint != self.mint_1 {
             return None;
@@ -111,8 +99,8 @@ impl Pool for ClmmPool {
         pool_state.liquidity = self.liquidity;
         pool_state.sqrt_price_x64 = self.sqrt_price_x64;
         let mut tick_arrays = match zero_for_one {
-            true => VecDeque::from(self.zero_to_one_tick_arays.clone()),
-            false => VecDeque::from(self.one_to_zero_tick_arays.clone()),
+            true => self.zero_to_one_tick_arays.clone(),
+            false => self.one_to_zero_tick_arays.clone(),
         };
         let result = get_out_put_amount_and_remaining_accounts(
             amount_in,
@@ -133,11 +121,31 @@ impl Pool for ClmmPool {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn Pool> {
-        Box::new(self.clone())
+    fn get_pool_id(&self) -> Pubkey {
+        self.pool_id
     }
 
-    fn update_data(&self, account_write: AccountWrite) {
+    fn get_mint_0(&self) -> Pubkey {
+        self.mint_1
+    }
+
+    fn get_mint_1(&self) -> Pubkey {
+        self.mint_0
+    }
+
+    fn get_mint_0_vault(&self) -> Option<Pubkey> {
+        None
+    }
+
+    fn get_mint_1_vault(&self) -> Option<Pubkey> {
+        None
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        todo!()
+    }
+
+    fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
         todo!()
     }
 }

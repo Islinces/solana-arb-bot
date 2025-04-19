@@ -17,3 +17,4 @@ anchor-spl = {workspace = true}
 anyhow = {workspace = true}
 spl-token-2022 = {workspace = true}
 arrayref = {workspace = true}
+async-trait = {workspace = true}
