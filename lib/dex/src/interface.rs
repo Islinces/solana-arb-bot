@@ -1,4 +1,5 @@
 use crate::state::FetchConfig;
+use crate::trigger::{TriggerEvent, TriggerEventHolder};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
@@ -31,7 +32,7 @@ pub trait DexPoolInterface: Sync + Send + Debug {
 
     fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> Option<u64>;
 
-    fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey>;
+    fn update_data(&mut self, changed_pool: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey>;
 }
 
 #[async_trait::async_trait]
@@ -40,7 +41,7 @@ pub trait GrpcSubscriber: Sync + Send {
         dex: Arc<dyn DexInterface>,
         fetch_config: Arc<FetchConfig>,
         account_write_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
-        trigger_route_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
+        trigger_event_sender: UnboundedSender<Box<dyn TriggerEvent>>,
     );
 }
 

@@ -1,5 +1,6 @@
 use crate::math::CheckedCeilDiv;
 use dex::interface::DexPoolInterface;
+use dex::trigger::TriggerEvent;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
 use std::ops::{Add, Div, Mul, Sub};
@@ -101,7 +102,7 @@ impl DexPoolInterface for PumpFunPool {
         }))
     }
 
-    fn update_data(&mut self, _changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
+    fn update_data(&mut self, _changed_pool: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
         todo!()
     }
 }

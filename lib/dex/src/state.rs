@@ -11,13 +11,24 @@ pub struct FetchConfig {
 }
 
 pub enum SourceMessage {
-    GrpcAccountUpdate(GrpcAccountUpdateType, SubscribeUpdateAccountInfo),
+    GrpcAccountUpdate(
+        GrpcAccountUpdateType,
+        SubscribeUpdateAccountInfo,
+        i64,
+        String,
+    ),
 }
 
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, Debug)]
 pub enum GrpcAccountUpdateType {
     PoolState,
     MintVault,
+}
+
+impl GrpcAccountUpdateType {
+    pub fn filter_name() ->String {
+        "".to_string()
+    }
 }
 
 impl From<usize> for GrpcAccountUpdateType {

@@ -8,6 +8,7 @@ use dex::interface::DexPoolInterface;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
 use std::collections::VecDeque;
+use dex::trigger::TriggerEvent;
 
 #[derive(Clone, Debug)]
 pub struct ClmmPool {
@@ -126,7 +127,7 @@ impl DexPoolInterface for ClmmPool {
         }
     }
 
-    fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
+    fn update_data(&mut self, changed_pool: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
         todo!()
     }
 }

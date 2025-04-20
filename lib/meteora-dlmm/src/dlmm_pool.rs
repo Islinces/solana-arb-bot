@@ -9,6 +9,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Deref;
 use solana_program::msg;
+use dex::trigger::TriggerEvent;
 use crate::sdk::commons::quote::quote_exact_in;
 
 #[derive(Debug, Clone)]
@@ -199,7 +200,7 @@ impl DexPoolInterface for DlmmPool {
         self
     }
 
-    fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
+    fn update_data(&mut self, changed_pool: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
         todo!()
     }
 }

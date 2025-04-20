@@ -8,6 +8,7 @@ use crate::sdk::{config, pool};
 use crate::state::PoolSnapshotInfo;
 use dex::interface::{DexInterface, DexPoolInterface, GrpcSubscriber};
 use dex::state::FetchConfig;
+use dex::trigger::TriggerEvent;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -229,7 +230,7 @@ impl GrpcSubscriber for RaydiumClmmGrpcSubscriber {
         dex: Arc<dyn DexInterface>,
         fetch_config: Arc<FetchConfig>,
         account_write_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
-        trigger_route_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
+        trigger_event_sender: UnboundedSender<Box<dyn TriggerEvent>>,
     ) {
         todo!()
     }

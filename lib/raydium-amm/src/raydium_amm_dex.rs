@@ -5,6 +5,7 @@ use base58::ToBase58;
 use chrono::Utc;
 use dex::interface::{DexInterface, DexPoolInterface, GrpcSubscriber};
 use dex::state::{FetchConfig, GrpcAccountUpdateType, SourceMessage};
+use dex::trigger::{TriggerEvent, TriggerEventHolder};
 use dex::util::tokio_spawn;
 use log::{error, info};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -13,14 +14,15 @@ use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token::state::Account;
-use std::collections::btree_map::Entry;
-use std::collections::{hash_map, HashMap};
+use std::any::Any;
+use std::cell::RefMut;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::ops::Sub;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::Instant;
 use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
@@ -210,10 +212,11 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
         dex: Arc<dyn DexInterface>,
         fetch_config: Arc<FetchConfig>,
         snapshot_write_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
-        trigger_route_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
+        trigger_route_sender: UnboundedSender<Box<dyn TriggerEvent>>,
     ) {
         let mut subscribe_pools = Vec::new();
-        let mut subscribe_vaults = Vec::new();
+        let mut mint_vault_account_map: HashMap<String, SubscribeRequestFilterAccounts> =
+            HashMap::new();
         {
             let mut snapshot_accounts = Vec::new();
             let dex_pools = dex.get_base_pools();
@@ -221,8 +224,20 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
                 let mint_0_vault = base_pool.get_mint_0_vault().unwrap();
                 let mint_1_vault = base_pool.get_mint_1_vault().unwrap();
                 subscribe_pools.push(base_pool.get_pool_id().to_string());
-                subscribe_vaults.push(mint_0_vault.to_string());
-                subscribe_vaults.push(mint_1_vault.to_string());
+                mint_vault_account_map.insert(
+                    format!("{}:{}", base_pool.get_pool_id(), 0),
+                    SubscribeRequestFilterAccounts {
+                        account: vec![mint_0_vault.to_string()],
+                        ..Default::default()
+                    },
+                );
+                mint_vault_account_map.insert(
+                    format!("{}:{}", base_pool.get_pool_id(), 1),
+                    SubscribeRequestFilterAccounts {
+                        account: vec![mint_1_vault.to_string()],
+                        ..Default::default()
+                    },
+                );
                 snapshot_accounts.push((base_pool.get_pool_id(), mint_0_vault, mint_1_vault));
             }
             // snapshot
@@ -248,15 +263,7 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
             accounts_data_slice: PoolUpdate::subscribe_request_data_slices(),
             ..Default::default()
         };
-        let mut mint_vault_account_map: HashMap<String, SubscribeRequestFilterAccounts> =
-            HashMap::new();
-        mint_vault_account_map.insert(
-            "raydium_amm_mint_vault_sub".to_string(),
-            SubscribeRequestFilterAccounts {
-                account: subscribe_vaults,
-                ..Default::default()
-            },
-        );
+
         let mint_vault_subscribe_request = SubscribeRequest {
             accounts: mint_vault_account_map,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
@@ -282,7 +289,9 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
             ..Default::default()
         };
 
-        let mut clear_timeout_update_cache = tokio::time::interval(Duration::from_millis(1000));
+        let mut trigger_event_holder = TriggerEventHolder::default();
+        let mut clear_timeout_update_cache =
+            tokio::time::interval(Duration::from_millis(1000 * 60 * 10));
         // 只保留最后一次
         clear_timeout_update_cache.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         clear_timeout_update_cache.tick().await;
@@ -290,100 +299,61 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
         let mut ping_timeout = tokio::time::interval(Duration::from_secs(10));
         ping_timeout.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         ping_timeout.tick().await;
-
         let (account_update_sender, mut account_update_and_wait_receiver) =
             tokio::sync::mpsc::unbounded_channel::<SourceMessage>();
-        let mut txn_timestamp: HashMap<String, i64> = HashMap::new();
-        let mut wait_triger_pool_cache: HashMap<String, PoolUpdate> = HashMap::new();
-        let mut wait_triger_vault_cache: HashMap<
-            String,
-            (Option<MintVaultUpdate>, Option<MintVaultUpdate>),
-        > = HashMap::new();
         loop {
             tokio::select! {
-                Some((key,Ok(data))) = subscrbeitions.next() => {
+                Some((subscibe_type,Ok(data))) = subscrbeitions.next() => {
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                        let filter_name = &data.filters[0];
                         let account_info=account.account.unwrap();
                         let txn= account_info.txn_signature.as_ref().unwrap().to_base58();
-                        info!("GPRC: 接收到账户变更，txn : {:?}, account : {:?}, type : {:?}",txn,account_info.pubkey.to_base58(),key);
-                        if let hash_map::Entry::Vacant(entry) = txn_timestamp.entry(txn){
-                            entry.insert(Utc::now().timestamp());
-                        }
+                        let pubkey = &account_info.pubkey.to_base58();
+                        info!("GPRC推送, txn : {:?}, account : {:?}, type : {:?}",txn,pubkey,subscibe_type);
                         if let Err(e) = account_update_sender
-                        .send(SourceMessage::GrpcAccountUpdate(GrpcAccountUpdateType::from(key),account_info)) {
-                            error!("raydium amm dex send pool state update error:{}",e);
+                        .send(SourceMessage::GrpcAccountUpdate(GrpcAccountUpdateType::from(subscibe_type),account_info,Utc::now().timestamp(),filter_name.clone())) {
+                            error!("GRPC推送, 推送账户变更失败，原因: {}",e);
                         }
                     }
                 },
                 data = account_update_and_wait_receiver.recv()=>{
-                    if let Some(account_type) = data {
-                        match account_type {
-                            SourceMessage::GrpcAccountUpdate(account_type, account_info) => {
+                    if let Some(message_type) = data {
+                        match message_type {
+                            SourceMessage::GrpcAccountUpdate(message_type, account_info,timestamp,filter_name) => {
                                 let pubkey = Pubkey::try_from(account_info.pubkey.as_slice()).unwrap();
                                 let txn = account_info.txn_signature.unwrap().to_base58();
-                                match account_type {
+                                info!("EventHolder接收数据, txn : {:?}, account : {:?}, type : {:?}",txn,pubkey,message_type);
+                                let amm_trigger_event = match message_type {
                                     GrpcAccountUpdateType::PoolState => {
-                                        let pool_update = PoolUpdate::from((pubkey,account_info.data));
-                                        match wait_triger_pool_cache.entry(txn.clone()) {
-                                            hash_map::Entry::Occupied(entry) => {
-                                                error!("raydium amm dex pool state update error:{}",txn);
-                                                entry.remove();
-                                            },
-                                            hash_map::Entry::Vacant(entry) => {
-                                                if let Some((mint_vault_amount_0, mint_vault_amount_1))
-                                                    = wait_triger_vault_cache.get(&txn) {
-                                                    if mint_vault_amount_0.is_some() && mint_vault_amount_1.is_some() {
-                                                        let (mint_0_vault_amount,mint_1_vault_amount)=
-                                                        if mint_vault_amount_0.as_ref().unwrap().mint==pool_update.mint_0{
-                                                            (mint_vault_amount_0.as_ref().unwrap().amount,mint_vault_amount_1.as_ref().unwrap().amount)
-                                                        }else{
-                                                            (mint_vault_amount_1.as_ref().unwrap().amount,mint_vault_amount_0.as_ref().unwrap().amount)
-                                                        };
-                                                        let mut amm_pool=AmmPool::from(pool_update);
-                                                        amm_pool.mint_0_vault_amount=mint_0_vault_amount;
-                                                        amm_pool.mint_1_vault_amount=mint_1_vault_amount;
-                                                        info!("Raydium Amm触发swap[PoolState]，txn : {:?}, amm_pool : {:?}",txn,amm_pool);
-                                                        if let Err(e) = trigger_route_sender.send(Box::new(amm_pool)) {
-                                                           error!("[Raydium Amm Dex]触发swap失败，{}",e);
-                                                        }
-                                                        wait_triger_vault_cache.remove(&txn);
-                                                    } else {
-                                                        info!("Raydium Amm接收: txn : {:?}, PoolUpdate : {:?}",txn,pool_update);
-                                                        entry.insert(pool_update);
-                                                    }
-                                                }else{
-                                                    info!("Raydium Amm接收: txn : {:?}, PoolUpdate : {:?}",txn,pool_update);
-                                                    entry.insert(pool_update);
-                                                }
-                                            }
+                                        AmmTriggerEvent{
+                                            txn,
+                                            pool_id:pubkey,
+                                            pool_update: Some(PoolUpdate::from((pubkey,account_info.data))),
+                                            timestamp,
+                                            ..Default::default()
                                         }
                                     },
                                     GrpcAccountUpdateType::MintVault => {
-                                        let mint_vault_update = MintVaultUpdate::from((pubkey,account_info.data));
-                                        match wait_triger_vault_cache.entry(txn.clone()){
-                                            hash_map::Entry::Occupied(mint_vault_entry) => {
-                                                if let hash_map::Entry::Occupied(pool_entry) = wait_triger_pool_cache.entry(txn.clone()){
-                                                    let (_, pool_update) = pool_entry.remove_entry();
-                                                    let (mint_0_vault_amount,mint_1_vault_amount)=if pool_update.mint_0==mint_vault_update.mint{
-                                                        (mint_vault_update.amount,mint_vault_entry.get().0.as_ref().unwrap().amount)
-                                                    }else{
-                                                         (mint_vault_entry.get().0.as_ref().unwrap().amount,mint_vault_update.amount)
-                                                    };
-                                                    let mut amm_pool=AmmPool::from(pool_update);
-                                                    amm_pool.mint_0_vault_amount=mint_0_vault_amount;
-                                                    amm_pool.mint_1_vault_amount=mint_1_vault_amount;
-                                                    info!("Raydium Amm接收，txn : {:?}, amm_pool : {:?}",txn,amm_pool);
-                                                    info!("Raydium Amm触发swap[MintVault]，txn : {:?}, amm_pool : {:?}",txn,amm_pool);
-                                                    if let Err(e) = trigger_route_sender.send(Box::new(amm_pool)) {
-                                                        error!("[Raydium Amm Dex]触发swap失败，{}",e);
-                                                    }
-                                                }
-                                            },
-                                            hash_map::Entry::Vacant(mint_vault_entry) => {
-                                                info!("Raydium Amm接收，txn : {:?}, MintVaultUpdate : {:?}",txn,mint_vault_update);
-                                                mint_vault_entry.insert((Some(mint_vault_update),None));
-                                            }
+                                        let filter_split = filter_name.split(":").take(2).collect::<Vec<_>>();
+                                        let (mint_0_vault_update,mint_1_vault_update) = if filter_split[1].eq("0"){
+                                            (Some(MintVaultUpdate::from((pubkey,account_info.data))),None)
+                                        }else{
+                                            (None,Some(MintVaultUpdate::from((pubkey,account_info.data))))
+                                        };
+                                        AmmTriggerEvent{
+                                            txn,
+                                            pool_id:Pubkey::from_str(filter_split[0]).unwrap(),
+                                            mint_0_vault_update,
+                                            mint_1_vault_update,
+                                            timestamp,
+                                            ..Default::default()
                                         }
+                                    }
+                                };
+                                if let Some(event)=trigger_event_holder.fetch_event(Box::new(amm_trigger_event)){
+                                    info!("EventHolder触发ruote, txn : {:?} , account : {:?}, data : {:?}",event.get_txn(),event.get_pool_id(),event);
+                                    if let Err(e) = trigger_route_sender.send(event){
+                                        error!("EventHolder触发ruote失败, 原因: {}",e);
                                     }
                                 }
                             }
@@ -391,23 +361,9 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
                     }
                 },
                 _ = clear_timeout_update_cache.tick() => {
-                    let timestamp_sec = Utc::now().timestamp();
-                    let timeout_txns= txn_timestamp.iter().filter_map(|(txn,timestamp)|{
-                        if timestamp.sub(timestamp_sec)>=10{
-                            Some(txn.to_owned())
-                        }else {
-                            None
-                        }
-                    }).collect::<Vec<_>>();
-                    txn_timestamp.retain(|txn,_|{
-                        !timeout_txns.contains(txn)
-                    });
-                    wait_triger_pool_cache.retain(|txn,_|{
-                        !timeout_txns.contains(txn)
-                    });
-                    wait_triger_vault_cache.retain(|txn,_|{
-                        !timeout_txns.contains(txn)
-                    });
+                    info!("开始清理过期数据");
+                    trigger_event_holder.clear_timeout_event(1000);
+                    info!("开始清理过期数据");
                 },
                 _ = ping_timeout.tick() => {
                     if let Err(e)=grpc_client.ping(1).await{
@@ -419,8 +375,8 @@ impl GrpcSubscriber for RaydiumAmmGrpcSubscriber {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct PoolUpdate {
+#[derive(Debug, Clone, Copy)]
+pub struct PoolUpdate {
     pub pool_id: Pubkey,
     pub mint_0: Pubkey,
     pub mint_1: Pubkey,
@@ -498,8 +454,8 @@ impl From<(Pubkey, Vec<u8>)> for PoolUpdate {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct MintVaultUpdate {
+#[derive(Debug, Copy, Clone)]
+pub struct MintVaultUpdate {
     pub pubkey: Pubkey,
     pub mint: Pubkey,
     pub amount: u64,
@@ -554,4 +510,63 @@ async fn grpc_client() -> anyhow::Result<GeyserGrpcClient<impl Interceptor>> {
         error!("failed to connect: {e}");
         anyhow::anyhow!(e)
     })
+}
+
+#[derive(Default, Debug)]
+pub(crate) struct AmmTriggerEvent {
+    pub txn: String,
+    pub pool_id: Pubkey,
+    pub pool_update: Option<PoolUpdate>,
+    pub mint_0_vault_update: Option<MintVaultUpdate>,
+    pub mint_1_vault_update: Option<MintVaultUpdate>,
+    pub timestamp: i64,
+}
+
+impl TriggerEvent for AmmTriggerEvent {
+    fn update_and_return_ready_event(
+        &mut self,
+        push_event: Box<dyn TriggerEvent>,
+    ) -> Option<Box<dyn TriggerEvent>> {
+        let push_event = push_event.any().downcast_ref::<AmmTriggerEvent>().unwrap();
+        if push_event.pool_update.is_some() {
+            self.pool_update = push_event.pool_update;
+        }
+        if push_event.mint_0_vault_update.is_some() {
+            self.mint_0_vault_update = push_event.mint_0_vault_update;
+        }
+        if push_event.mint_1_vault_update.is_some() {
+            self.mint_1_vault_update = push_event.mint_1_vault_update;
+        }
+        if self.pool_update.is_some()
+            && self.mint_0_vault_update.is_some()
+            && self.mint_1_vault_update.is_some()
+        {
+            Some(Box::new(Self {
+                txn: self.txn.clone(),
+                pool_id: self.pool_id,
+                pool_update: self.pool_update.clone(),
+                mint_0_vault_update: self.mint_0_vault_update.clone(),
+                mint_1_vault_update: self.mint_1_vault_update.clone(),
+                timestamp: self.timestamp,
+            }))
+        } else {
+            None
+        }
+    }
+
+    fn get_txn(&self) -> String {
+        self.txn.clone()
+    }
+
+    fn get_pool_id(&self) -> Pubkey {
+        self.pool_id
+    }
+
+    fn get_create_timestamp(&self) -> i64 {
+        self.timestamp
+    }
+
+    fn any(&self) -> &dyn Any {
+        self
+    }
 }

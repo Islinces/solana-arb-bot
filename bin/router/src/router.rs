@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use dex::interface::{DexInterface, DexPoolInterface};
+use dex::trigger::TriggerEvent;
 use log::info;
 use solana_program::pubkey::Pubkey;
 use std::collections::hash_map::Entry;
@@ -67,34 +68,29 @@ impl Routing {
 
     pub fn trigger_after_update_pool(
         &mut self,
-        pool: Box<dyn DexPoolInterface>,
+        trigger_event: Box<dyn TriggerEvent>,
         input_mint: Pubkey,
         amount_in: u64,
     ) -> anyhow::Result<Pubkey> {
         let changed_pool = if let Ok(mut write_guard) = self.pool.write() {
-            let pool_id = pool.get_pool_id();
+            let pool_id = trigger_event.get_pool_id();
             match write_guard.entry(pool_id) {
-                Entry::Occupied(mut exists_entry) => exists_entry.get_mut().update_data(pool),
-                Entry::Vacant(un_exists_entry) => {
-                    un_exists_entry.insert(pool);
-                    Ok(pool_id)
+                Entry::Occupied(mut exists_entry) => {
+                    exists_entry.get_mut().update_data(trigger_event)
                 }
+                Entry::Vacant(_) => Err(anyhow!("")),
             }
         } else {
             return Err(anyhow!(
                 "更新池子[{:?}]失败：获取pool写锁失败",
-                pool.get_pool_id()
+                trigger_event.get_pool_id()
             ));
         };
         if changed_pool.is_err() {
             return changed_pool;
         }
         let pool_id = changed_pool.as_ref().unwrap();
-        let route_step = self.find_route(
-            input_mint,
-            amount_in,
-            Some(pool_id.clone()),
-        );
+        let route_step = self.find_route(input_mint, amount_in, Some(pool_id.clone()));
         info!("route step : {:?}", route_step);
         if route_step.is_some() {
             changed_pool
@@ -102,8 +98,6 @@ impl Routing {
             Err(anyhow!("[{}]没有找到合适的路由", pool_id))
         }
     }
-
-    pub fn triger_swap(&self) {}
 
     pub fn find_route(
         &self,

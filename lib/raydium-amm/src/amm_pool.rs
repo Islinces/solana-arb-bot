@@ -1,10 +1,12 @@
 use crate::math::{CheckedCeilDiv, SwapDirection};
-use crate::raydium_amm_dex::PoolUpdate;
+use crate::raydium_amm_dex::{AmmTriggerEvent, PoolUpdate};
 use crate::state::AmmInfo;
 use anyhow::anyhow;
 use dex::interface::DexPoolInterface;
+use dex::trigger::TriggerEvent;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
+use std::sync::Arc;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]
@@ -165,24 +167,30 @@ impl DexPoolInterface for AmmPool {
         Some(amount_out)
     }
 
-    fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
-        let changed_pool = changed_pool.as_any().downcast_ref::<AmmPool>().unwrap();
-
-        let changed = if self.mint_0_vault_amount != changed_pool.mint_0_vault_amount {
-            self.mint_0_vault_amount = changed_pool.mint_0_vault_amount;
-            true
-        } else if self.mint_1_vault_amount != changed_pool.mint_1_vault_amount {
-            self.mint_1_vault_amount = changed_pool.mint_1_vault_amount;
-            true
-        } else if self.mint_0_need_take_pnl != changed_pool.mint_0_need_take_pnl {
-            self.mint_0_need_take_pnl = changed_pool.mint_0_need_take_pnl;
-            true
-        } else if self.mint_1_need_take_pnl != changed_pool.mint_1_need_take_pnl {
-            self.mint_1_need_take_pnl = changed_pool.mint_1_need_take_pnl;
-            true
-        } else {
-            false
-        };
+    fn update_data(&mut self, trigger_event: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
+        let changed_pool = trigger_event
+            .any()
+            .downcast_ref::<AmmTriggerEvent>()
+            .unwrap();
+        let pool_update = changed_pool.pool_update.as_ref().unwrap();
+        let mint_0_vault_amount = changed_pool.mint_0_vault_update.as_ref().unwrap().amount;
+        let mint_1_vault_amount = changed_pool.mint_1_vault_update.as_ref().unwrap().amount;
+        let mut changed = false;
+        if self.mint_0_vault_amount != mint_0_vault_amount {
+            self.mint_0_vault_amount = mint_0_vault_amount;
+        }
+        if self.mint_1_vault_amount != mint_1_vault_amount {
+            self.mint_1_vault_amount = mint_1_vault_amount;
+            changed |= true;
+        }
+        if self.mint_0_need_take_pnl != pool_update.mint_0_need_take_pnl {
+            self.mint_0_need_take_pnl = pool_update.mint_0_need_take_pnl;
+            changed |= true;
+        }
+        if self.mint_1_need_take_pnl != pool_update.mint_1_need_take_pnl {
+            self.mint_1_need_take_pnl = pool_update.mint_1_need_take_pnl;
+            changed |= true;
+        }
         if changed {
             Ok(self.pool_id)
         } else {

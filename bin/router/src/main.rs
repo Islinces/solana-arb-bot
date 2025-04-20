@@ -1,6 +1,7 @@
 use chrono::Local;
 use dex::interface::{DexInterface, DexPoolInterface, GrpcSubscriber};
 use dex::state::FetchConfig;
+use dex::trigger::TriggerEvent;
 use dex::util::tokio_spawn;
 use log::{error, info};
 use raydium_amm::raydium_amm_dex::{RaydiumAmmDex, RaydiumAmmGrpcSubscriber};
@@ -48,15 +49,14 @@ async fn main() {
     let mut routing = Routing::from(vec![raydium_amm_dex.clone()]);
     let (snapshot_sender, mut snapshot_receiver) =
         tokio::sync::mpsc::unbounded_channel::<Box<dyn DexPoolInterface>>();
-    let (trigger_route_sender, mut trigger_route_receiver) =
-        tokio::sync::mpsc::unbounded_channel::<Box<dyn DexPoolInterface>>();
-
+    let (trigger_event_sender, mut trigger_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<Box<dyn TriggerEvent>>();
     tokio_spawn("raydium dex sub", async move {
         RaydiumAmmGrpcSubscriber::subscribe(
             raydium_amm_dex,
             fetch_config,
             snapshot_sender.clone(),
-            trigger_route_sender.clone(),
+            trigger_event_sender.clone(),
         )
         .await;
     });
@@ -71,27 +71,26 @@ async fn main() {
                         }
                     }
                     None => {
-                        error!("snapshot_receiver:None");
+                        // error!("snapshot_receiver:None");
                     }
                 }
             },
-            data = trigger_route_receiver.recv()=>{
+            data = trigger_event_receiver.recv()=>{
                 match data {
                     Some(data) => {
-                        info!("trigger_route_receiver:{:?}",data);
-                        match &routing.trigger_after_update_pool(data,
-                            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-                            10_u64.pow(6)) {
-                            Ok(pool)=>{
-                                info!("swap成功:{:?}",pool);
-                            },
-                            Err(e)=>{
-                                error!("swap失败:{}",e);
+                         match &routing.trigger_after_update_pool(data,
+                                Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+                                10_u64.pow(6)) {
+                                Ok(pool)=>{
+                                    info!("swap成功:{:?}",pool);
+                                },
+                                Err(e)=>{
+                                    error!("swap失败:{}",e);
+                                }
                             }
-                        }
                     }
                     None => {
-                        error!("trigger_route_receiver:None");
+                        // error!("trigger_route_receiver:None");
                     }
                 }
             }
