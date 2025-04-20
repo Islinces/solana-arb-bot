@@ -4,7 +4,7 @@ use solana_program::pubkey::Pubkey;
 use std::any::Any;
 use std::ops::{Add, Div, Mul, Sub};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct PumpFunPool {
     pub pool_id: Pubkey,
     pub mint_0: Pubkey,
@@ -42,6 +42,30 @@ impl PumpFunPool {
 }
 
 impl DexPoolInterface for PumpFunPool {
+    fn get_pool_id(&self) -> Pubkey {
+        self.pool_id
+    }
+
+    fn get_mint_0(&self) -> Pubkey {
+        self.mint_0
+    }
+
+    fn get_mint_1(&self) -> Pubkey {
+        self.mint_1
+    }
+
+    fn get_mint_0_vault(&self) -> Option<Pubkey> {
+        Some(self.mint_0_vault)
+    }
+
+    fn get_mint_1_vault(&self) -> Option<Pubkey> {
+        Some(self.mint_1_vault)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn quote(&self, amount_in: u64, amount_in_mint: Pubkey) -> Option<u64> {
         if amount_in_mint != self.mint_0 && amount_in_mint != self.mint_1 {
             return None;
@@ -75,30 +99,6 @@ impl DexPoolInterface for PumpFunPool {
             eprintln!("amount_out is too large");
             u64::MIN
         }))
-    }
-
-    fn get_pool_id(&self) -> Pubkey {
-        self.pool_id
-    }
-
-    fn get_mint_0(&self) -> Pubkey {
-        self.mint_0
-    }
-
-    fn get_mint_1(&self) -> Pubkey {
-        self.mint_1
-    }
-
-    fn get_mint_0_vault(&self) -> Option<Pubkey> {
-        Some(self.mint_0_vault)
-    }
-
-    fn get_mint_1_vault(&self) -> Option<Pubkey> {
-        Some(self.mint_1_vault)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn update_data(&mut self, _changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {

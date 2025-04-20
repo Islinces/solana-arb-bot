@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use solana_program::pubkey::Pubkey;
-use crate::error::ErrorCode;
+use crate::sdk::error::ErrorCode;
 
 pub const AMM_CONFIG_SEED: &str = "amm_config";
 

@@ -1,6 +1,7 @@
 use crate::math::{CheckedCeilDiv, SwapDirection};
-use crate::raydium_amm_dex_interface::PoolUpdate;
+use crate::raydium_amm_dex::PoolUpdate;
 use crate::state::AmmInfo;
+use anyhow::anyhow;
 use dex::interface::DexPoolInterface;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
@@ -166,10 +167,26 @@ impl DexPoolInterface for AmmPool {
 
     fn update_data(&mut self, changed_pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
         let changed_pool = changed_pool.as_any().downcast_ref::<AmmPool>().unwrap();
-        self.mint_0_vault_amount = changed_pool.mint_0_vault_amount;
-        self.mint_1_vault_amount = changed_pool.mint_1_vault_amount;
-        self.mint_0_need_take_pnl = changed_pool.mint_0_need_take_pnl;
-        self.mint_1_need_take_pnl = changed_pool.mint_1_need_take_pnl;
-        Ok(self.pool_id)
+
+        let changed = if self.mint_0_vault_amount != changed_pool.mint_0_vault_amount {
+            self.mint_0_vault_amount = changed_pool.mint_0_vault_amount;
+            true
+        } else if self.mint_1_vault_amount != changed_pool.mint_1_vault_amount {
+            self.mint_1_vault_amount = changed_pool.mint_1_vault_amount;
+            true
+        } else if self.mint_0_need_take_pnl != changed_pool.mint_0_need_take_pnl {
+            self.mint_0_need_take_pnl = changed_pool.mint_0_need_take_pnl;
+            true
+        } else if self.mint_1_need_take_pnl != changed_pool.mint_1_need_take_pnl {
+            self.mint_1_need_take_pnl = changed_pool.mint_1_need_take_pnl;
+            true
+        } else {
+            false
+        };
+        if changed {
+            Ok(self.pool_id)
+        } else {
+            Err(anyhow!("[{}]池子数据未发生变化", self.pool_id))
+        }
     }
 }

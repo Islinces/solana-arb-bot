@@ -15,9 +15,8 @@ use raydium_amm::raydium_amm_dex::RaydiumAmmDex;
 use raydium_amm::state::{AmmInfo, Loadable};
 use raydium_clmm::clmm_pool::ClmmPool;
 use raydium_clmm::raydium_clmm_dex::RaydiumClmmDex;
-use raydium_clmm::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use raydium_clmm::utils::deserialize_anchor_account;
-use raydium_clmm::{config, pool};
+use raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
+use raydium_clmm::sdk::utils::deserialize_anchor_account;
 use router::router::Routing;
 use solana_client::rpc_client::RpcClient;
 use solana_program::clock::Clock;
@@ -30,9 +29,10 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use spl_token_2022::state::Mint;
 use std::alloc::*;
 use std::collections::HashMap;
-use std::ops::{Div, Mul};
+use std::ops::Div;
 use std::str::FromStr;
 use std::sync::Arc;
+use raydium_clmm::sdk::{config, pool};
 
 #[test]
 fn test_build_routing() {
@@ -307,7 +307,7 @@ fn build_clmm_pool(
         tickarray_bitmap_extension_account.as_ref().unwrap(),
     )
     .unwrap();
-    let zero_to_one_tick_arrays = raydium_clmm::utils::load_cur_and_next_specify_count_tick_array(
+    let zero_to_one_tick_arrays = raydium_clmm::sdk::utils::load_cur_and_next_specify_count_tick_array(
         &rpc_client,
         5,
         &pool_id_account.unwrap(),
@@ -316,7 +316,7 @@ fn build_clmm_pool(
         &tickarray_bitmap_extension,
         true,
     );
-    let one_to_zero_tick_arrays = raydium_clmm::utils::load_cur_and_next_specify_count_tick_array(
+    let one_to_zero_tick_arrays = raydium_clmm::sdk::utils::load_cur_and_next_specify_count_tick_array(
         &rpc_client,
         5,
         &pool_id_account.unwrap(),
@@ -340,7 +340,7 @@ fn build_clmm_pool(
         tick_current: pool_state.tick_current,
         tick_array_bitmap: pool_state.tick_array_bitmap,
         tick_array_bitmap_extension: tickarray_bitmap_extension,
-        zero_to_one_tick_arays: zero_to_one_tick_arrays,
+        tick_array_states: zero_to_one_tick_arrays,
         one_to_zero_tick_arays: one_to_zero_tick_arrays,
         trade_fee_rate: amm_config_state.trade_fee_rate,
     }

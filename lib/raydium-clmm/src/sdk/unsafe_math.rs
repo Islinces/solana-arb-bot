@@ -1,5 +1,5 @@
-use crate::big_num::U128;
-use crate::big_num::U256;
+use crate::sdk::big_num::U128;
+use crate::sdk::big_num::U256;
 
 pub trait UnsafeMathTrait {
     /// Returns ceil (x / y)

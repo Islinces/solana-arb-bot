@@ -3581,6 +3581,7 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "spl-token-2022 0.9.0",
+ "tokio",
  "uint",
 ]
 

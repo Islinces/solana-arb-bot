@@ -1,10 +1,10 @@
-use crate::big_num::U128;
-use crate::config::{AmmConfig, FEE_RATE_DENOMINATOR_VALUE};
-use crate::pool::PoolState;
-use crate::tick_array::{TickArrayState, TickState};
-use crate::tick_math::{MAX_TICK, MIN_TICK};
-use crate::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use crate::{liquidity_math, swap_math, tick_math};
+use crate::sdk::big_num::U128;
+use crate::sdk::config::{AmmConfig, FEE_RATE_DENOMINATOR_VALUE};
+use crate::sdk::pool::PoolState;
+use crate::sdk::tick_array::{TickArrayState, TickState};
+use crate::sdk::tick_math::{MAX_TICK, MIN_TICK};
+use crate::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
+use crate::sdk::{liquidity_math, swap_math, tick_math};
 use anchor_lang::AccountDeserialize;
 use anyhow::Result;
 use solana_client::rpc_client::RpcClient;
@@ -312,6 +312,30 @@ pub fn load_cur_and_next_specify_count_tick_array(
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
+    let tick_array_keys = load_cur_and_next_specify_count_tick_array_key(
+        load_count,
+        pool_id,
+        pool_state,
+        tickarray_bitmap_extension,
+        zero_for_one,
+    );
+    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).unwrap();
+    let mut tick_arrays = VecDeque::new();
+    for tick_array in tick_array_rsps {
+        let tick_array_state =
+            deserialize_anchor_account::<TickArrayState>(&tick_array.unwrap()).unwrap();
+        tick_arrays.push_back(tick_array_state);
+    }
+    tick_arrays
+}
+
+pub fn load_cur_and_next_specify_count_tick_array_key(
+    load_count: u8,
+    pool_id: &Pubkey,
+    pool_state: &PoolState,
+    tickarray_bitmap_extension: &TickArrayBitmapExtension,
+    zero_for_one: bool,
+) -> Vec<Pubkey> {
     // 获取当前可用 tick array 的 start index
     let (_, mut current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
@@ -321,11 +345,11 @@ pub fn load_cur_and_next_specify_count_tick_array(
     tick_array_keys.push(
         Pubkey::find_program_address(
             &[
-                crate::tick_array::TICK_ARRAY_SEED.as_bytes(),
+                crate::sdk::tick_array::TICK_ARRAY_SEED.as_bytes(),
                 pool_id.to_bytes().as_ref(),
                 &current_vaild_tick_array_start_index.to_be_bytes(),
             ],
-            &program_id,
+            &crate::ID,
         )
         .0,
     );
@@ -347,23 +371,16 @@ pub fn load_cur_and_next_specify_count_tick_array(
         tick_array_keys.push(
             Pubkey::find_program_address(
                 &[
-                    crate::tick_array::TICK_ARRAY_SEED.as_bytes(),
+                    crate::sdk::tick_array::TICK_ARRAY_SEED.as_bytes(),
                     pool_id.to_bytes().as_ref(),
                     &current_vaild_tick_array_start_index.to_be_bytes(),
                 ],
-                &program_id,
+                &crate::ID,
             )
             .0,
         );
         max_array_size -= 1;
     }
     println!("tick_array_keys : {:#?}", tick_array_keys);
-    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).unwrap();
-    let mut tick_arrays = VecDeque::new();
-    for tick_array in tick_array_rsps {
-        let tick_array_state =
-            deserialize_anchor_account::<TickArrayState>(&tick_array.unwrap()).unwrap();
-        tick_arrays.push_back(tick_array_state);
-    }
-    tick_arrays
+    tick_array_keys
 }

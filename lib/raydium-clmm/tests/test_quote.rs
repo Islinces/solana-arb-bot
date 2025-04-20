@@ -1,14 +1,14 @@
 use arrayref::array_ref;
 use dex::interface::Pool;
 use raydium_clmm::clmm_pool::ClmmPool;
-use raydium_clmm::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use raydium_clmm::utils::deserialize_anchor_account;
-use raydium_clmm::{config, pool};
+use raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
+use raydium_clmm::sdk::utils::deserialize_anchor_account;
 use solana_client::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use spl_token_2022::extension::StateWithExtensions;
 use spl_token_2022::state::Mint;
 use std::str::FromStr;
+use raydium_clmm::sdk::{config, pool};
 
 #[test]
 fn test_quote() {
@@ -60,7 +60,7 @@ fn new_clmm_pool(
         Some(
             Pubkey::find_program_address(
                 &[
-                    raydium_clmm::pool::POOL_SEED.as_bytes(),
+                    raydium_clmm::sdk::pool::POOL_SEED.as_bytes(),
                     amm_config_key.to_bytes().as_ref(),
                     mint0.unwrap().to_bytes().as_ref(),
                     mint1.unwrap().to_bytes().as_ref(),
@@ -78,7 +78,7 @@ fn new_clmm_pool(
         Some(
             Pubkey::find_program_address(
                 &[
-                    raydium_clmm::pool::POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+                    raydium_clmm::sdk::pool::POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
                     pool_id_account.unwrap().to_bytes().as_ref(),
                 ],
                 &program_id,
@@ -126,7 +126,7 @@ fn new_clmm_pool(
         tick_current: pool_state.tick_current,
         tick_array_bitmap: pool_state.tick_array_bitmap,
         tick_array_bitmap_extension: tickarray_bitmap_extension,
-        zero_to_one_tick_arays: raydium_clmm::utils::load_cur_and_next_specify_count_tick_array(
+        tick_array_states: raydium_clmm::sdk::utils::load_cur_and_next_specify_count_tick_array(
             &rpc_client,
             5,
             &pool_id_account.unwrap(),
@@ -135,7 +135,7 @@ fn new_clmm_pool(
             &tickarray_bitmap_extension,
             true,
         ),
-        one_to_zero_tick_arays: raydium_clmm::utils::load_cur_and_next_specify_count_tick_array(
+        one_to_zero_tick_arays: raydium_clmm::sdk::utils::load_cur_and_next_specify_count_tick_array(
             &rpc_client,
             5,
             &pool_id_account.unwrap(),

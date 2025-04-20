@@ -1,6 +1,6 @@
 use anchor_lang::require;
-use crate::big_num::U128;
-use crate::error::ErrorCode;
+use crate::sdk::big_num::U128;
+use crate::sdk::error::ErrorCode;
 
 /// The minimum tick
 pub const MIN_TICK: i32 = -443636;

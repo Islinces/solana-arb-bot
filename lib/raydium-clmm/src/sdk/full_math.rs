@@ -3,7 +3,7 @@
 //! and supports U128 operations.
 //!
 
-use crate::big_num::{U128, U256, U512};
+use crate::sdk::big_num::{U128, U256, U512};
 
 /// Trait for calculating `val * num / denom` with different rounding modes and overflow
 /// protection.

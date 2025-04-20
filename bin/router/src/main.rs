@@ -3,7 +3,7 @@ use dex::interface::{DexInterface, DexPoolInterface, GrpcSubscriber};
 use dex::state::FetchConfig;
 use dex::util::tokio_spawn;
 use log::{error, info};
-use raydium_amm::raydium_amm_dex_interface::{RaydiumAmmDex, RaydiumAmmGrpcSubscriber};
+use raydium_amm::raydium_amm_dex::{RaydiumAmmDex, RaydiumAmmGrpcSubscriber};
 use router::router::Routing;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
@@ -81,12 +81,12 @@ async fn main() {
                         info!("trigger_route_receiver:{:?}",data);
                         match &routing.trigger_after_update_pool(data,
                             Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-                            10_u64.pow(9)){
+                            10_u64.pow(6)) {
                             Ok(pool)=>{
                                 info!("swap成功:{:?}",pool);
                             },
                             Err(e)=>{
-                                error!("trigger_route_receiver:{:?}",e);
+                                error!("swap失败:{}",e);
                             }
                         }
                     }

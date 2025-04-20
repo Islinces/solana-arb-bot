@@ -3,9 +3,8 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
-use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 
 #[async_trait::async_trait]
 pub trait DexInterface: Sync + Send {
