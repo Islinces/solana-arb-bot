@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use chrono::format::Numeric::Quarter;
 use dex::interface::{DexInterface, DexPoolInterface};
 use dex::trigger::TriggerEvent;
 use log::info;
@@ -45,6 +46,7 @@ impl Routing {
                 }
             }
         }
+        info!("Init Rout Map : {:?}", mint_edge);
         Self {
             mint_edge,
             pool: RwLock::new(HashMap::with_capacity(pool_size)),
@@ -72,8 +74,9 @@ impl Routing {
         input_mint: Pubkey,
         amount_in: u64,
     ) -> anyhow::Result<Pubkey> {
+        let pool_id = trigger_event.get_pool_id();
+        let txn = trigger_event.get_txn();
         let changed_pool = if let Ok(mut write_guard) = self.pool.write() {
-            let pool_id = trigger_event.get_pool_id();
             match write_guard.entry(pool_id) {
                 Entry::Occupied(mut exists_entry) => {
                     exists_entry.get_mut().update_data(trigger_event)
@@ -89,7 +92,7 @@ impl Routing {
         if changed_pool.is_err() {
             return changed_pool;
         }
-        let pool_id = changed_pool.as_ref().unwrap();
+        info!("寻找路由: txn : {:?}, 触发池子: {:?}", txn, pool_id);
         let route_step = self.find_route(input_mint, amount_in, Some(pool_id.clone()));
         info!("route step : {:?}", route_step);
         if route_step.is_some() {
@@ -123,15 +126,36 @@ impl Routing {
             input_mint
         };
         let mut final_route_step = None;
+        info!(
+            "当前池子{:?}作为输入开始寻找路由",
+            changed_pool.as_ref().unwrap()
+        );
+        info!(
+            "Step 1 : pool_id : {:?}, amount_in_mint : {:?}, amount_in : {}, amount_out : {}",
+            changed_pool.as_ref().unwrap(),
+            input_mint,
+            amount_in,
+            next_amount_in
+        );
         if let Some(edges) = self.mint_edge.get(&next_input_mint) {
             if let Some(best_second_step) = edges
                 .iter()
-                .filter(|(m, pool)| *m == input_mint && pool != &changed_pool.unwrap())
+                .filter(|(m, pool)| {
+                    let x1 = *m == input_mint && pool != &changed_pool.unwrap();
+                    x1
+                })
                 .map(|(output_mint, pool_id)| {
                     if let Some(amount_out) = pool_reader
                         .get(&pool_id)?
                         .quote(next_amount_in, next_input_mint)
                     {
+                        info!(
+                            "Step 2 : pool_id : {:?}, amount_in_mint : {:?}, amount_in : {}, amount_out : {}",
+                            pool_id,
+                            next_input_mint,
+                            next_amount_in,
+                            amount_out
+                        );
                         Some(RouteStep {
                             input_mint: next_input_mint,
                             output_mint: *output_mint,
@@ -162,6 +186,10 @@ impl Routing {
         if final_route_step.is_some() {
             return final_route_step;
         }
+        info!(
+            "当前池子{:?}作为输出开始寻找路由",
+            changed_pool.as_ref().unwrap()
+        );
         if let Some(edges) = self.mint_edge.get(&input_mint) {
             final_route_step = edges
                 .iter()
@@ -170,11 +198,18 @@ impl Routing {
                     if let Some(next_amount_in) =
                         pool_reader.get(pool_id)?.quote(amount_in, input_mint)
                     {
+                        info!(
+                            "Step 1 : pool_id : {:?}, amount_in_mint : {:?}, amount_in : {}, amount_out : {}",
+                            pool_id,
+                            input_mint,
+                            amount_in,
+                            next_amount_in
+                        );
                         Some(RouteStep {
-                            input_mint: input_mint,
+                            input_mint,
                             output_mint: *output_mint,
                             pool_id: *pool_id,
-                            amount_in: amount_in,
+                            amount_in,
                             amount_out: next_amount_in,
                         })
                     } else {
@@ -187,6 +222,13 @@ impl Routing {
                     if let Some(amount_out) =
                         changed_pool_info.quote(step.amount_out, step.output_mint)
                     {
+                        info!(
+                            "Step 2 : pool_id : {:?}, amount_in_mint : {:?}, amount_in : {}, amount_out : {}",
+                            changed_pool.as_ref().unwrap(),
+                            step.output_mint,
+                            step.amount_out,
+                            amount_out
+                        );
                         Some((
                             step,
                             RouteStep {

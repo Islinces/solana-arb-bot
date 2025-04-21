@@ -4,9 +4,9 @@ use crate::state::AmmInfo;
 use anyhow::anyhow;
 use dex::interface::DexPoolInterface;
 use dex::trigger::TriggerEvent;
+use log::info;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
-use std::sync::Arc;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]

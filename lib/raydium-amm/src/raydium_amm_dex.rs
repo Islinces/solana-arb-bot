@@ -71,18 +71,22 @@ impl DexInterface for RaydiumAmmDex {
         let pubkeys = vec![
             Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n").unwrap(),
             Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap(),
+            Pubkey::from_str("61acRgpURKTU8LKPJKs6WQa18KzD9ogavXzjxfD84KLu").unwrap(),
+            Pubkey::from_str("FyqYBBJ8vhr5AtDZiyJue4Khx9Be6Xijx5nm6aL6wZZV").unwrap(),
+            Pubkey::from_str("AbbG2aR8iNhy2prC32iDRW7pKJjzqhUtri8rV5HboHUY").unwrap(),
+            Pubkey::from_str("CwF4aUPjMciM3u9DpxoZyLGVKVxgUgBmxHW32RbtmZNz").unwrap(),
+            Pubkey::from_str("EUvnsWhMnhY3S5EnV3tLATNRvTM2xBMWZQQguzpFNwYT").unwrap(),
+            
+            Pubkey::from_str("9DzLnkFRg5zMy532q7sbJjZx7uEL1SeFUDyAnF5yizoH").unwrap(),
+            
+            
         ];
+        let copy = pubkeys.clone();
         let accounts = pubkeys
             .into_iter()
             .zip(
                 rpc_client
-                    .get_multiple_accounts_with_commitment(
-                        &[
-                            Pubkey::from_str("5oAvct85WyF7Sj73VYHbyFJkdRJ28D8m4z4Sxjvzuc6n")?,
-                            Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2")?,
-                        ],
-                        CommitmentConfig::finalized(),
-                    )
+                    .get_multiple_accounts_with_commitment(&copy, CommitmentConfig::finalized())
                     .await
                     .unwrap()
                     .value

@@ -40,6 +40,7 @@ async fn main() {
         subscribe_mints: vec![
             Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
             Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+            // Pubkey::from_str("4FkNq8RcCYg4ZGDWh14scJ7ej3m5vMjYTcWoJVkupump").unwrap(),
         ],
     });
     let rpc_client = RpcClient::new(rpc_url.to_string());
@@ -80,7 +81,7 @@ async fn main() {
                     Some(data) => {
                          match &routing.trigger_after_update_pool(data,
                                 Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-                                10_u64.pow(6)) {
+                                10_u64.pow(5)) {
                                 Ok(pool)=>{
                                     info!("swap成功:{:?}",pool);
                                 },
