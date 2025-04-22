@@ -40,8 +40,8 @@ impl From<PoolUpdate> for AmmPool {
             pool_id: value.pool_id,
             mint_0: value.mint_0,
             mint_1: value.mint_1,
-            swap_fee_numerator: value.swap_fee_numerator,
-            swap_fee_denominator: value.swap_fee_denominator,
+            // swap_fee_numerator: value.swap_fee_numerator,
+            // swap_fee_denominator: value.swap_fee_denominator,
             mint_0_need_take_pnl: value.mint_0_need_take_pnl,
             mint_1_need_take_pnl: value.mint_1_need_take_pnl,
             ..Default::default()
@@ -169,7 +169,7 @@ impl DexPoolInterface for AmmPool {
 
     fn update_data(&mut self, trigger_event: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
         let changed_pool = trigger_event
-            .any()
+            .as_any()
             .downcast_ref::<AmmTriggerEvent>()
             .unwrap();
         let pool_update = changed_pool.pool_update.as_ref().unwrap();

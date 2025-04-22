@@ -1,4 +1,7 @@
 use crate::math::CheckedCeilDiv;
+use crate::pump_fun_dex::PumpFunTriggerEvent;
+use crate::Pool;
+use anyhow::anyhow;
 use dex::interface::DexPoolInterface;
 use dex::trigger::TriggerEvent;
 use solana_program::pubkey::Pubkey;
@@ -102,7 +105,41 @@ impl DexPoolInterface for PumpFunPool {
         }))
     }
 
-    fn update_data(&mut self, _changed_pool: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
-        todo!()
+    fn update_data(&mut self, changed_pool: Box<dyn TriggerEvent>) -> anyhow::Result<Pubkey> {
+        let pushed_event = changed_pool
+            .as_any()
+            .downcast_ref::<PumpFunTriggerEvent>()
+            .unwrap();
+        let mint_0_vault_amount = pushed_event.mint_0_vault_update.as_ref().unwrap().amount;
+        let mint_1_vault_amount = pushed_event.mint_1_vault_update.as_ref().unwrap().amount;
+        let mut changed = false;
+        if self.mint_0_vault_amount != mint_0_vault_amount {
+            self.mint_0_vault_amount = mint_0_vault_amount;
+        }
+        if self.mint_1_vault_amount != mint_1_vault_amount {
+            self.mint_1_vault_amount = mint_1_vault_amount;
+            changed |= true;
+        }
+        if changed {
+            Ok(self.pool_id)
+        } else {
+            Err(anyhow!("[{}]池子数据未发生变化", self.pool_id))
+        }
+    }
+}
+
+impl From<(Pubkey, Pool, u64, u64, u64, u64)> for PumpFunPool {
+    fn from(value: (Pubkey, Pool, u64, u64, u64, u64)) -> Self {
+        Self {
+            pool_id: value.0,
+            mint_0_vault: value.1.pool_base_token_account,
+            mint_1_vault: value.1.pool_quote_token_account,
+            mint_0: value.1.base_mint,
+            mint_1: value.1.quote_mint,
+            mint_0_vault_amount: value.2,
+            mint_1_vault_amount: value.3,
+            lp_fee_basis_points: value.4,
+            protocol_fee_basis_points: value.5,
+        }
     }
 }

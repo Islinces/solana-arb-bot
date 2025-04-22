@@ -16,7 +16,6 @@ pub struct Routing {
     // pub edge: Vec<Vec<Pubkey>>,
     // key ： 池子pubkey， value： 池子
     pub pool: RwLock<HashMap<Pubkey, Box<dyn DexPoolInterface>>>,
-    pub pool_size: usize,
 }
 
 impl Routing {
@@ -46,18 +45,21 @@ impl Routing {
                 }
             }
         }
-        info!("Init Rout Map : {:?}", mint_edge);
+        info!(
+            "Init Rout, size : {:?}, map : {:?}",
+            mint_edge.len(),
+            mint_edge
+        );
         Self {
             mint_edge,
             pool: RwLock::new(HashMap::with_capacity(pool_size)),
-            pool_size,
         }
     }
 
     pub fn fill_snapshot(&mut self, pool: Box<dyn DexPoolInterface>) -> anyhow::Result<Pubkey> {
         if let Ok(mut write_guard) = self.pool.write() {
             let pool_id = pool.get_pool_id();
-            self.pool_size -= 1;
+            info!("接收到池子{:?}快照", pool_id);
             write_guard.insert(pool_id, pool);
             Ok(pool_id)
         } else {

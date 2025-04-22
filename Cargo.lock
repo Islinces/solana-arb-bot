@@ -1542,6 +1542,7 @@ name = "dex"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "arrayref",
  "async-trait",
  "chrono",
  "log",
@@ -3367,13 +3368,21 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "anyhow",
+ "arrayref",
  "async-trait",
+ "base58",
+ "chrono",
  "dex",
+ "futures-util",
  "log",
  "solana-client",
  "solana-program",
  "solana-sdk",
+ "tokio",
+ "tokio-stream",
  "uint",
+ "yellowstone-grpc-client",
+ "yellowstone-grpc-proto",
 ]
 
 [[package]]
@@ -3742,6 +3751,7 @@ dependencies = [
  "criterion",
  "dex",
  "env_logger",
+ "futures",
  "futures-util",
  "log",
  "meteora-dlmm",

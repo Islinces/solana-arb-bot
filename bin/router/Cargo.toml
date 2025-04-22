@@ -31,6 +31,7 @@ anchor-spl = { workspace = true }
 yellowstone-grpc-client = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
 solana-account-decoder = { workspace = true }
+futures = "0.3.30"
 
 [dev-dependencies]
 criterion = "0.5"

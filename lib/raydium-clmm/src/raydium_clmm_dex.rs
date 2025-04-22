@@ -6,7 +6,7 @@ use crate::sdk::utils::{
 };
 use crate::sdk::{config, pool};
 use crate::state::PoolSnapshotInfo;
-use dex::interface::{DexInterface, DexPoolInterface, GrpcSubscriber};
+use dex::interface::{DexInterface, DexPoolInterface};
 use dex::state::FetchConfig;
 use dex::trigger::TriggerEvent;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -16,6 +16,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::JoinHandle;
 
 pub struct RaydiumClmmDex {
     pub clmm_pool: Vec<Arc<dyn DexPoolInterface>>,
@@ -224,14 +225,13 @@ struct FetchPoolInfo {
 
 pub struct RaydiumClmmGrpcSubscriber();
 
-#[async_trait::async_trait]
-impl GrpcSubscriber for RaydiumClmmGrpcSubscriber {
-    async fn subscribe(
-        dex: Arc<dyn DexInterface>,
-        fetch_config: Arc<FetchConfig>,
-        account_write_sender: UnboundedSender<Box<dyn DexPoolInterface>>,
+// #[async_trait::async_trait]
+impl RaydiumClmmGrpcSubscriber {
+    fn subscribe(
+        dex_name: String,
+        need_subscribe_pools: Vec<(Pubkey, Pubkey, Pubkey)>,
         trigger_event_sender: UnboundedSender<Box<dyn TriggerEvent>>,
-    ) {
+    ) -> JoinHandle<()> {
         todo!()
     }
 }

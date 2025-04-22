@@ -32,4 +32,4 @@ yellowstone-grpc-proto = { workspace = true }
 tonic = "0.12.1"
 spl-token = { workspace = true }
 base58 = { workspace = true }
-futures-util = "0.3.30"
+futures-util = {workspace = true}

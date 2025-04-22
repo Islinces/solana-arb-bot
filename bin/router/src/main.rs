@@ -1,18 +1,25 @@
 use chrono::Local;
-use dex::interface::{DexInterface, DexPoolInterface, GrpcSubscriber};
+use dex::interface::{DexInterface, DexPoolInterface};
 use dex::state::FetchConfig;
 use dex::trigger::TriggerEvent;
 use dex::util::tokio_spawn;
+use futures_util::StreamExt;
 use log::{error, info};
+use pump_fun::pump_fun_dex::{PumpFunDex, PumpFunGrpcSubscriber};
 use raydium_amm::raydium_amm_dex::{RaydiumAmmDex, RaydiumAmmGrpcSubscriber};
+use raydium_clmm::raydium_clmm_dex::{RaydiumClmmDex, RaydiumClmmGrpcSubscriber};
 use router::router::Routing;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentLevel;
 use std::env;
 use std::io::Write;
+use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
+use yellowstone_grpc_client::GeyserGrpcClient;
+use yellowstone_grpc_proto::tonic::transport::Channel;
 
 #[tokio::main]
 async fn main() {
@@ -40,33 +47,43 @@ async fn main() {
         subscribe_mints: vec![
             Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
             Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            // Pubkey::from_str("4FkNq8RcCYg4ZGDWh14scJ7ej3m5vMjYTcWoJVkupump").unwrap(),
         ],
     });
     let rpc_client = RpcClient::new(rpc_url.to_string());
-    let raydium_amm_dex = RaydiumAmmDex::fetch_pool_base_info(&rpc_client, &fetch_config)
-        .await
-        .unwrap();
-    let mut routing = Routing::from(vec![raydium_amm_dex.clone()]);
     let (snapshot_sender, mut snapshot_receiver) =
         tokio::sync::mpsc::unbounded_channel::<Box<dyn DexPoolInterface>>();
     let (trigger_event_sender, mut trigger_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<Box<dyn TriggerEvent>>();
-    tokio_spawn("raydium dex sub", async move {
-        RaydiumAmmGrpcSubscriber::subscribe(
-            raydium_amm_dex,
-            fetch_config,
-            snapshot_sender.clone(),
-            trigger_event_sender.clone(),
-        )
-        .await;
-    });
+    let raydium_amm_dex = RaydiumAmmDex::fetch_pool_base_info(&rpc_client, &fetch_config)
+        .await
+        .unwrap();
+    let raydium_amm_grpc_subscriber = RaydiumAmmGrpcSubscriber::subscribe(
+        raydium_amm_dex.clone(),
+        rpc_url.to_string(),
+        snapshot_sender.clone(),
+        trigger_event_sender.clone(),
+    )
+    .await;
+    let pump_fun_dex = PumpFunDex::fetch_pool_base_info(&rpc_client, &fetch_config)
+        .await
+        .unwrap();
+    let mut routing = Routing::from(vec![pump_fun_dex.clone()]);
+    let pump_fun_grpc_subscriber = PumpFunGrpcSubscriber::subscribe(
+        pump_fun_dex.clone(),
+        rpc_url.to_string(),
+        snapshot_sender.clone(),
+        trigger_event_sender.clone(),
+    )
+    .await;
+    let mut jobs: futures::stream::FuturesUnordered<_> =
+        vec![pump_fun_grpc_subscriber, raydium_amm_grpc_subscriber]
+            .into_iter()
+            .collect();
     loop {
         tokio::select! {
             data = snapshot_receiver.recv() => {
                 match data {
                     Some(data) => {
-                        info!("snapshot_receiver:{:?}",data);
                         if let Err(e)=routing.fill_snapshot(data){
                             error!("填充快照失败:{:?}",e);
                         }
@@ -94,6 +111,10 @@ async fn main() {
                         // error!("trigger_route_receiver:None");
                     }
                 }
+            },
+            _=jobs.next()=>{
+                error!("终止程序: 一个DEX订阅发生错误");
+                exit(-1);
             }
         }
     }

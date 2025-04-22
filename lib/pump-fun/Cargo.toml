@@ -17,3 +17,11 @@ anchor-lang = { workspace = true }
 anchor-spl = { workspace = true }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+futures-util = { workspace = true }
+tokio-stream = "0.1.15"
+yellowstone-grpc-client = { workspace = true }
+yellowstone-grpc-proto = { workspace = true }
+arrayref = { workspace = true }
+base58 = { workspace = true }

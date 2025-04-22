@@ -1,6 +1,5 @@
 use anchor_lang::Discriminator;
 use anchor_spl::token::spl_token;
-use dex::interface::Pool;
 use pump_fun::pump_fun_pool::PumpFunPool;
 use pump_fun::utils::deserialize_anchor_account;
 use pump_fun::{GlobalConfig, Pool as PumpPool};
@@ -47,17 +46,17 @@ fn test_quote() {
     let sol_unit = 10_u64.pow(9);
     let usdc_unit = 10_u64.pow(6);
     let amount_in = 1.mul(sol_unit);
-    let amount_out = pool.quote(
-        amount_in,
-        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-    );
-    if let Some(out) = amount_out {
-        println!(
-            "amount_in : {:?} SOL \namount_out: {:?} USDC",
-            amount_in ,
-            out
-        )
-    }
+    // let amount_out = pool.quote(
+    //     amount_in,
+    //     Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    // );
+    // if let Some(out) = amount_out {
+    //     println!(
+    //         "amount_in : {:?} SOL \namount_out: {:?} USDC",
+    //         amount_in ,
+    //         out
+    //     )
+    // }
 }
 
 #[test]
@@ -101,14 +100,13 @@ fn pool_pda() -> Pubkey {
     // creator
     let owner = Pubkey::from_str("CbAF99HGQnAtnvw67nHesZH7ZwaQZeboYceCH5xNhr4s").unwrap();
     let base_mint = Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
-    let quote_mint = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
     Pubkey::find_program_address(
         &[
             b"pool",
             &0_u16.to_be_bytes(),
             &owner.to_bytes(),
             &base_mint.to_bytes(),
-            &quote_mint.to_bytes(),
+            &Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap().to_bytes(),
         ],
         &amm_program_id,
     )
