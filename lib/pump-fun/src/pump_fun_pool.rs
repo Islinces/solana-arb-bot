@@ -115,6 +115,7 @@ impl DexPoolInterface for PumpFunPool {
         let mut changed = false;
         if self.mint_0_vault_amount != mint_0_vault_amount {
             self.mint_0_vault_amount = mint_0_vault_amount;
+            changed |= true;
         }
         if self.mint_1_vault_amount != mint_1_vault_amount {
             self.mint_1_vault_amount = mint_1_vault_amount;
