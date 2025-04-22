@@ -3,15 +3,15 @@ use base58::ToBase58;
 use chrono::Local;
 use futures_util::future::ok;
 use futures_util::stream::FuturesUnordered;
-use log::{error, info};
 use raydium_amm::state::{AmmInfo, Fees, Loadable, StateData};
 use raydium_clmm::sdk::big_num::U128;
+use raydium_clmm::sdk::pool;
 use raydium_clmm::sdk::pool::{PoolState, RewardInfo, REWARD_NUM};
 use raydium_clmm::sdk::tick_array::{TickArrayState, TickState, TICK_ARRAY_SIZE_USIZE};
+use raydium_clmm::sdk::tick_array_bit_map;
 use raydium_clmm::sdk::tick_math::get_tick_at_sqrt_price;
 use raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use raydium_clmm::sdk::utils::{deserialize_anchor_account, deserialize_anchor_bytes};
-use raydium_clmm::sdk::tick_array_bit_map;
 use serde::__private::de::Content::I32;
 use serde::{Deserialize, Serialize};
 use serde_diff::{Diff, SerdeDiff};
@@ -21,11 +21,17 @@ use solana_sdk::pubkey;
 use spl_token::state::{Account, AccountState};
 use std::collections::HashMap;
 use std::env;
-use std::io::Write;
 use std::mem::offset_of;
 use std::ops::Sub;
 use std::process::exit;
 use std::time::Duration;
+use tracing::{debug, error, info};
+use tracing_appender::non_blocking::NonBlocking;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use yellowstone_grpc_client::{GeyserGrpcClient, GeyserGrpcClientResult, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
@@ -33,25 +39,37 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions, SubscribeUpdateAccount,
 };
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::{StreamExt, StreamMap};
-use raydium_clmm::sdk::pool;
+struct MicrosecondFormatter;
+
+impl FormatTime for MicrosecondFormatter {
+    fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
+        let now = Local::now();
+        write!(w, "{}", now.format("%Y-%m-%d %H:%M:%S%.6f"))
+    }
+}
+#[test]
+fn logger_init() {
+    let filter = EnvFilter::new("info") // 默认全局日志级别为 info
+        .add_directive("router=debug".parse().unwrap());
+
+    tracing_subscriber::registry()
+        .with(fmt::layer().compact()) 
+        .with(filter)                 
+        .init();
+
+    // 记录日志
+    debug!("This is an asynchronous log message to the console.111");
+    info!("This is an asynchronous log message to the console.");
+    info!("This is an asynchronous log message to the console.");
+    info!("This is an asynchronous log message to the console.");
+
+    // 主线程继续执行其他操作
+    println!("Continuing with other operations.");
+}
 
 #[tokio::test]
 async fn main() {
-    env::set_var(
-        env_logger::DEFAULT_FILTER_ENV,
-        env::var_os(env_logger::DEFAULT_FILTER_ENV).unwrap_or_else(|| "info".into()),
-    );
-    env_logger::builder()
-        .format(|buf, record| {
-            write!(
-                buf,
-                "{} [{}] - {}\n",
-                Local::now().format("%Y-%m-%d %H:%M:%S%.6f"),
-                record.level(),
-                record.args()
-            )
-        })
-        .init();
+    logger_init();
 
     let _ = sub().await;
 }
@@ -67,13 +85,15 @@ async fn sub() -> anyhow::Result<()> {
         .unwrap()
         .subscribe_with_request(Some(generate_amm_info_sub_field_request()))
         // .subscribe_with_request(None)
-        .await.unwrap();
+        .await
+        .unwrap();
     let (_, mut mint_vault_stream) = client
         .as_mut()
         .unwrap()
         .subscribe_with_request(Some(generate_mint_vault_sub_request()))
         // .subscribe_with_request(None)
-        .await.unwrap();
+        .await
+        .unwrap();
     let mut map = StreamMap::new();
     map.insert("amm_info", stream);
     map.insert("mint_vault", mint_vault_stream);

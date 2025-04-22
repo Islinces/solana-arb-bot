@@ -4,9 +4,9 @@ use crate::state::AmmInfo;
 use anyhow::anyhow;
 use dex::interface::DexPoolInterface;
 use dex::trigger::TriggerEvent;
-use log::info;
 use solana_program::pubkey::Pubkey;
 use std::any::Any;
+use tracing::warn;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]
@@ -149,7 +149,7 @@ impl DexPoolInterface for AmmPool {
                 .unwrap(),
         };
         let amount_out = amount_out.try_into().unwrap_or_else(|_| {
-            eprintln!("amount_out is too large");
+            warn!("amount_out is too large");
             u64::MIN
         });
         match swap_direction {

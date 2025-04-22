@@ -11,8 +11,6 @@ dex = { path = "../dex", version = "0.0.1" }
 solana-program = { workspace = true }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
-uint = "0.9.5"
-log = "0.4.27"
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true }
 async-trait = { workspace = true }
@@ -25,3 +23,4 @@ yellowstone-grpc-client = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
 arrayref = { workspace = true }
 base58 = { workspace = true }
+tracing = { workspace = true }

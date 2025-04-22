@@ -29,3 +29,7 @@ async-trait = "0.1.88"
 tokio = "1.44.1"
 base58 = "0.2.0"
 futures-util = "0.3.30"
+
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"

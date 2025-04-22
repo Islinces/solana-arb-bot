@@ -4,7 +4,6 @@ use dex::state::FetchConfig;
 use dex::trigger::TriggerEvent;
 use dex::util::tokio_spawn;
 use futures_util::StreamExt;
-use log::{error, info};
 use pump_fun::pump_fun_dex::{PumpFunDex, PumpFunGrpcSubscriber};
 use raydium_amm::raydium_amm_dex::{RaydiumAmmDex, RaydiumAmmGrpcSubscriber};
 use raydium_clmm::raydium_clmm_dex::{RaydiumClmmDex, RaydiumClmmGrpcSubscriber};
@@ -18,26 +17,45 @@ use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::instrument::WithSubscriber;
+use tracing::{debug, error, info};
+use tracing_appender::non_blocking;
+use tracing_appender::non_blocking::NonBlocking;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
 use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::tonic::transport::Channel;
 
+struct MicrosecondFormatter;
+
+impl FormatTime for MicrosecondFormatter {
+    fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
+        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S%.6f"))
+    }
+}
 #[tokio::main]
 async fn main() {
-    env::set_var(
-        env_logger::DEFAULT_FILTER_ENV,
-        env::var_os(env_logger::DEFAULT_FILTER_ENV).unwrap_or_else(|| "info".into()),
-    );
-    env_logger::builder()
-        .format(|buf, record| {
-            write!(
-                buf,
-                "{} [{}] - {}\n",
-                Local::now().format("%Y-%m-%d %H:%M:%S%.6f"),
-                record.level(),
-                record.args()
-            )
-        })
+    let filter = EnvFilter::new("info")
+        .add_directive("router=debug".parse().unwrap())
+        .add_directive("pump_fun=debug".parse().unwrap())
+        .add_directive("raydium_amm:=debug".parse().unwrap())
+        .add_directive("raydium_clmm:=debug".parse().unwrap())
+        .add_directive("meteora_dlmm:=debug".parse().unwrap());
+    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                .with_timer(MicrosecondFormatter)
+                .with_writer(non_blocking_writer),
+        )
+        .with(filter)
         .init();
+
+    // 记录日志
+    debug!("This is an asynchronous log message to the console.111");
     let grpc_url = "https://solana-yellowstone-grpc.publicnode.com";
     let rpc_url = "https://solana-rpc.publicnode.com";
     let fetch_config = Arc::new(FetchConfig {

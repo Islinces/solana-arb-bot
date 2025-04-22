@@ -2,12 +2,12 @@ use anyhow::anyhow;
 use chrono::format::Numeric::Quarter;
 use dex::interface::{DexInterface, DexPoolInterface};
 use dex::trigger::TriggerEvent;
-use log::info;
 use solana_program::pubkey::Pubkey;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, RwLock};
+use tracing::info;
 
 pub struct Routing {
     // key: mint

@@ -19,9 +19,7 @@ spl-token-2022 = { workspace = true }
 arrayref = { workspace = true }
 anyhow = { workspace = true }
 tokio = { version = "1.44.1", features = ["rt", "rt-multi-thread", "macros"] }
-log = "0.4.27"
 base58 = "0.2.0"
-env_logger = "0.9.3"
 chrono = "0.4"
 futures-util = "0.3"
 tonic = "0.12.1"
@@ -32,6 +30,10 @@ yellowstone-grpc-client = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
 solana-account-decoder = { workspace = true }
 futures = "0.3.30"
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing-appender = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.5"

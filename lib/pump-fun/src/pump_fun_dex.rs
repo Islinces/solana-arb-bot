@@ -2,7 +2,6 @@ use crate::pump_fun_pool::PumpFunPool;
 use crate::utils::deserialize_anchor_account;
 use crate::GlobalConfig;
 use anchor_spl::token::spl_token::state::Account;
-use arrayref::array_refs;
 use base58::ToBase58;
 use chrono::Utc;
 use dex::interface::{DexInterface, DexPoolInterface};
@@ -11,25 +10,22 @@ use dex::subscribe_common::{GrpcClientCreator, MintVaultSubscribe, MintVaultUpda
 use dex::trigger::{TriggerEvent, TriggerEventHolder};
 use dex::util::tokio_spawn;
 use futures_util::future::join_all;
-use log::{error, info};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use std::any::Any;
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
 use tokio_stream::{StreamExt, StreamMap};
-use yellowstone_grpc_client::GeyserGrpcClient;
+use tracing::{error, info};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest, SubscribeRequestFilterAccounts,
+    SubscribeRequest, SubscribeRequestFilterAccounts,
 };
-use yellowstone_grpc_proto::tonic::service::Interceptor;
 
 pub struct PumpFunDex {
     pub pools: Vec<Arc<dyn DexPoolInterface>>,

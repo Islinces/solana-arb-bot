@@ -9,7 +9,6 @@ use dex::subscribe_common::{GrpcClientCreator, MintVaultSubscribe, MintVaultUpda
 use dex::trigger::{TriggerEvent, TriggerEventHolder};
 use dex::util::tokio_spawn;
 use futures_util::future::join_all;
-use log::{error, info};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
@@ -22,6 +21,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
+use tracing::{debug, info};
+use tracing::log::error;
 use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{

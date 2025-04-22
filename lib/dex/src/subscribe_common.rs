@@ -1,9 +1,9 @@
 use arrayref::{array_ref, array_refs};
-use log::error;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
+use tracing::error;
 use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,

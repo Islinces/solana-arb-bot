@@ -14,8 +14,7 @@ anyhow = { workspace = true }
 async-trait = "0.1.88"
 tokio = { workspace = true }
 chrono = { workspace = true }
-log = "0.4.27"
-
+tracing={workspace = true}
 yellowstone-grpc-client = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
 tonic = "0.12.1"
