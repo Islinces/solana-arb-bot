@@ -285,7 +285,7 @@ impl RaydiumAmmGrpcSubscriber {
                             let account_info=account.account.unwrap();
                             let txn= account_info.txn_signature.as_ref().unwrap().to_base58();
                             let pubkey = &account_info.pubkey.to_base58();
-                            info!("【RaydiumAMM】GPRC推送, txn : {:?}, account : {:?}, type : {:?}",txn,pubkey,subscibe_type);
+                            debug!("【RaydiumAMM】GPRC推送, txn : {:?}, account : {:?}, type : {:?}",txn,pubkey,subscibe_type);
                             if let Err(e) = account_update_sender
                             .send(SourceMessage::GrpcAccountUpdate(GrpcAccountUpdateType::from(subscibe_type),account_info,Utc::now().timestamp(),filter_name.clone())) {
                                 error!("【RaydiumAMM】GRPC推送, 推送账户变更失败，原因: {}",e);
@@ -298,7 +298,7 @@ impl RaydiumAmmGrpcSubscriber {
                                 SourceMessage::GrpcAccountUpdate(account_type, account_info,timestamp,filter_name) => {
                                     let pubkey = Pubkey::try_from(account_info.pubkey.as_slice()).unwrap();
                                     let txn = account_info.txn_signature.unwrap().to_base58();
-                                    info!("【RaydiumAMM】EventHolder接收数据, txn : {:?}, account : {:?}, type : {:?}",txn,pubkey,account_type);
+                                    debug!("【RaydiumAMM】EventHolder接收数据, txn : {:?}, account : {:?}, type : {:?}",txn,pubkey,account_type);
                                     let amm_trigger_event = match account_type {
                                             GrpcAccountUpdateType::PoolState => {
                                                 Some(AmmTriggerEvent{
@@ -339,9 +339,9 @@ impl RaydiumAmmGrpcSubscriber {
                         }
                     },
                     _ = clear_timeout_update_cache.tick() => {
-                        info!("【RaydiumAMM】开始清理过期数据");
+                        debug!("【RaydiumAMM】开始清理过期数据");
                         trigger_event_holder.clear_expired_event(1000);
-                        info!("【RaydiumAMM】开始清理过期数据");
+                        debug!("【RaydiumAMM】开始清理过期数据");
                     },
                     _ = ping_timeout.tick() => {
                         if let Err(e)=grpc_client.ping(1).await{
@@ -354,7 +354,7 @@ impl RaydiumAmmGrpcSubscriber {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PoolUpdate {
     pub pool_id: Pubkey,
     pub mint_0: Pubkey,
@@ -415,8 +415,6 @@ impl From<(Pubkey, Vec<u8>)> for PoolUpdate {
             coin_vault_mint,
             pc_vault_mint,
         ) = array_refs![src, 8, 8, 32, 32];
-        // let swap_fee_numerator = u64::from_le_bytes(*swap_fee_numerator);
-        // let swap_fee_denominator = u64::from_le_bytes(*swap_fee_denominator);
         let mint_0_need_take_pnl = u64::from_le_bytes(*need_take_pnl_coin);
         let mint_1_need_take_pnl = u64::from_le_bytes(*need_take_pnl_pc);
         let mint_0 = Pubkey::from(*coin_vault_mint);

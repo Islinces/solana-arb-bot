@@ -18,7 +18,7 @@ pub trait DexInterface: Sync + Send {
         Self: Sized;
 }
 
-pub trait DexPoolInterface: Sync + Send + Debug {
+pub trait DexPoolInterface: Sync + Send + Debug{
     fn get_pool_id(&self) -> Pubkey;
 
     fn get_mint_0(&self) -> Pubkey;

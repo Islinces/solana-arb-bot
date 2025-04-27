@@ -47,9 +47,9 @@ fn test_build_routing() {
     let amount_in_mint = sol.0;
     let amount_in = 10_u64.pow(sol.1 as u32).div(10_u64.pow(6));
     let mut amm_pools = Vec::<AmmPool>::new();
-    let mut clmm_pools = Vec::<ClmmPool>::new();
-    let mut pump_fun_pools = Vec::<PumpFunPool>::new();
-    let mut dlmm_pools = Vec::<DlmmPool>::new();
+    // let mut clmm_pools = Vec::<ClmmPool>::new();
+    // let mut pump_fun_pools = Vec::<PumpFunPool>::new();
+    // let mut dlmm_pools = Vec::<DlmmPool>::new();
     let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com".to_string());
 
     {
@@ -99,89 +99,89 @@ fn test_build_routing() {
         );
         amm_pools.push(pool_2);
     }
-    {
-        let pool_3 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            0,
-        );
-        clmm_pools.push(pool_3);
-        let pool_4 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            1,
-        );
-        clmm_pools.push(pool_4);
-        let pool_5 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            2,
-        );
-        clmm_pools.push(pool_5);
-        let pool_4 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            4,
-        );
-        clmm_pools.push(pool_4);
-        let pool_5 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            5,
-        );
-        clmm_pools.push(pool_5);
-        let pool_3 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            6,
-        );
-        clmm_pools.push(pool_3);
-        let pool_5 = build_clmm_pool(
-            &rpc_client,
-            Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
-            8,
-        );
-        clmm_pools.push(pool_5);
-    }
-    {
-        let pool_1 = build_pump_fun_pool(
-            &rpc_client,
-            Pubkey::from_str("FJgYJ23aemGm67iNAr2dZ8H7uLZ8Y1CorPW4KehrHhtM").unwrap(),
-        );
-        pump_fun_pools.push(pool_1);
-        let pool_2 = build_pump_fun_pool(
-            &rpc_client,
-            Pubkey::from_str("3s5pmAP8Zaphm92gdEdwnAcj6fJCNGuS8tdVYLRwwk4c").unwrap(),
-        );
-        pump_fun_pools.push(pool_2);
-        let pool_3 = build_pump_fun_pool(
-            &rpc_client,
-            Pubkey::from_str("6ef59PhPsXgre7d8BUB2J6GGK6RM3ABek6XSR7J3Z6kX").unwrap(),
-        );
-        pump_fun_pools.push(pool_3);
-        let pool_4 = build_pump_fun_pool(
-            &rpc_client,
-            Pubkey::from_str("FBirun32CEFCQXeZCWjZVWzCs628Co3DqY3vV8u9Xhdz").unwrap(),
-        );
-        pump_fun_pools.push(pool_4);
-    }
-    {
-        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 12_500);
-        dlmm_pools.push(pool_1);
-        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 400, 12_500);
-        dlmm_pools.push(pool_1);
-        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 62_500);
-        dlmm_pools.push(pool_1);
-        let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 2, 15_000);
-        dlmm_pools.push(pool_1);
-    }
+    // {
+    //     let pool_3 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         0,
+    //     );
+    //     clmm_pools.push(pool_3);
+    //     let pool_4 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         1,
+    //     );
+    //     clmm_pools.push(pool_4);
+    //     let pool_5 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         2,
+    //     );
+    //     clmm_pools.push(pool_5);
+    //     let pool_4 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         4,
+    //     );
+    //     clmm_pools.push(pool_4);
+    //     let pool_5 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         5,
+    //     );
+    //     clmm_pools.push(pool_5);
+    //     let pool_3 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         6,
+    //     );
+    //     clmm_pools.push(pool_3);
+    //     let pool_5 = build_clmm_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+    //         Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(),
+    //         8,
+    //     );
+    //     clmm_pools.push(pool_5);
+    // }
+    // {
+    //     let pool_1 = build_pump_fun_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("FJgYJ23aemGm67iNAr2dZ8H7uLZ8Y1CorPW4KehrHhtM").unwrap(),
+    //     );
+    //     pump_fun_pools.push(pool_1);
+    //     let pool_2 = build_pump_fun_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("3s5pmAP8Zaphm92gdEdwnAcj6fJCNGuS8tdVYLRwwk4c").unwrap(),
+    //     );
+    //     pump_fun_pools.push(pool_2);
+    //     let pool_3 = build_pump_fun_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("6ef59PhPsXgre7d8BUB2J6GGK6RM3ABek6XSR7J3Z6kX").unwrap(),
+    //     );
+    //     pump_fun_pools.push(pool_3);
+    //     let pool_4 = build_pump_fun_pool(
+    //         &rpc_client,
+    //         Pubkey::from_str("FBirun32CEFCQXeZCWjZVWzCs628Co3DqY3vV8u9Xhdz").unwrap(),
+    //     );
+    //     pump_fun_pools.push(pool_4);
+    // }
+    // {
+    //     let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 12_500);
+    //     dlmm_pools.push(pool_1);
+    //     let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 400, 12_500);
+    //     dlmm_pools.push(pool_1);
+    //     let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 80, 62_500);
+    //     dlmm_pools.push(pool_1);
+    //     let pool_1 = build_dlmm_pool(&rpc_client, usdc.0, sol.0, 2, 15_000);
+    //     dlmm_pools.push(pool_1);
+    // }
     let routing = Routing::new(vec![
         Arc::new(RaydiumAmmDex::new(amm_pools)),
         Arc::new(RaydiumClmmDex::new(clmm_pools)),

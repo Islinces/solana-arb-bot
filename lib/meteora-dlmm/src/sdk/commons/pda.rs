@@ -13,7 +13,7 @@ pub fn derive_lb_pair_with_preset_parameter_key(
             min(token_x_mint, token_y_mint).as_ref(),
             max(token_x_mint, token_y_mint).as_ref(),
         ],
-        &crate::ID,
+        &crate::defi::raydium_clmm::ID,
     )
 }
 

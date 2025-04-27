@@ -24,3 +24,5 @@ yellowstone-grpc-proto = { workspace = true }
 arrayref = { workspace = true }
 base58 = { workspace = true }
 tracing = { workspace = true }
+
+dashmap = { workspace = true }

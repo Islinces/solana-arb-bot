@@ -2,44 +2,50 @@
 name = "router"
 version = "0.0.1"
 edition = "2021"
+license = "MIT"
+authors = ["solana"]
 
 [lib]
 doctest = false
+#path = "src/main.rs"
 
 [dependencies]
-dex = { path = "../../lib/dex", version = "0.0.1" }
-raydium-amm = { path = "../../lib/raydium-amm", version = "0.0.1" }
-raydium-clmm = { path = "../../lib/raydium-clmm", version = "0.0.1" }
-pump-fun = { path = "../../lib/pump-fun", version = "0.0.1" }
-meteora-dlmm = { path = "../../lib/meteora-dlmm", version = "0.0.1" }
+serde.workspace = true
+serde_json.workspace = true
+bincode.workspace = true
+dashmap = { workspace = true }
 solana-program = { workspace = true }
 solana-client = { workspace = true }
 solana-sdk = { workspace = true }
 spl-token-2022 = { workspace = true }
-arrayref = { workspace = true }
 anyhow = { workspace = true }
-tokio = { version = "1.44.1", features = ["rt", "rt-multi-thread", "macros"] }
-base58 = "0.2.0"
-chrono = "0.4"
-futures-util = "0.3"
-tonic = "0.12.1"
+base58.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
 spl-token = { workspace = true }
-bincode = "1.3.3"
-anchor-spl = { workspace = true }
+
 yellowstone-grpc-client = { workspace = true }
 yellowstone-grpc-proto = { workspace = true }
 solana-account-decoder = { workspace = true }
-futures = "0.3.30"
-
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing-appender = { workspace = true }
-
-[dev-dependencies]
-criterion = "0.5"
-serde = { version = "1.0", features = ["derive"] }
-serde-diff = "0.4"
-serde_json = "1.0"
+thiserror="1.0.51"
+num-traits = "0.2.19"
+num-derive = "0.3.3"
+bytemuck = { workspace = true }
+safe-transmute = "0.11.2"
+burberry = { workspace = true }
+eyre.workspace = true
+async-stream = "0.3.6"
+async-channel.workspace = true
+moka.workspace = true
+uint = {workspace = true}
+anchor-lang = {workspace = true}
+anchor-spl = {workspace = true}
+arrayref = {workspace = true}
+async-trait = {workspace = true}
+tokio = { workspace = true }
 
 [[bench]]
 name = "test_quote_benches"
@@ -63,3 +69,9 @@ path = "tests/test_pump_fun_sub.rs"
 [[test]]
 name = "test_dlmm_sub"
 path = "tests/test_dlmm_sub.rs"
+
+[dev-dependencies]
+criterion = "0.5"
+serde-diff = "0.4"
+
+

@@ -3,15 +3,7 @@ use base58::ToBase58;
 use chrono::Local;
 use futures_util::future::ok;
 use futures_util::stream::FuturesUnordered;
-use raydium_amm::state::{AmmInfo, Fees, Loadable, StateData};
-use raydium_clmm::sdk::big_num::U128;
-use raydium_clmm::sdk::pool;
-use raydium_clmm::sdk::pool::{PoolState, RewardInfo, REWARD_NUM};
-use raydium_clmm::sdk::tick_array::{TickArrayState, TickState, TICK_ARRAY_SIZE_USIZE};
-use raydium_clmm::sdk::tick_array_bit_map;
-use raydium_clmm::sdk::tick_math::get_tick_at_sqrt_price;
-use raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use raydium_clmm::sdk::utils::{deserialize_anchor_account, deserialize_anchor_bytes};
+use router::defi::raydium_amm::state::{AmmInfo, Fees, StateData};
 use serde::__private::de::Content::I32;
 use serde::{Deserialize, Serialize};
 use serde_diff::{Diff, SerdeDiff};
@@ -24,14 +16,15 @@ use std::env;
 use std::mem::offset_of;
 use std::ops::Sub;
 use std::process::exit;
+use std::str::FromStr;
 use std::time::Duration;
 use tracing::{debug, error, info};
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::time::FormatTime;
-use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
 use yellowstone_grpc_client::{GeyserGrpcClient, GeyserGrpcClientResult, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
@@ -39,37 +32,9 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions, SubscribeUpdateAccount,
 };
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::{StreamExt, StreamMap};
-struct MicrosecondFormatter;
-
-impl FormatTime for MicrosecondFormatter {
-    fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
-        let now = Local::now();
-        write!(w, "{}", now.format("%Y-%m-%d %H:%M:%S%.6f"))
-    }
-}
-#[test]
-fn logger_init() {
-    let filter = EnvFilter::new("info") // 默认全局日志级别为 info
-        .add_directive("router=debug".parse().unwrap());
-
-    tracing_subscriber::registry()
-        .with(fmt::layer().compact()) 
-        .with(filter)                 
-        .init();
-
-    // 记录日志
-    debug!("This is an asynchronous log message to the console.111");
-    info!("This is an asynchronous log message to the console.");
-    info!("This is an asynchronous log message to the console.");
-    info!("This is an asynchronous log message to the console.");
-
-    // 主线程继续执行其他操作
-    println!("Continuing with other operations.");
-}
 
 #[tokio::test]
 async fn main() {
-    logger_init();
 
     let _ = sub().await;
 }
@@ -83,8 +48,8 @@ async fn sub() -> anyhow::Result<()> {
     let (_subscribe_tx, mut stream) = client
         .as_mut()
         .unwrap()
-        .subscribe_with_request(Some(generate_amm_info_sub_field_request()))
-        // .subscribe_with_request(None)
+        // .subscribe_with_request(Some(generate_amm_info_sub_field_request()))
+        .subscribe_with_request(None)
         .await
         .unwrap();
     let (_, mut mint_vault_stream) = client
@@ -94,54 +59,54 @@ async fn sub() -> anyhow::Result<()> {
         // .subscribe_with_request(None)
         .await
         .unwrap();
-    let mut map = StreamMap::new();
-    map.insert("amm_info", stream);
-    map.insert("mint_vault", mint_vault_stream);
+    // let mut map = StreamMap::new();
+    // map.insert("amm_info", stream);
+    // map.insert("mint_vault", mint_vault_stream);
     info!("connect grpc successful!");
     loop {
         tokio::select! {
-            update = map.next() =>{
-                if let Some((_,data)) = update {
-                    match data{
-                       Ok(msg) => match msg.update_oneof {
-                            Some(UpdateOneof::Account(account)) => {
-                                let account_info = &account.account.unwrap();
-                                let pubkey=&account_info.pubkey.to_base58();
-                                 // let  pool_state = amm_info_from_sub_data_slice(account_info.data.as_slice());
-                                // info!("txn : {:?}, account : {:?}, data:{:?}",
-                                //     &account_info.txn_signature.to_owned().unwrap().to_base58(),pubkey,pool_state);
-                                // let amm_info = AmmInfo::load_from_bytes(&account_info.data).unwrap();
-                                let  x = &account_info.txn_signature.to_owned().unwrap().to_base58();
-                                info!("txn : {:?}, account : {:?}, data:{:?}",
-                                    &account_info.txn_signature.to_owned().unwrap().to_base58(),
-                                    pubkey,
-                                    account_info.data
-                                );
-                            },
-                            _=>{}
-                        },
-                        _=>{}
-                    }
-
-                }
-            },
-            // update = mint_vault_stream.next() =>{
-            //     if let Some(data) = update {
+            // update = map.next() =>{
+            //     if let Some((_,data)) = update {
             //         match data{
             //            Ok(msg) => match msg.update_oneof {
             //                 Some(UpdateOneof::Account(account)) => {
             //                     let account_info = &account.account.unwrap();
-            //                     let txn = &account_info.txn_signature;
             //                     let pubkey=&account_info.pubkey.to_base58();
-            //                     let account = mint_vault_from_sub_data_slice(&account_info.data);
-            //                     info!("txn : {:?},pubkey:{:?}, data : {:?}",txn.to_owned().unwrap().to_base58(),pubkey,account);
+            //                      // let  pool_state = amm_info_from_sub_data_slice(account_info.data.as_slice());
+            //                     // info!("txn : {:?}, account : {:?}, data:{:?}",
+            //                     //     &account_info.txn_signature.to_owned().unwrap().to_base58(),pubkey,pool_state);
+            //                     // let amm_info = AmmInfo::load_from_bytes(&account_info.data).unwrap();
+            //                     let  x = &account_info.txn_signature.to_owned().unwrap().to_base58();
+            //                     info!("txn : {:?}, account : {:?}, data:{:?}",
+            //                         &account_info.txn_signature.to_owned().unwrap().to_base58(),
+            //                         pubkey,
+            //                         account_info.data
+            //                     );
             //                 },
             //                 _=>{}
             //             },
             //             _=>{}
             //         }
+            //
             //     }
             // },
+            update = mint_vault_stream.next() =>{
+                if let Some(data) = update {
+                    match data{
+                       Ok(msg) => match msg.update_oneof {
+                            Some(UpdateOneof::Account(account)) => {
+                                let account_info = &account.account.unwrap();
+                                let txn = &account_info.txn_signature;
+                                let pubkey=&account_info.pubkey.to_base58();
+                                let account = mint_vault_from_sub_data_slice(&account_info.data);
+                                info!("txn : {:?},pubkey:{:?}, data : {:?}",txn.to_owned().unwrap().to_base58(),pubkey,account);
+                            },
+                            _=>{}
+                        },
+                        _=>{}
+                    }
+                }
+            },
         }
     }
 }
