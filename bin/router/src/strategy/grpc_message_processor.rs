@@ -154,10 +154,10 @@ pub enum GrpcMessage {
     },
     RaydiumClmmData {
         pool_id: Pubkey,
-        mint_0_vault_amount: Option<u64>,
-        mint_1_vault_amount: Option<u64>,
-        mint_0_need_take_pnl: Option<u64>,
-        mint_1_need_take_pnl: Option<u64>,
+        tick_current: Option<i32>,
+        liquidity: Option<u128>,
+        sqrt_price_x64: Option<u128>,
+        tick_array_bitmap: Option<[u64; 16]>,
     },
 }
 

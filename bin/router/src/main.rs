@@ -1,4 +1,5 @@
 use chrono::Local;
+use router::start_bot;
 use serde::Deserialize;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -6,7 +7,6 @@ use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
-use router::start_bot;
 
 pub struct MicrosecondFormatter;
 

@@ -1,4 +1,5 @@
 use crate::defi::common::mint_vault::MintVaultSubscribe;
+use crate::defi::common::utils::change_option_ignore_none_old;
 use crate::defi::dex::Dex;
 use crate::defi::file_db::FILE_DB_DIR;
 use crate::defi::raydium_amm::state::PoolInfo;
@@ -11,10 +12,17 @@ use crate::defi::raydium_clmm::sdk::utils::{
 };
 use crate::defi::raydium_clmm::sdk::{config, pool, utils};
 use crate::defi::raydium_clmm::state::ClmmPoolInfo;
-use crate::defi::types::{GrpcAccountUpdateType, Mint, Pool, PoolExtra, Protocol};
+use crate::defi::types::PoolExtra::RaydiumCLMM;
+use crate::defi::types::{AccountUpdate, GrpcAccountUpdateType, Mint, Pool, PoolExtra, Protocol};
+use crate::strategy::grpc_message_processor::GrpcMessage;
+use crate::strategy::grpc_message_processor::GrpcMessage::{RaydiumAmmData, RaydiumClmmData};
 use anchor_lang::error::ComparedValues::Pubkeys;
 use anyhow::anyhow;
+use arrayref::{array_ref, array_refs};
+use base58::ToBase58;
 use futures_util::future::err;
+use moka::ops::compute::{CompResult, Op};
+use moka::sync::Cache;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -46,7 +54,7 @@ pub struct RaydiumClmmDex {
 
 impl RaydiumClmmDex {
     pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
-        if let PoolExtra::RaydiumCLMM {
+        if let RaydiumCLMM {
             tick_spacing,
             trade_fee_rate,
             liquidity,
@@ -253,7 +261,7 @@ impl RaydiumClmmDex {
                             decimals: pool_state.mint_decimals_1,
                         },
                     ],
-                    extra: PoolExtra::RaydiumCLMM {
+                    extra: RaydiumCLMM {
                         tick_spacing: pool_state.tick_spacing,
                         trade_fee_rate,
                         liquidity: pool_state.liquidity,
@@ -270,6 +278,112 @@ impl RaydiumClmmDex {
             None
         } else {
             Some(all_pools)
+        }
+    }
+
+    pub async fn try_get_ready_message(
+        account_update: AccountUpdate,
+        events: Arc<Cache<(String, Pubkey), GrpcMessage>>,
+    ) -> Option<GrpcMessage> {
+        let account_type = account_update.account_type;
+        let filters = account_update.filters;
+        let account = account_update.account;
+        if let Some(update_account_info) = account.account {
+            let txn = update_account_info.txn_signature.unwrap().to_base58();
+            let data = update_account_info.data;
+            let pool_id = Pubkey::try_from(update_account_info.pubkey).unwrap();
+            let push_event = match account_type {
+                GrpcAccountUpdateType::PoolState => {
+                    let src = array_ref![data, 0, 180];
+                    let (
+                        liquidity,
+                        price,
+                        tick_current,
+                        bitmap,
+                        _total_fees_token_0,
+                        _total_fees_token_1,
+                    ) = array_refs![src, 16, 16, 4, 128, 8, 8];
+                    Some((
+                        pool_id,
+                        RaydiumClmmData {
+                            pool_id,
+                            liquidity: Some(u128::from_le_bytes(*liquidity)),
+                            sqrt_price_x64: Some(u128::from_le_bytes(*price)),
+                            tick_current: Some(i32::from_le_bytes(*tick_current)),
+                            tick_array_bitmap: Some(
+                                bitmap
+                                    .chunks_exact(8)
+                                    .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+                                    .collect::<Vec<_>>()
+                                    .try_into()
+                                    .unwrap(),
+                            ),
+                        },
+                    ))
+                }
+                _ => None,
+            };
+            if let Some((pool_id, update_data)) = push_event {
+                let entry = events
+                    .entry((txn, pool_id))
+                    .and_compute_with(|maybe_entry| {
+                        if let Some(exists) = maybe_entry {
+                            let mut message = exists.into_value();
+                            if Self::fill_change_data(&mut message, update_data).is_ok() {
+                                Op::Remove
+                            } else {
+                                Op::Put(message)
+                            }
+                        } else {
+                            Op::Put(update_data)
+                        }
+                    });
+                match entry {
+                    CompResult::Removed(r) => Some(r.into_value()),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn fill_change_data(old: &mut GrpcMessage, update_data: GrpcMessage) -> anyhow::Result<()> {
+        match old {
+            RaydiumClmmData {
+                tick_current,
+                liquidity,
+                sqrt_price_x64,
+                tick_array_bitmap,
+                ..
+            } => {
+                if let RaydiumClmmData {
+                    tick_current: update_tick_current,
+                    liquidity: update_liquidity,
+                    sqrt_price_x64: update_sqrt_price_x64,
+                    tick_array_bitmap: update_tick_array_bitmap,
+                    ..
+                } = update_data
+                {
+                    if change_option_ignore_none_old(tick_current, update_tick_current)
+                        || change_option_ignore_none_old(liquidity, update_liquidity)
+                        || change_option_ignore_none_old(sqrt_price_x64, update_sqrt_price_x64)
+                        || change_option_ignore_none_old(
+                            tick_array_bitmap,
+                            update_tick_array_bitmap,
+                        )
+                    {
+                        Ok(())
+                    } else {
+                        Err(anyhow!(""))
+                    }
+                } else {
+                    Err(anyhow!(""))
+                }
+            }
+            _ => Err(anyhow!("")),
         }
     }
 
