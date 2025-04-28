@@ -1,6 +1,5 @@
 use crate::cache::PoolExtra::RaydiumCLMM;
 use crate::cache::{Mint, Pool};
-use crate::defi::common::utils::change_data_if_not_same;
 use crate::defi::json_state::state::ClmmJsonInfo;
 use crate::defi::raydium_clmm::sdk::config::AmmConfig;
 use crate::defi::raydium_clmm::sdk::pool::PoolState;
@@ -23,15 +22,17 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use std::collections::{HashMap, VecDeque};
+use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::sync::Arc;
-use tracing::error;
+use tracing::{debug, error};
+use tracing_subscriber::fmt::format::Format;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Debug, Clone)]
+#[derive( Clone)]
 pub struct RaydiumClmmDex {
     amount_in_mint: Pubkey,
     pool_id: Pubkey,
@@ -44,7 +45,8 @@ pub struct RaydiumClmmDex {
     tick_current: i32,
     tick_array_bitmap: [u64; 16],
     tick_array_bitmap_extension: TickArrayBitmapExtension,
-    tick_array_states: VecDeque<TickArrayState>,
+    zero_to_one_tick_array_states: VecDeque<TickArrayState>,
+    one_to_zero_tick_array_states: VecDeque<TickArrayState>,
 }
 
 impl RaydiumClmmDex {
@@ -57,7 +59,8 @@ impl RaydiumClmmDex {
             tick_current,
             tick_array_bitmap,
             tick_array_bitmap_extension,
-            tick_array_states,
+            zero_to_one_tick_array_states,
+            one_to_zero_tick_array_states,
         } = pool.extra.clone()
         {
             Some(Self {
@@ -72,7 +75,8 @@ impl RaydiumClmmDex {
                 sqrt_price_x64,
                 tick_array_bitmap,
                 tick_array_bitmap_extension,
-                tick_array_states,
+                zero_to_one_tick_array_states,
+                one_to_zero_tick_array_states,
             })
         } else {
             None
@@ -102,6 +106,16 @@ impl RaydiumClmmDex {
     }
 }
 
+impl Debug for RaydiumClmmDex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RaydiumClmmDex: {},{}",
+            self.pool_id, self.amount_in_mint
+        )
+    }
+}
+
 #[async_trait::async_trait]
 impl Dex for RaydiumClmmDex {
     async fn quote(&self, amount_in: u64) -> Option<u64> {
@@ -118,7 +132,11 @@ impl Dex for RaydiumClmmDex {
         pool_state.liquidity = self.liquidity;
         pool_state.sqrt_price_x64 = self.sqrt_price_x64;
 
-        let mut tick_arrays = self.tick_array_states.clone();
+        let mut tick_arrays = if zero_for_one {
+            self.zero_to_one_tick_array_states.clone()
+        } else {
+            self.one_to_zero_tick_array_states.clone()
+        };
 
         let result = Self::get_out_put_amount_and_remaining_accounts(
             amount_in,
@@ -420,31 +438,26 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                         bitmap_extension_pair.1.as_ref().unwrap(),
                     )
                     .unwrap();
-                let mut all_tick_array_states = VecDeque::new();
-                all_tick_array_states.extend(
-                    load_cur_and_next_specify_count_tick_array(
-                        rpc_client.clone(),
-                        10,
-                        &pool_id,
-                        &Pubkey::default(),
-                        &pool_state,
-                        &tickarray_bitmap_extension,
-                        true,
-                    )
-                    .await,
-                );
-                all_tick_array_states.extend(
-                    load_cur_and_next_specify_count_tick_array(
-                        rpc_client.clone(),
-                        10,
-                        &pool_id,
-                        &Pubkey::default(),
-                        &pool_state,
-                        &tickarray_bitmap_extension,
-                        false,
-                    )
-                    .await,
-                );
+                let mut zero_to_one_tick_array_states = load_cur_and_next_specify_count_tick_array(
+                    rpc_client.clone(),
+                    10,
+                    &pool_id,
+                    &Pubkey::default(),
+                    &pool_state,
+                    &tickarray_bitmap_extension,
+                    true,
+                )
+                .await;
+                let one_to_zero_tick_array_states = load_cur_and_next_specify_count_tick_array(
+                    rpc_client.clone(),
+                    10,
+                    &pool_id,
+                    &Pubkey::default(),
+                    &pool_state,
+                    &tickarray_bitmap_extension,
+                    false,
+                )
+                .await;
                 all_pools.push(Pool {
                     protocol: Protocol::RaydiumCLmm,
                     pool_id,
@@ -466,7 +479,8 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                         tick_current: pool_state.tick_current,
                         tick_array_bitmap: pool_state.tick_array_bitmap,
                         tick_array_bitmap_extension: tickarray_bitmap_extension,
-                        tick_array_states: all_tick_array_states,
+                        zero_to_one_tick_array_states,
+                        one_to_zero_tick_array_states,
                     },
                 })
             }
@@ -474,6 +488,13 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
         if all_pools.is_empty() {
             None
         } else {
+            debug!(
+                "Clmm snapshot : {:#?}",
+                all_pools
+                    .iter()
+                    .map(|pool| &pool.pool_id)
+                    .collect::<Vec<_>>()
+            );
             Some(all_pools)
         }
     }

@@ -1,5 +1,4 @@
 use crate::cache::{Pool, PoolCache};
-use crate::defi::raydium_amm::raydium_amm::RaydiumAmmDex;
 use crate::file_db::FileDB;
 use crate::interface::{Dex, GrpcMessage, Protocol, DB};
 use anyhow::anyhow;
@@ -11,7 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tokio::task::JoinSet;
-use tracing::info;
+use tracing::{error, info};
 
 pub mod common;
 mod json_state;
@@ -70,12 +69,21 @@ impl Defi {
         grpc_message: GrpcMessage,
     ) -> Option<Vec<(Pool, Pool)>> {
         let indexer = self.indexer.clone();
-        if let Some(_pool) = indexer.update_cache(grpc_message) {
+        if let Some(update_pool) = indexer.update_cache(grpc_message) {
             //TODO:支持配置
             let amount_in_mint =
                 Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-            if let Some(paths) = indexer.find_path(&amount_in_mint).await {
-                let path_result = Self::find_best_path(Arc::new(paths)).await;
+            if let Some(paths) = indexer.find_path(&amount_in_mint, &update_pool).await {
+                let reverse_path = paths
+                    .iter()
+                    .map(|p| {
+                        let mut path = p.clone();
+                        path.path.reverse();
+                        path
+                    })
+                    .collect::<Vec<_>>();
+                let path_result =
+                    Self::find_best_path(Arc::new(paths), Arc::new(reverse_path)).await;
                 info!("path_result {:?}", path_result);
             };
             None
@@ -84,60 +92,63 @@ impl Defi {
         }
     }
 
-    fn create_dex(amount_in_mint: Pubkey, pool: Pool) -> Option<Box<dyn Dex>> {
-        match pool.protocol {
-            Protocol::RaydiumAMM => Some(Box::new(RaydiumAmmDex::new(pool, amount_in_mint))),
-            _ => None,
-        }
+    fn create_dex(amount_in_mint: Pubkey, pool: &Pool) -> Option<Box<dyn Dex>> {
+        let protocol = &pool.protocol;
+        protocol.create_dex(amount_in_mint, pool.clone())
     }
 
     async fn find_best_path(
-        paths: Arc<Vec<(Box<dyn Dex>, Box<dyn Dex>)>>,
+        paths: Arc<Vec<Path>>,
+        reverse_path: Arc<Vec<Path>>,
     ) -> Option<DexQuoteResult> {
         let mut join_set = JoinSet::new();
         let mut start_amount_in = 1_000_000_u64;
-        for i in 1..4 {
+        for i in 1..3 {
             start_amount_in = start_amount_in.checked_mul(10u64.pow(i)).unwrap();
             let paths = paths.clone();
             join_set.spawn(async move {
-                let mut local_best: Option<(usize, u64, u64, u64)> = None;
-                for (index, (f_dex, s_dex)) in paths.iter().enumerate() {
-                    if let Some(f_amount_out) = f_dex.quote(start_amount_in).await {
-                        if let Some(s_amount_out) = s_dex.quote(f_amount_out).await {
-                            if s_amount_out < start_amount_in {
-                                continue;
-                            }
-                            if local_best.is_none() || s_amount_out > local_best.unwrap().2 {
-                                local_best = Some((
-                                    index,
-                                    start_amount_in,
-                                    s_amount_out,
-                                    s_amount_out.sub(start_amount_in),
-                                ))
-                            }
-                        }
-                    }
-                }
-                local_best
+                (
+                    true,
+                    Defi::find_best_path_for_single_direction_path(paths, start_amount_in).await,
+                )
+            });
+            let reverse_path = reverse_path.clone();
+            join_set.spawn(async move {
+                (
+                    false,
+                    Defi::find_best_path_for_single_direction_path(reverse_path, start_amount_in)
+                        .await,
+                )
             });
         }
-        let mut global_best: Option<(usize, u64, u64, u64)> = None;
+
+        let mut global_best: Option<(bool, (usize, u64, u64, u64))> = None;
         while let Some(result) = join_set.join_next().await {
             match result {
                 Ok(local_best) => {
-                    if let Some((path_index, amount_in, amount_out, profit)) = local_best {
-                        if global_best.is_none() || profit >= global_best.unwrap().3 {
-                            global_best = Some((path_index, amount_in, amount_out, profit));
+                    if let (is_positive, Some((path_index, amount_in, amount_out, profit))) =
+                        local_best
+                    {
+                        if global_best.is_none() || profit >= global_best.unwrap().1 .3 {
+                            global_best =
+                                Some((is_positive, (path_index, amount_in, amount_out, profit)));
                         }
                     }
                 }
                 Err(_error) => {}
             }
         }
-        if let Some((path_index, amount_in, amount_out, profit)) = global_best {
-            let option = paths.get(path_index).unwrap();
+        if let Some((is_positive, (path_index, amount_in, amount_out, profit))) = global_best {
+            let option = if is_positive {
+                paths.get(path_index).unwrap()
+            } else {
+                reverse_path.get(path_index).unwrap()
+            };
             Some(DexQuoteResult {
-                path: vec![option.0.clone_self(), option.1.clone_self()],
+                path: vec![
+                    option.path.first().unwrap().clone_self(),
+                    option.path.last().unwrap().clone_self(),
+                ],
                 amount_in,
                 amount_out,
                 profit,
@@ -145,6 +156,31 @@ impl Defi {
         } else {
             None
         }
+    }
+
+    async fn find_best_path_for_single_direction_path(
+        paths: Arc<Vec<Path>>,
+        start_amount_in: u64,
+    ) -> Option<(usize, u64, u64, u64)> {
+        let mut local_best: Option<(usize, u64, u64, u64)> = None;
+        for (index, path) in paths.iter().enumerate() {
+            if let Some(f_amount_out) = path.path[0].quote(start_amount_in).await {
+                if let Some(s_amount_out) = path.path[1].quote(f_amount_out).await {
+                    if s_amount_out < start_amount_in {
+                        continue;
+                    }
+                    if local_best.is_none() || s_amount_out > local_best.unwrap().2 {
+                        local_best = Some((
+                            index,
+                            start_amount_in,
+                            s_amount_out,
+                            s_amount_out.sub(start_amount_in),
+                        ))
+                    }
+                }
+            }
+        }
+        local_best
     }
 }
 
@@ -199,7 +235,8 @@ impl DexIndexer {
     pub async fn find_path(
         &self,
         amount_in_mint: &Pubkey,
-    ) -> Option<Vec<(Box<dyn Dex>, Box<dyn Dex>)>> {
+        update_pool: &Pubkey,
+    ) -> Option<Vec<Path>> {
         let pool_cache = self.pool_cache.clone();
         let edges = pool_cache.edges;
         let pool_map = pool_cache.pool_map;
@@ -211,15 +248,24 @@ impl DexIndexer {
                         if amount_in_mint != s_pool_out_mint || f_pool == s_pool {
                             continue;
                         }
-                        if let Some(f_dex) = Defi::create_dex(
-                            amount_in_mint.clone(),
-                            pool_map.get(f_pool).unwrap().clone(),
-                        ) {
+                        // 要包含更新的池子
+                        if f_pool != update_pool && s_pool != update_pool {
+                            continue;
+                        }
+                        if let Some(f_dex) =
+                            Defi::create_dex(*amount_in_mint, &pool_map.get(f_pool).unwrap())
+                        {
                             if let Some(s_dex) = Defi::create_dex(
-                                f_pool_out_mint.clone(),
-                                pool_map.get(s_pool).unwrap().clone(),
+                                *f_pool_out_mint,
+                                &pool_map.get(s_pool).unwrap().clone(),
                             ) {
-                                paths.push((f_dex, s_dex))
+                                info!(
+                                    "路径：【{:?},{:?}】,【{:?},{:?}】",
+                                    amount_in_mint, f_pool, f_pool_out_mint, s_pool
+                                );
+                                paths.push(Path {
+                                    path: vec![f_dex, s_dex],
+                                });
                             }
                         }
                     }
@@ -252,11 +298,23 @@ impl DexIndexer {
             Entry::Vacant(_) => Err(anyhow!("")),
         };
         if successful.is_ok() {
-            info!("更新缓存：成功 {:#?}", pool_id);
+            info!("更新缓存：成功 {:?}", pool_id);
             Some(successful.unwrap())
         } else {
-            info!("更新缓存：未发生变化{:#?}", pool_id);
+            info!("更新缓存：未发生变化{:?}", pool_id);
             None
+        }
+    }
+}
+
+pub struct Path {
+    path: Vec<Box<dyn Dex>>,
+}
+
+impl Clone for Path {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path.iter().map(|path| path.clone_self()).collect(),
         }
     }
 }

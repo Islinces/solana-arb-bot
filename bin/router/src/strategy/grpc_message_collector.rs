@@ -3,7 +3,7 @@ use crate::interface::{AccountUpdate, SubscribeKey};
 use burberry::{async_trait, Collector, CollectorStream};
 use solana_program::pubkey::Pubkey;
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::SubscribeUpdate;
@@ -38,6 +38,7 @@ impl GrpcMessageCollector {
     {
         let defi = Defi::new(&self.rpc_url, &self.subscribe_mints).await?;
         let pools = defi.get_all_pools().unwrap();
+        // TODO：支持配置GRPC参数
         let mut grpc_client = GeyserGrpcClient::build_from_static(self.grpc_url)
             .tcp_nodelay(true)
             .http2_adaptive_window(true)
@@ -48,7 +49,7 @@ impl GrpcMessageCollector {
             .connect()
             .await
             .map_err(|e| {
-                error!("failed to connect: {e}");
+                error!("GRPC订阅: 连接GRPC服务器失败，原因: {e}");
                 anyhow::anyhow!(e)
             })?;
         let mut subscrbeitions = StreamMap::new();
@@ -59,23 +60,24 @@ impl GrpcMessageCollector {
             if let Some(requests) = subscribe_requests {
                 if let Some(subscribe_requests) = requests {
                     for (key, subscribe_request) in subscribe_requests {
+                        // TODO: 失败重试
                         let (_, stream) = grpc_client
                             .subscribe_with_request(Some(subscribe_request))
                             .await?;
                         subscrbeitions.insert(key, stream);
                     }
                 } else {
-                    error!("GRPC订阅：【{:?}】未生成订阅请求", protocol);
+                    error!("GRPC订阅: 【{:?}】未生成订阅请求", protocol);
                 }
             } else {
                 error!(
-                    "GRPC订阅：【{:?}】未找到GrpcSubscribeRequestGenerator实现，订阅失败",
+                    "GRPC订阅: 【{:?}】未找到GrpcSubscribeRequestGenerator实现，订阅失败",
                     protocol
                 );
             }
         }
         if subscrbeitions.is_empty() {
-            Err(anyhow::anyhow!("GRPC订阅：无订阅请求生成，订阅失败"))
+            Err(anyhow::anyhow!("GRPC订阅: 无订阅请求生成，订阅失败"))
         } else {
             let ping_interval = self.ping_interval_with_secs;
             tokio::spawn(async move {
@@ -85,6 +87,7 @@ impl GrpcMessageCollector {
                 loop {
                     tokio::select! {
                         _ = ping.tick() => {
+                            debug!("GRPC订阅: PING...");
                             if let Err(e)=grpc_client.ping(1).await{
                                 error!("GRPC PING 失败，{}",e);
                             }
@@ -94,7 +97,7 @@ impl GrpcMessageCollector {
             });
 
             info!(
-                "GRPC订阅：订阅成功列表【{:#?}】",
+                "GRPC订阅: 订阅成功列表【{:#?}】",
                 subscrbeitions
                     .keys()
                     .map(|s| format!("{:?}", s))

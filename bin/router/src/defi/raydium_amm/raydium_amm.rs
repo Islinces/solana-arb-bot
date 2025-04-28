@@ -20,6 +20,7 @@ use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token::state::Account;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::fs::File;
 use std::ops::Add;
 use std::sync::Arc;
@@ -29,22 +30,28 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RaydiumAmmDex {
     pool: Pool,
-    swap_direction: SwapDirection,
+    amount_in_mint: Pubkey,
 }
 
 impl RaydiumAmmDex {
-    pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Self {
-        Self {
-            swap_direction: if amount_in_mint == pool.mint_0() {
-                SwapDirection::Coin2PC
-            } else {
-                SwapDirection::PC2Coin
-            },
+    pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
+        Some(Self {
+            amount_in_mint,
             pool,
-        }
+        })
+    }
+}
+
+impl Debug for RaydiumAmmDex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RaydiumAmmDex: {},{}",
+            self.pool.pool_id, self.amount_in_mint
+        )
     }
 }
 
@@ -83,7 +90,7 @@ impl Dex for RaydiumAmmDex {
                     .checked_sub(mint_1_need_take_pnl.unwrap())
                     .unwrap(),
             );
-            let amount_out = if let SwapDirection::PC2Coin = self.swap_direction {
+            let mut amount_out = if self.pool.mint_0() == self.amount_in_mint {
                 mint_1_amount_without_pnl
                     .checked_mul(swap_in_after_deduct_fee)
                     .unwrap()
@@ -100,7 +107,12 @@ impl Dex for RaydiumAmmDex {
                     )
                     .unwrap()
             };
-            Some(amount_out.try_into().unwrap())
+            let amount_out = amount_out.try_into().unwrap();
+            if amount_out == u64::MIN {
+                None
+            } else {
+                Some(amount_out)
+            }
         } else {
             None
         }
@@ -170,7 +182,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                     } else {
                         mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
                     }
-                    let pool_id = Pubkey::try_from(items.first().unwrap().clone()).unwrap();
+                    let pool_id = Pubkey::try_from(items.first().unwrap().clone())?;
                     self.pool_id = Some(pool_id);
                     self.txn = Some(txn);
                     self.grpc_message = Some(RaydiumAmmData {

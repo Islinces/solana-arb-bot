@@ -28,7 +28,6 @@ impl PoolCache {
 
 #[derive(Debug, Clone)]
 pub enum PoolExtra {
-    None,
     RaydiumAMM {
         mint_0_vault: Option<Pubkey>,
         mint_1_vault: Option<Pubkey>,
@@ -47,7 +46,8 @@ pub enum PoolExtra {
         tick_current: i32,
         tick_array_bitmap: [u64; 16],
         tick_array_bitmap_extension: TickArrayBitmapExtension,
-        tick_array_states: VecDeque<TickArrayState>,
+        zero_to_one_tick_array_states: VecDeque<TickArrayState>,
+        one_to_zero_tick_array_states: VecDeque<TickArrayState>,
     },
     PumpFun {
         mint_0_vault: Pubkey,
@@ -59,7 +59,6 @@ pub enum PoolExtra {
 impl PoolExtra {
     pub fn try_change(&mut self, change: GrpcMessage) -> anyhow::Result<()> {
         match self {
-            PoolExtra::None => Err(anyhow!("")),
             PoolExtra::RaydiumAMM {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
@@ -152,7 +151,6 @@ impl Pool {
 
     pub fn mint_vault_pair(&self) -> Option<(Pubkey, Pubkey)> {
         match self.extra {
-            PoolExtra::None => None,
             PoolExtra::RaydiumAMM {
                 mint_0_vault,
                 mint_1_vault,

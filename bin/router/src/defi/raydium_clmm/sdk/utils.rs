@@ -13,6 +13,7 @@ use solana_sdk::account::Account;
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Neg};
 use std::sync::Arc;
+use tracing::error;
 
 // the top level state of the swap, the results of which are recorded in storage at the end
 #[derive(Debug)]
@@ -144,7 +145,7 @@ fn swap_compute(
         && state.tick < tick_math::MAX_TICK
         && state.tick > tick_math::MIN_TICK
     {
-        if loop_count > 10 {
+        if loop_count > 100 {
             return Result::Err("loop_count limit");
         }
         let mut step = StepComputations::default();
@@ -175,7 +176,14 @@ fn swap_compute(
                     zero_for_one,
                 )
                 .unwrap();
-            tick_array_current = tick_arrays.pop_front().unwrap();
+            let option = tick_arrays.pop_front();
+            
+            if let Some(next_vaild_tick_array) = option {
+                tick_array_current = next_vaild_tick_array;    
+            }else { 
+                error!("tick_arrays is empty");
+            }
+            
             if next_vaild_tick_array_start_index.is_none() {
                 return Result::Err("tick array start tick index out of range limit");
             }
@@ -385,6 +393,6 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
         );
         max_array_size -= 1;
     }
-    println!("tick_array_keys : {:#?}", tick_array_keys);
+    // println!("tick_array_keys : {:#?}", tick_array_keys);
     tick_array_keys
 }

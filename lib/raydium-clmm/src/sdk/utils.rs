@@ -381,6 +381,6 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
         );
         max_array_size -= 1;
     }
-    println!("tick_array_keys : {:#?}", tick_array_keys);
+    // println!("tick_array_keys : {:#?}", tick_array_keys);
     tick_array_keys
 }

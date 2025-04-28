@@ -1,9 +1,11 @@
 use crate::cache::Pool;
 use crate::defi::raydium_amm::raydium_amm::{
-    RaydiumAmmGrpcMessageOperator, RaydiumAmmSnapshotFetcher, RaydiumAmmSubscribeRequestCreator,
+    RaydiumAmmDex, RaydiumAmmGrpcMessageOperator, RaydiumAmmSnapshotFetcher,
+    RaydiumAmmSubscribeRequestCreator,
 };
 use crate::defi::raydium_clmm::raydium_clmm::{
-    RaydiumClmmGrpcMessageOperator, RaydiumClmmSnapshotFetcher, RaydiumClmmSubscribeRequestCreator,
+    RaydiumClmmDex, RaydiumClmmGrpcMessageOperator, RaydiumClmmSnapshotFetcher,
+    RaydiumClmmSubscribeRequestCreator,
 };
 use crate::interface::SourceMessage::{Account, NONE};
 use anyhow::Result;
@@ -87,6 +89,27 @@ impl Protocol {
             Protocol::RaydiumCLmm => false,
             Protocol::PumpFunAMM => false,
             Protocol::MeteoraDLMM => false,
+        }
+    }
+
+    pub fn create_dex(&self, amount_in_mint: Pubkey, pool: Pool) -> Option<Box<dyn Dex>> {
+        match self {
+            Protocol::RaydiumAMM => {
+                if let Some(dex) = RaydiumAmmDex::new(pool, amount_in_mint) {
+                    Some(Box::new(dex))
+                } else {
+                    None
+                }
+            }
+            Protocol::RaydiumCLmm => {
+                if let Some(dex) = RaydiumClmmDex::new(pool, amount_in_mint) {
+                    Some(Box::new(dex))
+                } else {
+                    None
+                }
+            }
+            Protocol::PumpFunAMM => None,
+            Protocol::MeteoraDLMM => None,
         }
     }
 }
