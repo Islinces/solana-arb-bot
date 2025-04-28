@@ -32,7 +32,7 @@ impl Arb {
         loop {
             tokio::select! {
                 message = self.ready_grpc_data_receiver.recv() => {
-                    if let  Some(paths) = self.defi.update_and_find_route(message.context("").unwrap()).await{
+                    if let Some(paths) = self.defi.update_and_find_route(message.context("").unwrap()).await{
                         info!("找到路由：{:?}",paths);
                         //TODO:触发交易
                         self.swap_sender.submit(Action::SWAP((Pubkey::default())));

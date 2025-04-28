@@ -4,3 +4,4 @@ use std::fmt::Debug;
 pub trait Dex: Send + Sync + Debug {
     fn quote(&self, amount_in: u64) -> Option<u64>;
 }
+

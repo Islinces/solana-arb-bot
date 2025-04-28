@@ -305,6 +305,8 @@ impl RaydiumAmmDex {
             _ => Err(anyhow!("")),
         }
     }
+
+    pub async fn try_change_cache() {}
 }
 
 #[async_trait::async_trait]

@@ -1,20 +1,12 @@
 use crate::defi::raydium_amm::raydium_amm::RaydiumAmmDex;
-use crate::defi::types::{
-    AccountUpdate, GrpcAccountUpdateType, PoolExtra, Protocol, SourceMessage,
-};
-use anyhow::anyhow;
-use arrayref::{array_ref, array_refs};
+use crate::defi::raydium_clmm::raydium_clmm::RaydiumClmmDex;
+use crate::defi::types::{AccountUpdate, Protocol};
 use async_channel::{Receiver, Sender};
-use base58::ToBase58;
-use chrono::Utc;
-use moka::ops::compute::{CompResult, Op};
 use moka::sync::Cache;
 use solana_program::pubkey::Pubkey;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
-use yellowstone_grpc_proto::geyser::SubscribeUpdateAccount;
-use GrpcMessage::RaydiumAmmData;
 
 pub struct GrpcDataProcessor {
     events: Arc<Cache<(String, Pubkey), GrpcMessage>>,
@@ -46,17 +38,24 @@ impl GrpcDataProcessor {
         loop {
             tokio::select! {
                 source_message = self.source_message_receiver.recv() => {
-                    let  update = source_message.unwrap();
-                    match update.protocol {
+                    let update = source_message?;
+                    let protocol = update.protocol.clone();
+                    let update_data= match protocol {
                         Protocol::RaydiumAMM=>{
-                            if let Some(update_data)= RaydiumAmmDex::try_get_ready_message(update,self.events.clone()).await{
-                                info!("发送更新缓存消息");
-                                self.ready_update_data_sender.send(update_data).await?;
-                            }
+                            RaydiumAmmDex::try_get_ready_message(update,self.events.clone()).await
+                        },
+                        Protocol::RaydiumCLmm=>{
+                            RaydiumClmmDex::try_get_ready_message(update,self.events.clone()).await
                         },
                         _=>{
+                            None
                         }
+                    };
+                    if let Some(grpc_message)=update_data{
+                        info!("发送更新缓存消息: {:?}",protocol);
+                        self.ready_update_data_sender.send(grpc_message).await?;
                     }
+
                 }
             }
         }
@@ -154,10 +153,10 @@ pub enum GrpcMessage {
     },
     RaydiumClmmData {
         pool_id: Pubkey,
-        tick_current: Option<i32>,
-        liquidity: Option<u128>,
-        sqrt_price_x64: Option<u128>,
-        tick_array_bitmap: Option<[u64; 16]>,
+        tick_current: i32,
+        liquidity: u128,
+        sqrt_price_x64: u128,
+        tick_array_bitmap: [u64; 16],
     },
 }
 

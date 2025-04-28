@@ -1,20 +1,18 @@
-use crate::defi::common::utils::change_option_ignore_none_old;
+use crate::defi::common::utils::{change_data_if_not_same, change_option_ignore_none_old};
 use crate::defi::raydium_clmm::sdk::tick_array::TickArrayState;
 use crate::defi::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::defi::types::SourceMessage::{Account, NONE};
 use crate::strategy::grpc_message_processor::GrpcMessage;
 use anyhow::anyhow;
 use dashmap::{DashMap, Entry};
-use futures_util::future::err;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use solana_program::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::{Display, Formatter, Write};
-use std::str::FromStr;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tracing::info;
 use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
+    SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts, SubscribeUpdateAccount,
 };
 
@@ -202,23 +200,19 @@ impl PoolExtra {
                     ..
                 } = change
                 {
-                    let mut has_change = change_option_ignore_none_old(
+                    if change_option_ignore_none_old(
                         mint_0_vault_amount,
                         change_mint_0_vault_amount,
-                    );
-                    has_change |= change_option_ignore_none_old(
+                    ) || change_option_ignore_none_old(
                         mint_1_vault_amount,
                         change_mint_1_vault_amount,
-                    );
-                    has_change |= change_option_ignore_none_old(
+                    ) || change_option_ignore_none_old(
                         mint_0_need_take_pnl,
                         change_mint_0_need_take_pnl,
-                    );
-                    has_change |= change_option_ignore_none_old(
+                    ) || change_option_ignore_none_old(
                         mint_1_need_take_pnl,
                         change_mint_1_need_take_pnl,
-                    );
-                    if has_change {
+                    ) {
                         Ok(())
                     } else {
                         Err(anyhow!(""))
@@ -228,7 +222,34 @@ impl PoolExtra {
                 }
             }
             PoolExtra::PumpFun { .. } => Err(anyhow!("")),
-            PoolExtra::RaydiumCLMM { .. } => Err(anyhow!("")),
+            PoolExtra::RaydiumCLMM {
+                liquidity,
+                sqrt_price_x64,
+                tick_current,
+                tick_array_bitmap,
+                ..
+            } => {
+                if let GrpcMessage::RaydiumClmmData {
+                    pool_id: _pool_id,
+                    tick_current: update_tick_current,
+                    liquidity: update_liquidity,
+                    sqrt_price_x64: update_sqrt_price_x64,
+                    tick_array_bitmap: update_tick_array_bitmap,
+                } = change
+                {
+                    if change_data_if_not_same(liquidity, update_liquidity)
+                        || change_data_if_not_same(sqrt_price_x64, update_sqrt_price_x64)
+                        || change_data_if_not_same(tick_current, update_tick_current)
+                        || change_data_if_not_same(tick_array_bitmap, update_tick_array_bitmap)
+                    {
+                        Ok(())
+                    } else {
+                        Err(anyhow!(""))
+                    }
+                } else {
+                    Err(anyhow!(""))
+                }
+            }
         }
     }
 }

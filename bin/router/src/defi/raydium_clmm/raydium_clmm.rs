@@ -1,5 +1,5 @@
 use crate::defi::common::mint_vault::MintVaultSubscribe;
-use crate::defi::common::utils::change_option_ignore_none_old;
+use crate::defi::common::utils::{change_data_if_not_same, change_option_ignore_none_old};
 use crate::defi::dex::Dex;
 use crate::defi::file_db::FILE_DB_DIR;
 use crate::defi::raydium_amm::state::PoolInfo;
@@ -286,7 +286,6 @@ impl RaydiumClmmDex {
         events: Arc<Cache<(String, Pubkey), GrpcMessage>>,
     ) -> Option<GrpcMessage> {
         let account_type = account_update.account_type;
-        let filters = account_update.filters;
         let account = account_update.account;
         if let Some(update_account_info) = account.account {
             let txn = update_account_info.txn_signature.unwrap().to_base58();
@@ -307,17 +306,15 @@ impl RaydiumClmmDex {
                         pool_id,
                         RaydiumClmmData {
                             pool_id,
-                            liquidity: Some(u128::from_le_bytes(*liquidity)),
-                            sqrt_price_x64: Some(u128::from_le_bytes(*price)),
-                            tick_current: Some(i32::from_le_bytes(*tick_current)),
-                            tick_array_bitmap: Some(
-                                bitmap
-                                    .chunks_exact(8)
-                                    .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
-                                    .collect::<Vec<_>>()
-                                    .try_into()
-                                    .unwrap(),
-                            ),
+                            liquidity: u128::from_le_bytes(*liquidity),
+                            sqrt_price_x64: u128::from_le_bytes(*price),
+                            tick_current: i32::from_le_bytes(*tick_current),
+                            tick_array_bitmap: bitmap
+                                .chunks_exact(8)
+                                .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+                                .collect::<Vec<_>>()
+                                .try_into()
+                                .unwrap(),
                         },
                     ))
                 }
@@ -367,13 +364,10 @@ impl RaydiumClmmDex {
                     ..
                 } = update_data
                 {
-                    if change_option_ignore_none_old(tick_current, update_tick_current)
-                        || change_option_ignore_none_old(liquidity, update_liquidity)
-                        || change_option_ignore_none_old(sqrt_price_x64, update_sqrt_price_x64)
-                        || change_option_ignore_none_old(
-                            tick_array_bitmap,
-                            update_tick_array_bitmap,
-                        )
+                    if change_data_if_not_same(tick_current, update_tick_current)
+                        || change_data_if_not_same(liquidity, update_liquidity)
+                        || change_data_if_not_same(sqrt_price_x64, update_sqrt_price_x64)
+                        || change_data_if_not_same(tick_array_bitmap, update_tick_array_bitmap)
                     {
                         Ok(())
                     } else {
