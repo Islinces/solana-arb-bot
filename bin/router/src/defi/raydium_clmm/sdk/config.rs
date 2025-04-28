@@ -1,6 +1,7 @@
+use crate::defi::raydium_clmm::sdk::config;
+use crate::defi::raydium_clmm::sdk::error::ErrorCode;
 use anchor_lang::prelude::*;
 use solana_program::pubkey::Pubkey;
-use crate::defi::raydium_clmm::sdk::error::ErrorCode;
 
 pub const AMM_CONFIG_SEED: &str = "amm_config";
 
@@ -31,30 +32,12 @@ pub struct AmmConfig {
 
 impl AmmConfig {
     pub const LEN: usize = 8 + 1 + 2 + 32 + 4 + 4 + 2 + 64;
-    
-    pub fn is_authorized<'info>(
-        &self,
-        signer: &Signer<'info>,
-        expect_pubkey: Pubkey,
-    ) -> Result<()> {
-        require!(
-            signer.key() == self.owner || expect_pubkey == signer.key(),
-            ErrorCode::NotApproved
-        );
-        Ok(())
-    }
-}
 
-/// Emitted when create or update a config
-#[event]
-#[cfg_attr(feature = "client", derive(Debug))]
-pub struct ConfigChangeEvent {
-    pub index: u16,
-    #[index]
-    pub owner: Pubkey,
-    pub protocol_fee_rate: u32,
-    pub trade_fee_rate: u32,
-    pub tick_spacing: u16,
-    pub fund_fee_rate: u32,
-    pub fund_owner: Pubkey,
+    pub fn key(index: u16) -> Pubkey {
+        Pubkey::find_program_address(
+            &[config::AMM_CONFIG_SEED.as_bytes(), &index.to_be_bytes()],
+            &crate::defi::raydium_clmm::ID,
+        )
+        .0
+    }
 }

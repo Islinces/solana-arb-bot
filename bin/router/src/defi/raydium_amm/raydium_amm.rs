@@ -1,17 +1,19 @@
+use crate::cache::{Mint, Pool, PoolExtra};
 use crate::defi::common::mint_vault::MintVaultSubscribe;
 use crate::defi::common::utils::change_option_ignore_none_old;
-use crate::defi::dex::Dex;
-use crate::defi::file_db::FILE_DB_DIR;
+use crate::defi::json_state::state::AmmJsonInfo;
 use crate::defi::raydium_amm::math::{CheckedCeilDiv, SwapDirection};
-use crate::defi::raydium_amm::state::{AmmInfo, Loadable, PoolInfo};
-use crate::defi::types::{AccountUpdate, GrpcAccountUpdateType, Mint, Pool, PoolExtra, Protocol};
-use crate::strategy::grpc_message_processor::GrpcMessage;
-use crate::strategy::grpc_message_processor::GrpcMessage::RaydiumAmmData;
+use crate::defi::raydium_amm::state::{AmmInfo, Loadable};
+use crate::file_db::FILE_DB_DIR;
+use crate::interface::GrpcMessage::RaydiumAmmData;
+use crate::interface::{
+    AccountSnapshotFetcher, AccountUpdate, Dex, GrpcAccountUpdateType, GrpcMessage,
+    GrpcSubscribeRequestGenerator, Protocol, ReadyGrpcMessageOperator, SubscribeKey,
+};
 use anyhow::anyhow;
+use anyhow::Result;
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
-use moka::ops::compute::{CompResult, Op};
-use moka::sync::Cache;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
@@ -27,7 +29,7 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RaydiumAmmDex {
     pool: Pool,
     swap_direction: SwapDirection,
@@ -44,10 +46,211 @@ impl RaydiumAmmDex {
             pool,
         }
     }
+}
 
-    pub fn get_subscribe_request(
-        pools: &Vec<Pool>,
-    ) -> Vec<(GrpcAccountUpdateType, SubscribeRequest)> {
+#[async_trait::async_trait]
+impl Dex for RaydiumAmmDex {
+    async fn quote(&self, amount_in: u64) -> Option<u64> {
+        let amount_in = u128::from(amount_in);
+        if let PoolExtra::RaydiumAMM {
+            swap_fee_numerator,
+            swap_fee_denominator,
+            mint_0_vault_amount,
+            mint_0_need_take_pnl,
+            mint_1_vault_amount,
+            mint_1_need_take_pnl,
+            ..
+        } = self.pool.extra
+        {
+            let swap_fee = amount_in
+                .checked_mul(u128::from(swap_fee_numerator))
+                .unwrap()
+                .checked_ceil_div(u128::from(swap_fee_denominator))
+                .unwrap()
+                .0;
+
+            let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
+
+            let mint_0_amount_without_pnl = u128::from(
+                mint_0_vault_amount
+                    .unwrap()
+                    .checked_sub(mint_0_need_take_pnl.unwrap())
+                    .unwrap(),
+            );
+            let mint_1_amount_without_pnl = u128::from(
+                mint_1_vault_amount
+                    .unwrap()
+                    .checked_sub(mint_1_need_take_pnl.unwrap())
+                    .unwrap(),
+            );
+            let amount_out = if let SwapDirection::PC2Coin = self.swap_direction {
+                mint_1_amount_without_pnl
+                    .checked_mul(swap_in_after_deduct_fee)
+                    .unwrap()
+                    .checked_div(
+                        mint_0_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
+                    )
+                    .unwrap()
+            } else {
+                mint_0_amount_without_pnl
+                    .checked_mul(swap_in_after_deduct_fee)
+                    .unwrap()
+                    .checked_div(
+                        mint_1_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
+                    )
+                    .unwrap()
+            };
+            Some(amount_out.try_into().unwrap())
+        } else {
+            None
+        }
+    }
+
+    fn clone_self(&self) -> Box<dyn Dex> {
+        Box::new(self.clone())
+    }
+}
+
+pub struct RaydiumAmmGrpcMessageOperator {
+    update_account: AccountUpdate,
+    txn: Option<String>,
+    pool_id: Option<Pubkey>,
+    grpc_message: Option<GrpcMessage>,
+}
+
+impl RaydiumAmmGrpcMessageOperator {
+    pub fn new(update_account: AccountUpdate) -> Self {
+        Self {
+            update_account,
+            txn: None,
+            pool_id: None,
+            grpc_message: None,
+        }
+    }
+}
+impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
+    fn parse_message(&mut self) -> Result<()> {
+        let account_type = &self.update_account.account_type;
+        let filters = &self.update_account.filters;
+        let account = &self.update_account.account;
+        if let Some(update_account_info) = &account.account {
+            let data = &update_account_info.data;
+            let txn = &update_account_info
+                .txn_signature
+                .as_ref()
+                .unwrap()
+                .to_base58();
+            let txn = txn.clone();
+            match account_type {
+                GrpcAccountUpdateType::PoolState => {
+                    let src = array_ref![data, 0, 80];
+                    let (need_take_pnl_coin, need_take_pnl_pc, _coin_vault_mint, _pc_vault_mint) =
+                        array_refs![src, 8, 8, 32, 32];
+                    let pool_id = Pubkey::try_from(update_account_info.pubkey.as_slice()).unwrap();
+                    self.pool_id = Some(pool_id);
+                    self.txn = Some(txn);
+                    self.grpc_message = Some(RaydiumAmmData {
+                        pool_id,
+                        mint_0_vault_amount: None,
+                        mint_1_vault_amount: None,
+                        mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
+                        mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
+                    });
+                    Ok(())
+                }
+                GrpcAccountUpdateType::MintVault => {
+                    let src = array_ref![data, 0, 41];
+                    let (_mint, amount, _state) = array_refs![src, 32, 8, 1];
+                    let mut mint_0_vault_amount = None;
+                    let mut mint_1_vault_amount = None;
+                    let items = filters.get(0).unwrap().split(":").collect::<Vec<&str>>();
+                    let mint_flag = items.last().unwrap().to_string();
+                    if mint_flag.eq("0") {
+                        mint_0_vault_amount = Some(u64::from_le_bytes(*amount));
+                    } else {
+                        mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
+                    }
+                    let pool_id = Pubkey::try_from(items.first().unwrap().clone()).unwrap();
+                    self.pool_id = Some(pool_id);
+                    self.txn = Some(txn);
+                    self.grpc_message = Some(RaydiumAmmData {
+                        pool_id,
+                        mint_0_vault_amount,
+                        mint_1_vault_amount,
+                        mint_0_need_take_pnl: None,
+                        mint_1_need_take_pnl: None,
+                    });
+                    Ok(())
+                }
+                GrpcAccountUpdateType::NONE => Err(anyhow!("")),
+            }
+        } else {
+            Err(anyhow!(""))
+        }
+    }
+
+    fn change_and_return_ready_data(&self, old: &mut GrpcMessage) -> Result<()> {
+        match old {
+            RaydiumAmmData {
+                mint_0_vault_amount,
+                mint_1_vault_amount,
+                mint_0_need_take_pnl,
+                mint_1_need_take_pnl,
+                ..
+            } => {
+                if let RaydiumAmmData {
+                    mint_0_vault_amount: update_mint_0_vault_amount,
+                    mint_1_vault_amount: update_mint_1_vault_amount,
+                    mint_0_need_take_pnl: update_mint_0_need_take_pnl,
+                    mint_1_need_take_pnl: update_mint_1_need_take_pnl,
+                    ..
+                } = self.grpc_message.as_ref().unwrap().clone()
+                {
+                    change_option_ignore_none_old(mint_0_vault_amount, update_mint_0_vault_amount);
+                    change_option_ignore_none_old(mint_1_vault_amount, update_mint_1_vault_amount);
+                    change_option_ignore_none_old(
+                        mint_0_need_take_pnl,
+                        update_mint_0_need_take_pnl,
+                    );
+                    change_option_ignore_none_old(
+                        mint_1_need_take_pnl,
+                        update_mint_1_need_take_pnl,
+                    );
+                    if mint_0_vault_amount.is_some()
+                        && mint_1_vault_amount.is_some()
+                        && mint_0_need_take_pnl.is_some()
+                        && mint_1_need_take_pnl.is_some()
+                    {
+                        Ok(())
+                    } else {
+                        Err(anyhow!(""))
+                    }
+                } else {
+                    Err(anyhow!(""))
+                }
+            }
+            _ => Err(anyhow!("")),
+        }
+    }
+
+    fn get_cache_key(&self) -> (String, Pubkey) {
+        let txn = self.txn.as_ref().unwrap();
+        (txn.clone(), self.pool_id.unwrap())
+    }
+
+    fn get_insert_data(&self) -> GrpcMessage {
+        self.grpc_message.as_ref().unwrap().clone()
+    }
+}
+
+#[derive(Default)]
+pub struct RaydiumAmmSubscribeRequestCreator;
+
+impl GrpcSubscribeRequestGenerator for RaydiumAmmSubscribeRequestCreator {
+    fn create_subscribe_requests(
+        &self,
+        pools: &[Pool],
+    ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
         let mut subscribe_pool_accounts = HashMap::new();
         subscribe_pool_accounts.insert(
             Protocol::RaydiumAMM.name().to_string(),
@@ -86,15 +289,26 @@ impl RaydiumAmmDex {
             ],
             ..Default::default()
         };
-        let vault_request = MintVaultSubscribe::mint_vault_subscribe_request(&pools);
-        vec![
-            (GrpcAccountUpdateType::PoolState, pool_request),
-            (GrpcAccountUpdateType::MintVault, vault_request),
-        ]
+        Some(vec![
+            (
+                (Protocol::RaydiumAMM, GrpcAccountUpdateType::PoolState),
+                pool_request,
+            ),
+            (
+                (Protocol::RaydiumAMM, GrpcAccountUpdateType::MintVault),
+                MintVaultSubscribe::mint_vault_subscribe_request(&pools),
+            ),
+        ])
     }
+}
 
-    pub async fn fetch_snapshot(rpc_client: Arc<RpcClient>) -> Option<Vec<Pool>> {
-        let pool_infos: Vec<PoolInfo> =
+#[derive(Default)]
+pub struct RaydiumAmmSnapshotFetcher;
+
+#[async_trait::async_trait]
+impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
+    async fn fetch_snapshot(&self, rpc_client: Arc<RpcClient>) -> Option<Vec<Pool>> {
+        let pool_infos: Vec<AmmJsonInfo> =
             match File::open(format!("{}/raydium_amm.json", FILE_DB_DIR)) {
                 Ok(file) => serde_json::from_reader(file).expect("Could not parse JSON"),
                 Err(e) => {
@@ -179,191 +393,6 @@ impl RaydiumAmmDex {
             None
         } else {
             Some(all_pool)
-        }
-    }
-
-    pub async fn try_get_ready_message(
-        account_update: AccountUpdate,
-        events: Arc<Cache<(String, Pubkey), GrpcMessage>>,
-    ) -> Option<GrpcMessage> {
-        let account_type = account_update.account_type;
-        let filters = account_update.filters;
-        let account = account_update.account;
-        if let Some(update_account_info) = account.account {
-            let txn = update_account_info.txn_signature.unwrap().to_base58();
-            let data = update_account_info.data;
-            let push_event = match account_type {
-                GrpcAccountUpdateType::PoolState => {
-                    let src = array_ref![data, 0, 80];
-                    let (need_take_pnl_coin, need_take_pnl_pc, _coin_vault_mint, _pc_vault_mint) =
-                        array_refs![src, 8, 8, 32, 32];
-                    let pool_id = Pubkey::try_from(update_account_info.pubkey.as_slice()).unwrap();
-                    Some((
-                        pool_id,
-                        RaydiumAmmData {
-                            pool_id,
-                            mint_0_vault_amount: None,
-                            mint_1_vault_amount: None,
-                            mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
-                            mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
-                        },
-                    ))
-                }
-                GrpcAccountUpdateType::MintVault => {
-                    let src = array_ref![data, 0, 41];
-                    let (_mint, amount, _state) = array_refs![src, 32, 8, 1];
-                    let mut mint_0_vault_amount = None;
-                    let mut mint_1_vault_amount = None;
-                    let items = filters.get(0).unwrap().split(":").collect::<Vec<&str>>();
-                    let mint_flag = items.last().unwrap().to_string();
-                    if mint_flag.eq("0") {
-                        mint_0_vault_amount = Some(u64::from_le_bytes(*amount));
-                    } else {
-                        mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
-                    }
-                    let pool_id = Pubkey::try_from(items.first().unwrap().clone()).unwrap();
-                    Some((
-                        pool_id,
-                        RaydiumAmmData {
-                            pool_id,
-                            mint_0_vault_amount,
-                            mint_1_vault_amount,
-                            mint_0_need_take_pnl: None,
-                            mint_1_need_take_pnl: None,
-                        },
-                    ))
-                }
-                GrpcAccountUpdateType::NONE => None,
-            };
-            if let Some((pool_id, update_data)) = push_event {
-                let entry = events
-                    .entry((txn, pool_id))
-                    .and_compute_with(|maybe_entry| {
-                        if let Some(exists) = maybe_entry {
-                            let mut message = exists.into_value();
-                            if Self::fill_change_data(&mut message, update_data).is_ok() {
-                                Op::Remove
-                            } else {
-                                Op::Put(message)
-                            }
-                        } else {
-                            Op::Put(update_data)
-                        }
-                    });
-                match entry {
-                    CompResult::Removed(r) => Some(r.into_value()),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    fn fill_change_data(old: &mut GrpcMessage, update_data: GrpcMessage) -> anyhow::Result<()> {
-        match old {
-            RaydiumAmmData {
-                mint_0_vault_amount,
-                mint_1_vault_amount,
-                mint_0_need_take_pnl,
-                mint_1_need_take_pnl,
-                ..
-            } => {
-                if let RaydiumAmmData {
-                    mint_0_vault_amount: update_mint_0_vault_amount,
-                    mint_1_vault_amount: update_mint_1_vault_amount,
-                    mint_0_need_take_pnl: update_mint_0_need_take_pnl,
-                    mint_1_need_take_pnl: update_mint_1_need_take_pnl,
-                    ..
-                } = update_data
-                {
-                    change_option_ignore_none_old(mint_0_vault_amount, update_mint_0_vault_amount);
-                    change_option_ignore_none_old(mint_1_vault_amount, update_mint_1_vault_amount);
-                    change_option_ignore_none_old(
-                        mint_0_need_take_pnl,
-                        update_mint_0_need_take_pnl,
-                    );
-                    change_option_ignore_none_old(
-                        mint_1_need_take_pnl,
-                        update_mint_1_need_take_pnl,
-                    );
-                    if mint_0_vault_amount.is_some()
-                        && mint_1_vault_amount.is_some()
-                        && mint_0_need_take_pnl.is_some()
-                        && mint_1_need_take_pnl.is_some()
-                    {
-                        Ok(())
-                    } else {
-                        Err(anyhow!(""))
-                    }
-                } else {
-                    Err(anyhow!(""))
-                }
-            }
-            _ => Err(anyhow!("")),
-        }
-    }
-
-    pub async fn try_change_cache() {}
-}
-
-#[async_trait::async_trait]
-impl Dex for RaydiumAmmDex {
-    fn quote(&self, amount_in: u64) -> Option<u64> {
-        let amount_in = u128::from(amount_in);
-        if let PoolExtra::RaydiumAMM {
-            swap_fee_numerator,
-            swap_fee_denominator,
-            mint_0_vault_amount,
-            mint_0_need_take_pnl,
-            mint_1_vault_amount,
-            mint_1_need_take_pnl,
-            ..
-        } = self.pool.extra
-        {
-            let swap_fee = amount_in
-                .checked_mul(u128::from(swap_fee_numerator))
-                .unwrap()
-                .checked_ceil_div(u128::from(swap_fee_denominator))
-                .unwrap()
-                .0;
-
-            let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
-
-            let mint_0_amount_without_pnl = u128::from(
-                mint_0_vault_amount
-                    .unwrap()
-                    .checked_sub(mint_0_need_take_pnl.unwrap())
-                    .unwrap(),
-            );
-            let mint_1_amount_without_pnl = u128::from(
-                mint_1_vault_amount
-                    .unwrap()
-                    .checked_sub(mint_1_need_take_pnl.unwrap())
-                    .unwrap(),
-            );
-            let amount_out = if let SwapDirection::PC2Coin = self.swap_direction {
-                mint_1_amount_without_pnl
-                    .checked_mul(swap_in_after_deduct_fee)
-                    .unwrap()
-                    .checked_div(
-                        mint_0_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
-                    )
-                    .unwrap()
-            } else {
-                mint_0_amount_without_pnl
-                    .checked_mul(swap_in_after_deduct_fee)
-                    .unwrap()
-                    .checked_div(
-                        mint_1_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
-                    )
-                    .unwrap()
-            };
-            Some(amount_out.try_into().unwrap())
-        } else {
-            None
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::defi;
-use crate::defi::types::SourceMessage;
+use crate::interface::SourceMessage;
 use crate::strategy::grpc_message_collector::GrpcMessageCollector;
 use crate::strategy::arb_executor::GrpcMessageExecutor;
 use crate::strategy::grpc_subscribe_strategy::GrpcSubscribeStrategy;

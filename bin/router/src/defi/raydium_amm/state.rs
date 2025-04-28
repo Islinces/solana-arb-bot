@@ -14,8 +14,6 @@ use std::{
     cell::{Ref, RefMut},
     mem::size_of,
 };
-use std::str::FromStr;
-use serde::{Deserialize, Deserializer};
 use crate::defi::raydium_amm::error::AmmError;
 
 pub trait Loadable: Pod {
@@ -371,23 +369,3 @@ impl AmmInfo {
         Ok(data)
     }
 }
-
-#[derive(Debug,Deserialize)]
-pub struct PoolInfo{
-    #[serde(deserialize_with = "crate::defi::common::utils::deserialize_pubkey")]
-    pub pool_id:Pubkey,
-    #[serde(deserialize_with = "crate::defi::common::utils::deserialize_pubkey")]
-    pub mint_0: Pubkey,
-    pub mint_0_decimals: u8,
-    #[serde(deserialize_with = "crate::defi::common::utils::deserialize_pubkey")]
-    pub mint_1: Pubkey,
-    pub mint_1_decimals: u8,
-    #[serde(deserialize_with = "crate::defi::common::utils::deserialize_pubkey")]
-    pub mint_0_vault:Pubkey,
-    #[serde(deserialize_with = "crate::defi::common::utils::deserialize_pubkey")]
-    pub mint_1_vault:Pubkey,
-}
-
-
-
-

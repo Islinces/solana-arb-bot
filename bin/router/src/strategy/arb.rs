@@ -1,7 +1,7 @@
+use crate::interface::GrpcMessage;
 use crate::defi::Defi;
-use crate::strategy::grpc_message_processor::GrpcMessage;
 use crate::strategy::Action;
-use async_channel::{Receiver, Sender};
+use async_channel::Receiver;
 use burberry::ActionSubmitter;
 use eyre::Context;
 use solana_program::pubkey::Pubkey;

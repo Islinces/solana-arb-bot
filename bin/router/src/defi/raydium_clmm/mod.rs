@@ -1,6 +1,5 @@
 pub mod sdk;
 pub mod raydium_clmm;
-mod state;
 
 use solana_sdk::declare_id;
 use std::str::FromStr;

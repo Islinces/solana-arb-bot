@@ -1,6 +1,5 @@
 use chrono::Local;
 use router::start_bot;
-use serde::Deserialize;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;

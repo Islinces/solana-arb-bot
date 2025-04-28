@@ -1,209 +1,95 @@
-use crate::defi::raydium_amm::raydium_amm::RaydiumAmmDex;
-use crate::defi::raydium_clmm::raydium_clmm::RaydiumClmmDex;
-use crate::defi::types::{AccountUpdate, Protocol};
+use crate::interface::{AccountUpdate, GrpcMessage, ReadyGrpcMessageOperator};
 use async_channel::{Receiver, Sender};
+use moka::ops::compute::{CompResult, Op};
 use moka::sync::Cache;
 use solana_program::pubkey::Pubkey;
-use std::sync::Arc;
 use std::time::Duration;
-use tracing::info;
+use tracing::{error, info, warn};
 
 pub struct GrpcDataProcessor {
-    events: Arc<Cache<(String, Pubkey), GrpcMessage>>,
+    events: Option<Cache<(String, Pubkey), GrpcMessage>>,
     source_message_receiver: Receiver<AccountUpdate>,
     ready_update_data_sender: Sender<GrpcMessage>,
 }
 
 impl GrpcDataProcessor {
     pub fn new(
+        need_cache: bool,
         event_capacity: u64,
         event_expired_mills: u64,
         source_message_receiver: Receiver<AccountUpdate>,
         cache_update_sender: Sender<GrpcMessage>,
     ) -> Self {
         Self {
-            events: Arc::new(
-                Cache::builder()
-                    .max_capacity(event_capacity)
-                    .time_to_live(Duration::from_millis(event_expired_mills))
-                    .build(),
-            ),
+            events: if need_cache {
+                Some(
+                    Cache::builder()
+                        .max_capacity(event_capacity)
+                        .time_to_live(Duration::from_millis(event_expired_mills))
+                        .build(),
+                )
+            } else {
+                None
+            },
             source_message_receiver,
             ready_update_data_sender: cache_update_sender,
         }
     }
 
+    fn get_ready_data(
+        &self,
+        mut operator: Box<dyn ReadyGrpcMessageOperator>,
+    ) -> Option<GrpcMessage> {
+        if operator.parse_message().is_err() {
+            return None;
+        }
+        // 不需要等待其他账户数据的情况
+        if self.events.is_none() {
+            return Some(operator.get_insert_data());
+        }
+        let cache_key = operator.get_cache_key();
+        let entry = self
+            .events
+            .as_ref()
+            .unwrap()
+            .entry(cache_key)
+            .and_compute_with(|maybe_entry| {
+                if let Some(exists) = maybe_entry {
+                    let mut message = exists.into_value();
+                    if operator.change_and_return_ready_data(&mut message).is_ok() {
+                        Op::Remove
+                    } else {
+                        Op::Put(message)
+                    }
+                } else {
+                    Op::Put(operator.get_insert_data())
+                }
+            });
+        match entry {
+            CompResult::Removed(r) => Some(r.into_value()),
+            _ => None,
+        }
+    }
+
     #[tokio::main]
-    pub async fn run(mut self) -> anyhow::Result<()> {
+    pub async fn run(self) -> anyhow::Result<()> {
         loop {
             tokio::select! {
                 source_message = self.source_message_receiver.recv() => {
                     let update = source_message?;
                     let protocol = update.protocol.clone();
-                    let update_data= match protocol {
-                        Protocol::RaydiumAMM=>{
-                            RaydiumAmmDex::try_get_ready_message(update,self.events.clone()).await
-                        },
-                        Protocol::RaydiumCLmm=>{
-                            RaydiumClmmDex::try_get_ready_message(update,self.events.clone()).await
-                        },
-                        _=>{
-                            None
+                    if let Some(operator)=protocol.get_grpc_message_operator(update){
+                        if let Some(grpc_message)= self.get_ready_data(operator){
+                            info!("发送更新缓存消息: {:?}",protocol);
+                            if let Err(e)=self.ready_update_data_sender.send(grpc_message).await{
+                                error!("触发Route：发送消息失败，原因：{}",e);
+                            }
                         }
-                    };
-                    if let Some(grpc_message)=update_data{
-                        info!("发送更新缓存消息: {:?}",protocol);
-                        self.ready_update_data_sender.send(grpc_message).await?;
+                    }else{
+                        warn!("更新缓存失败：未找到【{:?}】的【ReadyGrpcMessageOperator】实现",protocol)
                     }
-
                 }
             }
         }
     }
-
-    // async fn raydium_amm_get_ready_message(
-    //     &mut self,
-    //     account_type: GrpcAccountUpdateType,
-    //     filters: Vec<String>,
-    //     account: SubscribeUpdateAccount,
-    // ) -> Option<GrpcMessage> {
-    //     if let Some(update_account_info) = account.account {
-    //         let txn = update_account_info.txn_signature.unwrap().to_base58();
-    //         let data = update_account_info.data;
-    //         let push_event = match account_type {
-    //             GrpcAccountUpdateType::PoolState => {
-    //                 let src = array_ref![data, 0, 80];
-    //                 let (need_take_pnl_coin, need_take_pnl_pc, _coin_vault_mint, _pc_vault_mint) =
-    //                     array_refs![src, 8, 8, 32, 32];
-    //                 let pool_id = Pubkey::try_from(update_account_info.pubkey.as_slice()).unwrap();
-    //                 Some((
-    //                     pool_id,
-    //                     RaydiumAmmData {
-    //                         pool_id,
-    //                         mint_0_vault_amount: None,
-    //                         mint_1_vault_amount: None,
-    //                         mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
-    //                         mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
-    //                     },
-    //                 ))
-    //             }
-    //             GrpcAccountUpdateType::MintVault => {
-    //                 let src = array_ref![data, 0, 41];
-    //                 let (_mint, amount, _state) = array_refs![src, 32, 8, 1];
-    //                 let mut mint_0_vault_amount = None;
-    //                 let mut mint_1_vault_amount = None;
-    //                 let items = filters.get(0).unwrap().split(":").collect::<Vec<&str>>();
-    //                 let mint_flag = items.last().unwrap().to_string();
-    //                 if mint_flag.eq("0") {
-    //                     mint_0_vault_amount = Some(u64::from_le_bytes(*amount));
-    //                 } else {
-    //                     mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
-    //                 }
-    //                 let pool_id = Pubkey::try_from(items.first().unwrap().clone()).unwrap();
-    //                 Some((
-    //                     pool_id,
-    //                     RaydiumAmmData {
-    //                         pool_id,
-    //                         mint_0_vault_amount,
-    //                         mint_1_vault_amount,
-    //                         mint_0_need_take_pnl: None,
-    //                         mint_1_need_take_pnl: None,
-    //                     },
-    //                 ))
-    //             }
-    //             GrpcAccountUpdateType::NONE => None,
-    //         };
-    //         if let Some((pool_id, update_data)) = push_event {
-    //             let entry = self
-    //                 .events
-    //                 .entry((txn, pool_id))
-    //                 .and_compute_with(|maybe_entry| {
-    //                     if let Some(exists) = maybe_entry {
-    //                         let mut message = exists.into_value();
-    //                         if message.fill_change_data(update_data).is_ok() {
-    //                             Op::Remove
-    //                         } else {
-    //                             Op::Put(message)
-    //                         }
-    //                     } else {
-    //                         Op::Put(update_data)
-    //                     }
-    //                 });
-    //             match entry {
-    //                 CompResult::Removed(r) => Some(r.into_value()),
-    //                 _ => None,
-    //             }
-    //         } else {
-    //             None
-    //         }
-    //     } else {
-    //         None
-    //     }
-    // }
 }
-
-#[derive(Debug, Clone)]
-pub enum GrpcMessage {
-    RaydiumAmmData {
-        pool_id: Pubkey,
-        mint_0_vault_amount: Option<u64>,
-        mint_1_vault_amount: Option<u64>,
-        mint_0_need_take_pnl: Option<u64>,
-        mint_1_need_take_pnl: Option<u64>,
-    },
-    RaydiumClmmData {
-        pool_id: Pubkey,
-        tick_current: i32,
-        liquidity: u128,
-        sqrt_price_x64: u128,
-        tick_array_bitmap: [u64; 16],
-    },
-}
-
-// impl GrpcMessage {
-//     fn fill_change_data(&mut self, update_data: GrpcMessage) -> anyhow::Result<()> {
-//         match self {
-//             RaydiumAmmData {
-//                 mint_0_vault_amount,
-//                 mint_1_vault_amount,
-//                 mint_0_need_take_pnl,
-//                 mint_1_need_take_pnl,
-//                 ..
-//             } => {
-//                 if let RaydiumAmmData {
-//                     mint_0_vault_amount: update_mint_0_vault_amount,
-//                     mint_1_vault_amount: update_mint_1_vault_amount,
-//                     mint_0_need_take_pnl: update_mint_0_need_take_pnl,
-//                     mint_1_need_take_pnl: update_mint_1_need_take_pnl,
-//                     ..
-//                 } = update_data
-//                 {
-//                     if update_mint_0_vault_amount.is_some() {
-//                         *mint_0_vault_amount = update_mint_0_vault_amount;
-//                     }
-//                     if update_mint_1_vault_amount.is_some() {
-//                         *mint_1_vault_amount = update_mint_1_vault_amount;
-//                     }
-//                     if update_mint_0_need_take_pnl.is_some() {
-//                         *mint_0_need_take_pnl = update_mint_0_need_take_pnl;
-//                     }
-//                     if update_mint_1_need_take_pnl.is_some() {
-//                         *mint_1_need_take_pnl = update_mint_1_need_take_pnl;
-//                     }
-//                     if mint_0_vault_amount.is_some()
-//                         && mint_1_vault_amount.is_some()
-//                         && mint_0_need_take_pnl.is_some()
-//                         && mint_1_need_take_pnl.is_some()
-//                     {
-//                         Ok(())
-//                     } else {
-//                         Err(anyhow!(""))
-//                     }
-//                 } else {
-//                     Err(anyhow!(""))
-//                 }
-//             },
-//             _=>{Ok(())}
-//         }
-//     }
-// }

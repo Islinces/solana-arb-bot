@@ -4,6 +4,9 @@ use solana_sdk::declare_id;
 pub mod defi;
 pub mod start_bot;
 pub mod strategy;
+mod cache;
+pub mod interface;
+pub mod file_db;
 
 #[cfg(feature = "devnet")]
 declare_id!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");

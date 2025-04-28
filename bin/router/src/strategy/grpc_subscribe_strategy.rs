@@ -1,17 +1,16 @@
-use crate::defi::types::{AccountUpdate, PoolCache, Protocol, SourceMessage};
 use crate::defi::Defi;
+use crate::interface::{AccountUpdate, GrpcMessage, Protocol, SourceMessage};
 use crate::strategy::arb::Arb;
-use crate::strategy::grpc_message_processor::{GrpcDataProcessor, GrpcMessage};
+use crate::strategy::grpc_message_processor::GrpcDataProcessor;
 use crate::strategy::Action;
 use async_channel::Sender;
 use burberry::{ActionSubmitter, Strategy};
+use futures_util::TryFutureExt;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
-use futures_util::TryFutureExt;
 use tokio::runtime::{Builder, Handle, RuntimeFlavor};
 use tracing::error;
-use yellowstone_grpc_proto::geyser::SubscribeUpdateAccountInfo;
 
 #[macro_export]
 macro_rules! run_in_tokio {
@@ -56,7 +55,7 @@ impl GrpcSubscribeStrategy {
     pub fn new(
         rpc_url: String,
         subscribe_mints: Vec<Pubkey>,
-        protocol: Vec<Protocol>,
+        protocols: Vec<Protocol>,
         event_expired_mills: Option<u64>,
         event_capacity: Option<u64>,
         grpc_worker_size: usize,
@@ -65,7 +64,7 @@ impl GrpcSubscribeStrategy {
             event_expired_mills: event_expired_mills.unwrap_or(1000),
             event_capacity: event_capacity.unwrap_or(1000),
             grpc_worker_size,
-            protocols: protocol,
+            protocols,
             rpc_url,
             subscribe_mints,
             protocol_grpc_sender: None,
@@ -94,22 +93,22 @@ impl Strategy<SourceMessage, Action> for GrpcSubscribeStrategy {
             grpc_message_sender_maps.insert(protocol.clone(), grpc_message_sender);
             let ready_grpc_data_sender = ready_data_sender.clone();
             let init_tx = init_tx.clone();
-            let worker_name = format!("{}", protocol.clone());
-
+            let use_cache = protocol.use_cache();
             let _ = std::thread::Builder::new()
                 .stack_size(128 * 1024 * 1024) // 128 MB
-                .name(format!("grpc-data-{:?}", worker_name))
+                .name(format!("cache-worker-{:?}", protocol))
                 .spawn(move || {
                     run_in_tokio!(init_tx.send(())).unwrap();
                     let data_process_worker = GrpcDataProcessor::new(
+                        use_cache,
                         event_capacity,
                         event_expired_mills,
                         grpc_message_receiver,
                         ready_grpc_data_sender,
                     );
-                    let _ = data_process_worker
-                        .run()
-                        .unwrap_or_else(|e| panic!("worker {worker_name} panicked: {e:?}"));
+                    let _ = data_process_worker.run().unwrap_or_else(|e| {
+                        panic!("thread of [cache-worker-{}] panicked: {e:?}", protocol)
+                    });
                 });
         }
         for _ in 0..self.protocols.len() {
@@ -125,15 +124,15 @@ impl Strategy<SourceMessage, Action> for GrpcSubscribeStrategy {
             let subscribe_mints = self.subscribe_mints.clone();
             let _ = std::thread::Builder::new()
                 .stack_size(128 * 1024 * 1024) // 128 MB
-                .name(format!("worker-{:?}", index))
+                .name(format!("route-worker-{:?}", index))
                 .spawn(move || {
                     let defi =
                         Arc::new(run_in_tokio!({ Defi::new(&rpc_url, &subscribe_mints) }).unwrap());
                     run_in_tokio!(init_tx.send(())).unwrap();
                     let arb_worker = Arb::new(defi, ready_grpc_data_receiver, swap_action_sender);
-                    let _ = arb_worker
-                        .run()
-                        .unwrap_or_else(|e| panic!("worker {index} panicked: {e:?}"));
+                    let _ = arb_worker.run().unwrap_or_else(|e| {
+                        panic!("worker of [route-worker-{index}] panicked: {e:?}")
+                    });
                 });
         }
         for _ in 0..self.grpc_worker_size {

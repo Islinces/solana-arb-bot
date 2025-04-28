@@ -1,16 +1,16 @@
+use crate::defi::raydium_clmm::sdk::big_num::{U1024, U128, U256};
+use crate::defi::raydium_clmm::sdk::config::AmmConfig;
 use crate::defi::raydium_clmm::sdk::error::ErrorCode;
+use crate::defi::raydium_clmm::sdk::full_math::MulDiv;
+use crate::defi::raydium_clmm::sdk::tick_array::TickArrayState;
+use crate::defi::raydium_clmm::sdk::tick_array_bit_map::check_current_tick_array_is_initialized;
+use crate::defi::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
+use crate::defi::raydium_clmm::sdk::{fixed_point_64, tick_array_bit_map, tick_math};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::{BitAnd, BitOr, BitXor};
-use crate::defi::raydium_clmm::sdk::big_num::{U1024, U128, U256};
-use crate::defi::raydium_clmm::sdk::full_math::MulDiv;
-use crate::defi::raydium_clmm::sdk::tick_array_bit_map::check_current_tick_array_is_initialized;
-use crate::defi::raydium_clmm::sdk::config::AmmConfig;
-use crate::defi::raydium_clmm::sdk::{fixed_point_64, tick_array_bit_map, tick_math};
-use crate::defi::raydium_clmm::sdk::tick_array::TickArrayState;
-use crate::defi::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -175,6 +175,19 @@ impl PoolState {
         ]
     }
 
+    pub fn key_with_seeds(amm_config_key: &Pubkey, mint_0: &Pubkey, mint_1: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(
+            &[
+                POOL_SEED.as_bytes(),
+                amm_config_key.to_bytes().as_ref(),
+                mint_0.to_bytes().as_ref(),
+                mint_1.to_bytes().as_ref(),
+            ],
+            &crate::defi::raydium_clmm::ID,
+        )
+            .0
+    }
+
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(&self.seeds(), &crate::defi::raydium_clmm::ID).unwrap()
     }
@@ -269,7 +282,8 @@ impl PoolState {
             if tickarray_bitmap_extension.is_none() {
                 return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
             }
-            let (is_found, start_index) = tickarray_bitmap_extension.as_ref()
+            let (is_found, start_index) = tickarray_bitmap_extension
+                .as_ref()
                 .unwrap()
                 .next_initialized_tick_array_from_one_bitmap(
                     last_tick_array_start_index,
@@ -373,149 +387,4 @@ pub struct RewardInfo {
 
 impl RewardInfo {
     pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
-
-    /// Creates a new RewardInfo
-    pub fn new(authority: Pubkey) -> Self {
-        Self {
-            authority,
-            ..Default::default()
-        }
-    }
-
-    /// Returns true if this reward is initialized.
-    /// Once initialized, a reward cannot transition back to uninitialized.
-    pub fn initialized(&self) -> bool {
-        self.token_mint.ne(&Pubkey::default())
-    }
-
-    pub fn get_reward_growths(reward_infos: &[RewardInfo; REWARD_NUM]) -> [u128; REWARD_NUM] {
-        let mut reward_growths = [0u128; REWARD_NUM];
-        for i in 0..REWARD_NUM {
-            reward_growths[i] = reward_infos[i].reward_growth_global_x64;
-        }
-        reward_growths
-    }
-}
-
-/// Emitted when a pool is created and initialized with a starting price
-///
-#[event]
-#[cfg_attr(feature = "client", derive(Debug))]
-pub struct PoolCreatedEvent {
-    /// The first token of the pool by address sort order
-    #[index]
-    pub token_mint_0: Pubkey,
-
-    /// The second token of the pool by address sort order
-    #[index]
-    pub token_mint_1: Pubkey,
-
-    /// The minimum number of ticks between initialized ticks
-    pub tick_spacing: u16,
-
-    /// The address of the created pool
-    pub pool_state: Pubkey,
-
-    /// The initial sqrt price of the pool, as a Q64.64
-    pub sqrt_price_x64: u128,
-
-    /// The initial tick of the pool, i.e. log base 1.0001 of the starting price of the pool
-    pub tick: i32,
-
-    /// Vault of token_0
-    pub token_vault_0: Pubkey,
-    /// Vault of token_1
-    pub token_vault_1: Pubkey,
-}
-
-/// Emitted when the collected protocol fees are withdrawn by the factory owner
-#[event]
-#[cfg_attr(feature = "client", derive(Debug))]
-pub struct CollectProtocolFeeEvent {
-    /// The pool whose protocol fee is collected
-    #[index]
-    pub pool_state: Pubkey,
-
-    /// The address that receives the collected token_0 protocol fees
-    pub recipient_token_account_0: Pubkey,
-
-    /// The address that receives the collected token_1 protocol fees
-    pub recipient_token_account_1: Pubkey,
-
-    /// The amount of token_0 protocol fees that is withdrawn
-    pub amount_0: u64,
-
-    /// The amount of token_0 protocol fees that is withdrawn
-    pub amount_1: u64,
-}
-
-/// Emitted by when a swap is performed for a pool
-#[event]
-#[cfg_attr(feature = "client", derive(Debug))]
-pub struct SwapEvent {
-    /// The pool for which token_0 and token_1 were swapped
-    #[index]
-    pub pool_state: Pubkey,
-
-    /// The address that initiated the swap call, and that received the callback
-    #[index]
-    pub sender: Pubkey,
-
-    /// The payer token account in zero for one swaps, or the recipient token account
-    /// in one for zero swaps
-    #[index]
-    pub token_account_0: Pubkey,
-
-    /// The payer token account in one for zero swaps, or the recipient token account
-    /// in zero for one swaps
-    #[index]
-    pub token_account_1: Pubkey,
-
-    /// The real delta amount of the token_0 of the pool or user
-    pub amount_0: u64,
-
-    /// The transfer fee charged by the withheld_amount of the token_0
-    pub transfer_fee_0: u64,
-
-    /// The real delta of the token_1 of the pool or user
-    pub amount_1: u64,
-
-    /// The transfer fee charged by the withheld_amount of the token_1
-    pub transfer_fee_1: u64,
-
-    /// if true, amount_0 is negtive and amount_1 is positive
-    pub zero_for_one: bool,
-
-    /// The sqrt(price) of the pool after the swap, as a Q64.64
-    pub sqrt_price_x64: u128,
-
-    /// The liquidity of the pool after the swap
-    pub liquidity: u128,
-
-    /// The log base 1.0001 of price of the pool after the swap
-    pub tick: i32,
-}
-
-/// Emitted pool liquidity change when increase and decrease liquidity
-#[event]
-#[cfg_attr(feature = "client", derive(Debug))]
-pub struct LiquidityChangeEvent {
-    /// The pool for swap
-    #[index]
-    pub pool_state: Pubkey,
-
-    /// The tick of the pool
-    pub tick: i32,
-
-    /// The tick lower of position
-    pub tick_lower: i32,
-
-    /// The tick lower of position
-    pub tick_upper: i32,
-
-    /// The liquidity of the pool before liquidity change
-    pub liquidity_before: u128,
-
-    /// The liquidity of the pool after liquidity change
-    pub liquidity_after: u128,
 }

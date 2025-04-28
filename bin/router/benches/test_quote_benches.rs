@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use router::defi::dex::Dex;
 use router::defi::raydium_amm::math::{CheckedCeilDiv, SwapDirection};
 use router::defi::raydium_amm::raydium_amm::RaydiumAmmDex;
-use router::defi::types::{Mint, Pool, PoolExtra, Protocol};
+use router::interface::{Mint, Pool, PoolExtra, Protocol};
 use solana_program::pubkey::Pubkey;
 use std::ops::{Add, Div, Mul, Sub};
 use std::str::FromStr;

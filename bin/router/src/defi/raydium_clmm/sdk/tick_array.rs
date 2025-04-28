@@ -1,14 +1,11 @@
-use crate::defi::raydium_clmm::sdk::pool::PoolState;
-use crate::defi::raydium_clmm::sdk::account_load::AccountLoad;
 use crate::defi::raydium_clmm::sdk::error::ErrorCode;
-use crate::defi::raydium_clmm::sdk::pool::{RewardInfo, REWARD_NUM};
-use crate::defi::raydium_clmm::sdk::system::get_recent_epoch;
+use crate::defi::raydium_clmm::sdk::liquidity_math;
+use crate::defi::raydium_clmm::sdk::pool::REWARD_NUM;
+use crate::defi::raydium_clmm::sdk::tick_math;
 use anchor_lang::__private::bytemuck::{from_bytes, Pod, Zeroable};
-use anchor_lang::{prelude::*, system_program};
+use anchor_lang::prelude::*;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
-use crate::defi::raydium_clmm::sdk::tick_math;
-use crate::defi::raydium_clmm::sdk::liquidity_math;
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;

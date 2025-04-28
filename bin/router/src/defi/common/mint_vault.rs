@@ -1,9 +1,9 @@
-use crate::defi::types::Pool;
 use std::collections::HashMap;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
 };
+use crate::cache::Pool;
 
 pub struct MintVaultSubscribe {}
 

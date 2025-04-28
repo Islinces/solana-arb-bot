@@ -7,13 +7,6 @@
 use std::{cmp::Eq, convert::identity, convert::TryInto};
 use uint::construct_uint;
 
-// construct_uint! {
-//     pub struct U256(4);
-// }
-// construct_uint! {
-//     pub struct U128(2);
-// }
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u64)]
 pub enum SwapDirection {
@@ -87,38 +80,3 @@ impl CheckedCeilDiv for u128 {
         Some((quotient, rhs))
     }
 }
-
-// impl CheckedCeilDiv for U128 {
-//     fn checked_ceil_div(&self, mut rhs: Self) -> Option<(Self, Self)> {
-//         let mut quotient = self.checked_div(rhs)?;
-//         // Avoid dividing a small number by a big one and returning 1, and instead
-//         // fail.
-//         let zero = U128::from(0);
-//         let one = U128::from(1);
-//         // self小于rhs的情况
-//         if quotient.is_zero() {
-//             // return None;
-//             // 类似2/3的情况
-//             if self.checked_mul(U128::from(2))? >= rhs {
-//                 return Some((one, zero));
-//             } else {
-//                 return Some((zero, zero));
-//             }
-//         }
-// 
-//         // Ceiling the destination amount if there's any remainder, which will
-//         // almost always be the case.
-//         let remainder = self.checked_rem(rhs)?;
-//         if remainder > zero {
-//             quotient = quotient.checked_add(one)?;
-//             // calculate the minimum amount needed to get the dividend amount to
-//             // avoid truncating too much
-//             rhs = self.checked_div(quotient)?;
-//             let remainder = self.checked_rem(quotient)?;
-//             if remainder > zero {
-//                 rhs = rhs.checked_add(one)?;
-//             }
-//         }
-//         Some((quotient, rhs))
-//     }
-// }

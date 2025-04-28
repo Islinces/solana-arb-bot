@@ -1,5 +1,5 @@
 use std::env;
-use router::defi::types::Pool;
+use router::interface::Pool;
 use std::fs::File;
 use router::defi::raydium_amm::state::PoolInfo;
 
