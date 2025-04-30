@@ -1,9 +1,8 @@
-use std::str::FromStr;
 use solana_sdk::declare_id;
 
-pub mod defi;
+pub mod dex;
 pub mod start_bot;
-pub mod strategy;
+pub mod arbitrage;
 mod cache;
 pub mod interface;
 pub mod file_db;

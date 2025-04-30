@@ -7,9 +7,11 @@ authors = ["solana"]
 
 [lib]
 doctest = false
-#path = "src/main.rs"
 
 [dependencies]
+borsh = "^1.5"
+anchor-lang = { version = "0.29.0", features = ["derive"], package = "anchor-lang" }
+
 serde.workspace = true
 serde_json.workspace = true
 bincode.workspace = true
@@ -30,22 +32,32 @@ solana-account-decoder = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing-appender = { workspace = true }
-thiserror="1.0.51"
+thiserror = "1.0.51"
 num-traits = "0.2.19"
-num-derive = "0.3.3"
-bytemuck = { workspace = true }
+num-derive = "0.4.2"
+bytemuck = { workspace = true, features = ["derive", "min_const_generics"] }
 safe-transmute = "0.11.2"
 burberry = { workspace = true }
 eyre.workspace = true
 async-stream = "0.3.6"
 async-channel.workspace = true
 moka.workspace = true
-uint = {workspace = true}
-anchor-lang = {workspace = true}
-anchor-spl = {workspace = true}
-arrayref = {workspace = true}
-async-trait = {workspace = true}
+uint = { workspace = true }
+anchor-spl = { workspace = true }
+arrayref = { workspace = true }
+async-trait = { workspace = true }
 tokio = { workspace = true }
+
+num-integer = "0.1.45"
+log = "0.4.27"
+anchor-client.workspace = true
+ruint.version = "1.3.0"
+spl-transfer-hook-interface.version = "0.5.0"
+
+[patch.crates-io]
+# 强制所有依赖使用同一个 borsh 版本（如果兼容）
+borsh = { version = "^1.5", features = ["derive"], package = "borsh" }
+
 
 [[bench]]
 name = "test_quote_benches"

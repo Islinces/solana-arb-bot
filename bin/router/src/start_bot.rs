@@ -1,9 +1,9 @@
-use crate::defi;
+use crate::dex;
 use crate::interface::SourceMessage;
-use crate::strategy::grpc_message_collector::GrpcMessageCollector;
-use crate::strategy::arb_executor::GrpcMessageExecutor;
-use crate::strategy::grpc_subscribe_strategy::GrpcSubscribeStrategy;
-use crate::strategy::Action;
+use crate::arbitrage::arb_executor::GrpcMessageExecutor;
+use crate::arbitrage::message_collector::GrpcMessageCollector;
+use crate::arbitrage::arb_strategy::ArbStrategy;
+use crate::arbitrage::Action;
 use burberry::{map_collector, map_executor, Engine};
 use solana_program::pubkey::Pubkey;
 use std::str::FromStr;
@@ -21,10 +21,10 @@ pub async fn run() -> anyhow::Result<()> {
     let message_executor = GrpcMessageExecutor::new();
     engine.add_collector(map_collector!(message_collector, SourceMessage::Account));
     engine.add_executor(map_executor!(message_executor, Action::SWAP));
-    engine.add_strategy(Box::new(GrpcSubscribeStrategy::new(
+    engine.add_strategy(Box::new(ArbStrategy::new(
         rpc_url.to_string(),
         mints,
-        defi::supported_protocols(),
+        dex::supported_protocols(),
         None,
         None,
         5,

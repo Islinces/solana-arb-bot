@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use router::defi::dex::Dex;
-use router::defi::raydium_amm::math::{CheckedCeilDiv, SwapDirection};
-use router::defi::raydium_amm::raydium_amm::RaydiumAmmDex;
+use router::dex::dex::Dex;
+use router::dex::raydium_amm::math::{CheckedCeilDiv, SwapDirection};
+use router::dex::raydium_amm::raydium_amm::RaydiumAmmDex;
 use router::interface::{Mint, Pool, PoolExtra, Protocol};
 use solana_program::pubkey::Pubkey;
 use std::ops::{Add, Div, Mul, Sub};
@@ -24,7 +24,7 @@ fn bench_route(c: &mut Criterion) {
                     decimals: 6,
                 },
             ],
-            extra: PoolExtra::RaydiumAMM {
+            state: PoolExtra::RaydiumAMM {
                 mint_0_vault_amount: Some(1744849814023_u64),
                 mint_1_vault_amount: Some(11752484441015_u64),
                 mint_0_need_take_pnl: Some(0),
