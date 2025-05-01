@@ -32,25 +32,41 @@ use yellowstone_grpc_proto::geyser::{
 
 #[derive(Clone)]
 pub struct RaydiumAMMDex {
-    pool: Pool,
+    pool_id: Pubkey,
+    mint_0_vault_amount: Option<u64>,
+    mint_1_vault_amount: Option<u64>,
+    mint_0_need_take_pnl: Option<u64>,
+    mint_1_need_take_pnl: Option<u64>,
+    swap_fee_numerator: u64,
+    swap_fee_denominator: u64,
     swap_direction: SwapDirection,
 }
 
 impl RaydiumAMMDex {
     pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
-        let mint_0 = pool.mint_0();
-        let mint_1 = pool.mint_1();
-        if mint_0 != amount_in_mint && mint_1 != amount_in_mint {
-            return None;
+        if let PoolState::RaydiumAMM(pool_state) = &pool.state {
+            let mint_0 = pool.mint_0();
+            let mint_1 = pool.mint_1();
+            if mint_0 != amount_in_mint && mint_1 != amount_in_mint {
+                return None;
+            }
+            Some(Self {
+                swap_direction: if mint_0 == amount_in_mint {
+                    SwapDirection::Coin2PC
+                } else {
+                    SwapDirection::PC2Coin
+                },
+                pool_id: pool.pool_id,
+                mint_0_vault_amount: pool_state.mint_0_vault_amount,
+                mint_1_vault_amount: pool_state.mint_1_vault_amount,
+                mint_0_need_take_pnl: pool_state.mint_0_need_take_pnl,
+                mint_1_need_take_pnl: pool_state.mint_1_need_take_pnl,
+                swap_fee_numerator: pool_state.swap_fee_numerator,
+                swap_fee_denominator: pool_state.swap_fee_denominator,
+            })
+        } else {
+            None
         }
-        Some(Self {
-            swap_direction: if mint_0 == amount_in_mint {
-                SwapDirection::Coin2PC
-            } else {
-                SwapDirection::PC2Coin
-            },
-            pool,
-        })
     }
 }
 
@@ -71,54 +87,48 @@ impl Dex for RaydiumAMMDex {
             return None;
         }
         let amount_in = u128::from(amount_in);
-        if let PoolState::RaydiumAMM(ref pool_state) = self.pool.state {
-            let swap_fee = amount_in
-                .checked_mul(u128::from(pool_state.swap_fee_numerator))
-                .unwrap()
-                .checked_ceil_div(u128::from(pool_state.swap_fee_denominator))
-                .unwrap()
-                .0;
+        let swap_fee = amount_in
+            .checked_mul(u128::from(self.swap_fee_numerator))
+            .unwrap()
+            .checked_ceil_div(u128::from(self.swap_fee_denominator))
+            .unwrap()
+            .0;
 
-            let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
+        let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
 
-            let mint_0_amount_without_pnl = u128::from(
-                pool_state
-                    .mint_0_vault_amount
-                    .unwrap()
-                    .checked_sub(pool_state.mint_0_need_take_pnl.unwrap())
-                    .unwrap(),
-            );
-            let mint_1_amount_without_pnl = u128::from(
-                pool_state
-                    .mint_1_vault_amount
-                    .unwrap()
-                    .checked_sub(pool_state.mint_1_need_take_pnl.unwrap())
-                    .unwrap(),
-            );
-            let amount_out = if self.swap_direction == SwapDirection::Coin2PC {
-                mint_1_amount_without_pnl
-                    .checked_mul(swap_in_after_deduct_fee)
-                    .unwrap()
-                    .checked_div(
-                        mint_0_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
-                    )
-                    .unwrap()
-            } else {
-                mint_0_amount_without_pnl
-                    .checked_mul(swap_in_after_deduct_fee)
-                    .unwrap()
-                    .checked_div(
-                        mint_1_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
-                    )
-                    .unwrap()
-            };
-            Some(amount_out.try_into().unwrap_or_else(|_| {
-                eprintln!("amount_out is too large");
-                u64::MIN
-            }))
+        let mint_0_amount_without_pnl = u128::from(
+            self.mint_0_vault_amount
+                .unwrap()
+                .checked_sub(self.mint_0_need_take_pnl.unwrap())
+                .unwrap(),
+        );
+        let mint_1_amount_without_pnl = u128::from(
+            self.mint_1_vault_amount
+                .unwrap()
+                .checked_sub(self.mint_1_need_take_pnl.unwrap())
+                .unwrap(),
+        );
+        let amount_out = if self.swap_direction == SwapDirection::Coin2PC {
+            mint_1_amount_without_pnl
+                .checked_mul(swap_in_after_deduct_fee)
+                .unwrap()
+                .checked_div(
+                    mint_0_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
+                )
+                .unwrap()
         } else {
-            None
-        }
+            mint_0_amount_without_pnl
+                .checked_mul(swap_in_after_deduct_fee)
+                .unwrap()
+                .checked_div(
+                    mint_1_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
+                )
+                .unwrap()
+        };
+        Some(amount_out.try_into().unwrap_or_else(|_| {
+            eprintln!("amount_out is too large");
+            u64::MIN
+        }))
     }
 
     fn clone_self(&self) -> Box<dyn Dex> {

@@ -97,10 +97,10 @@ impl Dex for PumpFunDex {
         let total_fee = lp_fee.add(protocol_fee);
         let effective_amount = amount_in.sub(total_fee);
         let amount_out = match self.swap_direction {
-            SwapDirection::PC2Coin => quote_vault
+            SwapDirection::Coin2PC => quote_vault
                 .mul(effective_amount)
                 .div(base_vault.add(effective_amount)),
-            SwapDirection::Coin2PC => base_vault
+            SwapDirection::PC2Coin => base_vault
                 .mul(effective_amount)
                 .div(quote_vault.add(effective_amount)),
         };
