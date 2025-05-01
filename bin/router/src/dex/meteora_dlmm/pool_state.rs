@@ -6,7 +6,7 @@ use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-pub struct MeteoraDLMMPoolExtra {
+pub struct MeteoraDLMMPoolState {
     // ======================启动时初始化即可==============================
     // 1，5，8，10，16，80，100
     pub bin_step: u16,
@@ -45,7 +45,7 @@ pub struct MeteoraDLMMPoolExtra {
     // pub clock: Clock,
 }
 
-impl MeteoraDLMMPoolExtra {
+impl MeteoraDLMMPoolState {
     pub fn new(
         lb_pair: LbPair,
         bin_array_bitmap_extension: Option<BinArrayBitmapExtension>,
@@ -82,7 +82,7 @@ impl MeteoraDLMMPoolExtra {
     }
 }
 
-impl Into<LbPair> for MeteoraDLMMPoolExtra {
+impl Into<LbPair> for MeteoraDLMMPoolState {
     fn into(self) -> LbPair {
         let mut lb_pair = LbPair::default();
         lb_pair.bin_step = self.bin_step;

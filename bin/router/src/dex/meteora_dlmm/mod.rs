@@ -1,6 +1,6 @@
 pub mod sdk;
 pub mod meteora_dlmm;
-pub mod meteora_dlmm_pool_extra;
+pub mod pool_state;
 
 #[cfg(not(feature = "staging"))]
 solana_program::declare_id!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");

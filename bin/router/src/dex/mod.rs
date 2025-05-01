@@ -1,6 +1,6 @@
 use crate::cache::{Pool, PoolCache};
 use crate::file_db::FileDB;
-use crate::interface::{Dex, GrpcMessage, Protocol, DB};
+use crate::interface::{Dex, DexType, GrpcMessage, DB};
 use anyhow::anyhow;
 use dashmap::{DashMap, Entry};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -29,10 +29,10 @@ pub struct Defi {
 }
 
 impl Defi {
-    pub async fn new(rpc_url: &str, subscribe_mints: &Vec<Pubkey>) -> anyhow::Result<Self> {
+    pub async fn new(rpc_url: &str) -> anyhow::Result<Self> {
         let indexer = INDEXER
             .get_or_init(|| async {
-                let indexer = DexIndexer::new(rpc_url, subscribe_mints).await;
+                let indexer = DexIndexer::new(rpc_url).await;
                 Arc::new(indexer)
             })
             .await
@@ -45,19 +45,19 @@ impl Defi {
         option.map(|pool| pool.clone())
     }
 
-    pub fn get_support_protocols(&self) -> Vec<Protocol> {
+    pub fn get_support_protocols(&self) -> Vec<DexType> {
         self.indexer
             .pool_cache
             .pool_map
             .iter()
             .map(|pool| pool.protocol.clone())
-            .collect::<HashSet<Protocol>>()
+            .collect::<HashSet<DexType>>()
             .into_iter()
-            .collect::<Vec<Protocol>>()
+            .collect::<Vec<DexType>>()
     }
 
-    pub fn get_all_pools(&self) -> Option<HashMap<Protocol, Vec<Pool>>> {
-        let mut protocol_pool_map: HashMap<Protocol, Vec<Pool>> = HashMap::new();
+    pub fn get_all_pools(&self) -> Option<HashMap<DexType, Vec<Pool>>> {
+        let mut protocol_pool_map: HashMap<DexType, Vec<Pool>> = HashMap::new();
         for pool in self.indexer.pool_cache.pool_map.iter() {
             protocol_pool_map
                 .entry(pool.protocol.clone())
@@ -203,12 +203,12 @@ pub struct DexQuoteResult {
     pub profit: u64,
 }
 
-pub fn supported_protocols() -> Vec<Protocol> {
+pub fn supported_protocols() -> Vec<DexType> {
     vec![
-        Protocol::RaydiumAMM,
-        Protocol::RaydiumCLmm,
-        Protocol::PumpFunAMM,
-        Protocol::MeteoraDLMM,
+        DexType::RaydiumAMM,
+        DexType::RaydiumCLmm,
+        DexType::PumpFunAMM,
+        DexType::MeteoraDLMM,
     ]
 }
 
@@ -219,7 +219,7 @@ pub struct DexIndexer {
 }
 
 impl DexIndexer {
-    pub async fn new(rpc_url: &str, subscribe_mints: &[Pubkey]) -> Self {
+    pub async fn new(rpc_url: &str) -> Self {
         let rpc_db = FileDB::new(rpc_url);
         let pools = rpc_db
             .load_token_pools(supported_protocols().as_slice())
@@ -227,10 +227,7 @@ impl DexIndexer {
             .unwrap();
         let pool_map = DashMap::new();
         let mut edges = HashMap::new();
-        for pool in pools.into_iter().filter(|pool| {
-            subscribe_mints.contains(&pool.tokens.first().unwrap().mint)
-                && subscribe_mints.contains(&pool.tokens.last().unwrap().mint)
-        }) {
+        for pool in pools.into_iter() {
             let pool_id = pool.pool_id;
             let mint_pair = pool.token_pair();
             pool_map.insert(pool_id, pool);

@@ -1,18 +1,18 @@
 use crate::cache::Pool;
 use crate::dex::meteora_dlmm::meteora_dlmm::{
-    MeteoraDLMMCacheUpdater, MeteoraDLMMGrpcMessageOperator,
-    MeteoraDLMMGrpcSubscribeRequestGenerator, MeteoraDLMMSnapshotFetcher, MeteoraDlmmDex,
+    MeteoraDLMMCacheUpdater, MeteoraDLMMDex, MeteoraDLMMGrpcMessageOperator,
+    MeteoraDLMMGrpcSubscribeRequestGenerator, MeteoraDLMMSnapshotFetcher,
 };
 use crate::dex::pump_fun::pump_fun::{
     PumpFunAccountSnapshotFetcher, PumpFunCacheUpdater, PumpFunDex,
     PumpFunGrpcSubscribeRequestGenerator, PumpFunReadyGrpcMessageOperator,
 };
 use crate::dex::raydium_amm::raydium_amm::{
-    RaydiumAmmCacheUpdater, RaydiumAmmDex, RaydiumAmmGrpcMessageOperator,
+    RaydiumAMMDex, RaydiumAmmCacheUpdater, RaydiumAmmGrpcMessageOperator,
     RaydiumAmmSnapshotFetcher, RaydiumAmmSubscribeRequestCreator,
 };
 use crate::dex::raydium_clmm::raydium_clmm::{
-    RaydiumClmmCacheUpdater, RaydiumClmmDex, RaydiumClmmGrpcMessageOperator,
+    RaydiumCLMMDex, RaydiumClmmCacheUpdater, RaydiumClmmGrpcMessageOperator,
     RaydiumClmmSnapshotFetcher, RaydiumClmmSubscribeRequestCreator,
 };
 use crate::interface::SourceMessage::Account;
@@ -25,50 +25,50 @@ use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 use yellowstone_grpc_proto::geyser::{SubscribeRequest, SubscribeUpdateAccount};
 
-pub type SubscribeKey = (Protocol, GrpcAccountUpdateType);
+pub type SubscribeKey = (DexType, GrpcAccountUpdateType);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub enum Protocol {
+pub enum DexType {
     RaydiumAMM,
     RaydiumCLmm,
     PumpFunAMM,
     MeteoraDLMM,
 }
 
-impl Display for Protocol {
+impl Display for DexType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Protocol::RaydiumAMM => "RaydiumAMM",
-            Protocol::RaydiumCLmm => "RaydiumCLmm",
-            Protocol::PumpFunAMM => "PumpFunAM",
-            Protocol::MeteoraDLMM => "MeteoraDLMM",
+            DexType::RaydiumAMM => "RaydiumAMM",
+            DexType::RaydiumCLmm => "RaydiumCLmm",
+            DexType::PumpFunAMM => "PumpFunAM",
+            DexType::MeteoraDLMM => "MeteoraDLMM",
         })
     }
 }
 
-impl From<Pubkey> for Protocol {
+impl From<Pubkey> for DexType {
     fn from(value: Pubkey) -> Self {
         if value == crate::dex::raydium_amm::ID {
-            Protocol::RaydiumAMM
+            DexType::RaydiumAMM
         } else if value == crate::dex::raydium_clmm::ID {
-            Protocol::RaydiumCLmm
+            DexType::RaydiumCLmm
         } else if value == crate::dex::pump_fun::ID {
-            Protocol::PumpFunAMM
+            DexType::PumpFunAMM
         } else if value == crate::dex::meteora_dlmm::ID {
-            Protocol::MeteoraDLMM
+            DexType::MeteoraDLMM
         } else {
             unreachable!()
         }
     }
 }
 
-impl Protocol {
+impl DexType {
     pub fn get_owner(&self) -> Pubkey {
         match self {
-            Protocol::RaydiumAMM => crate::dex::raydium_amm::ID,
-            Protocol::RaydiumCLmm => crate::dex::raydium_clmm::ID,
-            Protocol::PumpFunAMM => crate::dex::pump_fun::ID,
-            Protocol::MeteoraDLMM => crate::dex::meteora_dlmm::ID,
+            DexType::RaydiumAMM => crate::dex::raydium_amm::ID,
+            DexType::RaydiumCLmm => crate::dex::raydium_clmm::ID,
+            DexType::PumpFunAMM => crate::dex::pump_fun::ID,
+            DexType::MeteoraDLMM => crate::dex::meteora_dlmm::ID,
         }
     }
 
@@ -76,10 +76,10 @@ impl Protocol {
         &self,
     ) -> Result<Box<dyn GrpcSubscribeRequestGenerator>> {
         match self {
-            Protocol::RaydiumAMM => Ok(Box::new(RaydiumAmmSubscribeRequestCreator)),
-            Protocol::RaydiumCLmm => Ok(Box::new(RaydiumClmmSubscribeRequestCreator)),
-            Protocol::PumpFunAMM => Ok(Box::new(PumpFunGrpcSubscribeRequestGenerator)),
-            Protocol::MeteoraDLMM => Ok(Box::new(MeteoraDLMMGrpcSubscribeRequestGenerator)),
+            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmSubscribeRequestCreator)),
+            DexType::RaydiumCLmm => Ok(Box::new(RaydiumClmmSubscribeRequestCreator)),
+            DexType::PumpFunAMM => Ok(Box::new(PumpFunGrpcSubscribeRequestGenerator)),
+            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMGrpcSubscribeRequestGenerator)),
         }
     }
 
@@ -88,16 +88,14 @@ impl Protocol {
         account_update: AccountUpdate,
     ) -> Result<Box<dyn ReadyGrpcMessageOperator>> {
         match self {
-            Protocol::RaydiumAMM => {
-                Ok(Box::new(RaydiumAmmGrpcMessageOperator::new(account_update)))
-            }
-            Protocol::RaydiumCLmm => Ok(Box::new(RaydiumClmmGrpcMessageOperator::new(
+            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmGrpcMessageOperator::new(account_update))),
+            DexType::RaydiumCLmm => Ok(Box::new(RaydiumClmmGrpcMessageOperator::new(
                 account_update,
             ))),
-            Protocol::PumpFunAMM => Ok(Box::new(PumpFunReadyGrpcMessageOperator::new(
+            DexType::PumpFunAMM => Ok(Box::new(PumpFunReadyGrpcMessageOperator::new(
                 account_update,
             ))),
-            Protocol::MeteoraDLMM => Ok(Box::new(MeteoraDLMMGrpcMessageOperator::new(
+            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMGrpcMessageOperator::new(
                 account_update,
             ))),
         }
@@ -105,28 +103,28 @@ impl Protocol {
 
     pub fn get_snapshot_fetcher(&self) -> Result<Box<dyn AccountSnapshotFetcher>> {
         match self {
-            Protocol::RaydiumAMM => Ok(Box::new(RaydiumAmmSnapshotFetcher)),
-            Protocol::RaydiumCLmm => Ok(Box::new(RaydiumClmmSnapshotFetcher)),
-            Protocol::PumpFunAMM => Ok(Box::new(PumpFunAccountSnapshotFetcher)),
-            Protocol::MeteoraDLMM => Ok(Box::new(MeteoraDLMMSnapshotFetcher)),
+            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmSnapshotFetcher)),
+            DexType::RaydiumCLmm => Ok(Box::new(RaydiumClmmSnapshotFetcher)),
+            DexType::PumpFunAMM => Ok(Box::new(PumpFunAccountSnapshotFetcher)),
+            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMSnapshotFetcher)),
         }
     }
 
     pub fn get_cache_updater(&self, grpc_message: GrpcMessage) -> Result<Box<dyn CacheUpdater>> {
         match self {
-            Protocol::RaydiumAMM => Ok(Box::new(RaydiumAmmCacheUpdater::new(grpc_message)?)),
-            Protocol::RaydiumCLmm => Ok(Box::new(RaydiumClmmCacheUpdater::new(grpc_message)?)),
-            Protocol::PumpFunAMM => Ok(Box::new(PumpFunCacheUpdater::new(grpc_message)?)),
-            Protocol::MeteoraDLMM => Ok(Box::new(MeteoraDLMMCacheUpdater::new(grpc_message)?)),
+            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmCacheUpdater::new(grpc_message)?)),
+            DexType::RaydiumCLmm => Ok(Box::new(RaydiumClmmCacheUpdater::new(grpc_message)?)),
+            DexType::PumpFunAMM => Ok(Box::new(PumpFunCacheUpdater::new(grpc_message)?)),
+            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMCacheUpdater::new(grpc_message)?)),
         }
     }
 
     pub fn use_cache(&self) -> bool {
         match self {
-            Protocol::RaydiumAMM => true,
-            Protocol::RaydiumCLmm => false,
-            Protocol::PumpFunAMM => true,
-            Protocol::MeteoraDLMM => false,
+            DexType::RaydiumAMM => true,
+            DexType::RaydiumCLmm => false,
+            DexType::PumpFunAMM => true,
+            DexType::MeteoraDLMM => false,
         }
     }
 
@@ -137,17 +135,15 @@ impl Protocol {
         clock: Clock,
     ) -> Option<Box<dyn Dex>> {
         match self {
-            Protocol::RaydiumAMM => {
-                Protocol::inner_create_dex(RaydiumAmmDex::new(pool, amount_in_mint))
+            DexType::RaydiumAMM => {
+                DexType::inner_create_dex(RaydiumAMMDex::new(pool, amount_in_mint))
             }
-            Protocol::RaydiumCLmm => {
-                Protocol::inner_create_dex(RaydiumClmmDex::new(pool, amount_in_mint))
+            DexType::RaydiumCLmm => {
+                DexType::inner_create_dex(RaydiumCLMMDex::new(pool, amount_in_mint))
             }
-            Protocol::PumpFunAMM => {
-                Protocol::inner_create_dex(PumpFunDex::new(pool, amount_in_mint))
-            }
-            Protocol::MeteoraDLMM => {
-                Protocol::inner_create_dex(MeteoraDlmmDex::new(pool, amount_in_mint, clock))
+            DexType::PumpFunAMM => DexType::inner_create_dex(PumpFunDex::new(pool, amount_in_mint)),
+            DexType::MeteoraDLMM => {
+                DexType::inner_create_dex(MeteoraDLMMDex::new(pool, amount_in_mint, clock))
             }
         }
     }
@@ -219,7 +215,7 @@ pub struct ClockUpdate {
 
 #[derive(Debug, Clone)]
 pub struct AccountUpdate {
-    pub protocol: Protocol,
+    pub protocol: DexType,
     pub account_type: GrpcAccountUpdateType,
     pub filters: Vec<String>,
     pub account: SubscribeUpdateAccount,
@@ -227,7 +223,7 @@ pub struct AccountUpdate {
 
 impl
     From<(
-        Protocol,
+        DexType,
         GrpcAccountUpdateType,
         Vec<String>,
         SubscribeUpdateAccount,
@@ -235,7 +231,7 @@ impl
 {
     fn from(
         value: (
-            Protocol,
+            DexType,
             GrpcAccountUpdateType,
             Vec<String>,
             SubscribeUpdateAccount,
@@ -289,7 +285,7 @@ pub trait CacheUpdater: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait DB: Debug + Send + Sync {
-    async fn load_token_pools(&self, protocols: &[Protocol]) -> anyhow::Result<Vec<Pool>>;
+    async fn load_token_pools(&self, protocols: &[DexType]) -> anyhow::Result<Vec<Pool>>;
 }
 
 #[async_trait::async_trait]

@@ -177,13 +177,13 @@ fn swap_compute(
                 )
                 .unwrap();
             let option = tick_arrays.pop_front();
-            
+
             if let Some(next_vaild_tick_array) = option {
-                tick_array_current = next_vaild_tick_array;    
-            }else { 
+                tick_array_current = next_vaild_tick_array;
+            } else {
                 error!("tick_arrays is empty");
             }
-            
+
             if next_vaild_tick_array_start_index.is_none() {
                 return Result::Err("tick array start tick index out of range limit");
             }
@@ -320,7 +320,7 @@ pub async fn load_cur_and_next_specify_count_tick_array(
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
-) -> VecDeque<TickArrayState> {
+) -> Option<VecDeque<TickArrayState>> {
     let tick_array_keys = load_cur_and_next_specify_count_tick_array_key(
         load_count,
         pool_id,
@@ -328,17 +328,18 @@ pub async fn load_cur_and_next_specify_count_tick_array(
         tickarray_bitmap_extension,
         zero_for_one,
     );
-    let tick_array_rsps = rpc_client
-        .get_multiple_accounts(&tick_array_keys)
-        .await
-        .unwrap();
-    let mut tick_arrays = VecDeque::new();
-    for tick_array in tick_array_rsps {
-        let tick_array_state =
-            deserialize_anchor_account::<TickArrayState>(&tick_array.unwrap()).unwrap();
-        tick_arrays.push_back(tick_array_state);
+    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).await;
+    if let Ok(tick_array_states) = tick_array_rsps {
+        let mut tick_arrays = VecDeque::new();
+        for tick_array in tick_array_states {
+            let tick_array_state =
+                deserialize_anchor_account::<TickArrayState>(&tick_array.unwrap()).unwrap();
+            tick_arrays.push_back(tick_array_state);
+        }
+        Some(tick_arrays)
+    } else {
+        None
     }
-    tick_arrays
 }
 
 pub fn load_cur_and_next_specify_count_tick_array_key(

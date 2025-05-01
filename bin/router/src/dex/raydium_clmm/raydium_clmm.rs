@@ -1,6 +1,7 @@
 use crate::cache::PoolState::RaydiumCLMM;
 use crate::cache::{Mint, Pool};
 use crate::dex::common::utils::{change_data_if_not_same, SwapDirection};
+use crate::dex::raydium_clmm::pool_state::RaydiumCLMMPoolState;
 use crate::dex::raydium_clmm::sdk::config::AmmConfig;
 use crate::dex::raydium_clmm::sdk::pool::PoolState;
 use crate::dex::raydium_clmm::sdk::tick_array::TickArrayState;
@@ -11,13 +12,14 @@ use crate::dex::raydium_clmm::sdk::utils::{
 use crate::dex::raydium_clmm::sdk::{config, utils};
 use crate::interface::GrpcMessage::RaydiumCLMMData;
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, GrpcAccountUpdateType, GrpcMessage,
-    GrpcSubscribeRequestGenerator, Protocol, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
+    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
+use log::warn;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -32,7 +34,7 @@ use yellowstone_grpc_proto::geyser::{
 };
 
 #[derive(Clone)]
-pub struct RaydiumClmmDex {
+pub struct RaydiumCLMMDex {
     pool_id: Pubkey,
     swap_direction: SwapDirection,
     mint_0: Pubkey,
@@ -44,24 +46,13 @@ pub struct RaydiumClmmDex {
     tick_current: i32,
     tick_array_bitmap: [u64; 16],
     tick_array_bitmap_extension: TickArrayBitmapExtension,
-    zero_to_one_tick_array_states: VecDeque<TickArrayState>,
-    one_to_zero_tick_array_states: VecDeque<TickArrayState>,
+    zero_to_one_tick_array_states: Option<VecDeque<TickArrayState>>,
+    one_to_zero_tick_array_states: Option<VecDeque<TickArrayState>>,
 }
 
-impl RaydiumClmmDex {
+impl RaydiumCLMMDex {
     pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
-        if let RaydiumCLMM {
-            tick_spacing,
-            trade_fee_rate,
-            liquidity,
-            sqrt_price_x64,
-            tick_current,
-            tick_array_bitmap,
-            tick_array_bitmap_extension,
-            zero_to_one_tick_array_states,
-            one_to_zero_tick_array_states,
-        } = pool.state.clone()
-        {
+        if let RaydiumCLMM(pool_state) = pool.state.clone() {
             Some(Self {
                 swap_direction: if amount_in_mint == pool.mint_0() {
                     SwapDirection::Coin2PC
@@ -71,15 +62,15 @@ impl RaydiumClmmDex {
                 pool_id: pool.pool_id,
                 mint_0: pool.mint_0(),
                 mint_1: pool.mint_1(),
-                tick_current,
-                tick_spacing,
-                trade_fee_rate,
-                liquidity,
-                sqrt_price_x64,
-                tick_array_bitmap,
-                tick_array_bitmap_extension,
-                zero_to_one_tick_array_states,
-                one_to_zero_tick_array_states,
+                tick_current: pool_state.tick_current,
+                tick_spacing: pool_state.tick_spacing,
+                trade_fee_rate: pool_state.trade_fee_rate,
+                liquidity: pool_state.liquidity,
+                sqrt_price_x64: pool_state.sqrt_price_x64,
+                tick_array_bitmap: pool_state.tick_array_bitmap,
+                tick_array_bitmap_extension: pool_state.tick_array_bitmap_extension,
+                zero_to_one_tick_array_states: pool_state.zero_to_one_tick_array_states,
+                one_to_zero_tick_array_states: pool_state.one_to_zero_tick_array_states,
             })
         } else {
             None
@@ -109,18 +100,18 @@ impl RaydiumClmmDex {
     }
 }
 
-impl Debug for RaydiumClmmDex {
+impl Debug for RaydiumCLMMDex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "RaydiumClmmDex: {},{:?}",
+            "RaydiumCLMMDex: {},{:?}",
             self.pool_id, self.swap_direction
         )
     }
 }
 
 #[async_trait::async_trait]
-impl Dex for RaydiumClmmDex {
+impl Dex for RaydiumCLMMDex {
     async fn quote(&self, amount_in: u64) -> Option<u64> {
         if amount_in == u64::MIN {
             return None;
@@ -139,22 +130,30 @@ impl Dex for RaydiumClmmDex {
             SwapDirection::PC2Coin => (false, self.one_to_zero_tick_array_states.clone()),
             SwapDirection::Coin2PC => (true, self.zero_to_one_tick_array_states.clone()),
         };
-        let result = Self::get_out_put_amount_and_remaining_accounts(
-            amount_in,
-            None,
-            zero_for_one,
-            true,
-            &amm_config,
-            &pool_state,
-            &Some(self.tick_array_bitmap_extension),
-            &mut tick_arrays,
-        );
-        match result {
-            Ok((amount_out, _, _)) => Some(amount_out),
-            Err(e) => {
-                error!("get_out_put_amount_and_remaining_accounts error: {:?}", e);
-                None
+        if let Some(mut tick_arrays) = tick_arrays {
+            let result = Self::get_out_put_amount_and_remaining_accounts(
+                amount_in,
+                None,
+                zero_for_one,
+                true,
+                &amm_config,
+                &pool_state,
+                &Some(self.tick_array_bitmap_extension),
+                &mut tick_arrays,
+            );
+            match result {
+                Ok((amount_out, _, _)) => Some(amount_out),
+                Err(e) => {
+                    error!("get_out_put_amount_and_remaining_accounts error: {:?}", e);
+                    None
+                }
             }
+        } else {
+            warn!(
+                "【RaydiumDLMM】池子【{:?}】方向【{:?}】没有TickArrayState",
+                self.pool_id, self.swap_direction
+            );
+            None
         }
     }
 
@@ -249,7 +248,7 @@ impl GrpcSubscribeRequestGenerator for RaydiumClmmSubscribeRequestCreator {
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
         let mut subscribe_pool_accounts = HashMap::new();
         subscribe_pool_accounts.insert(
-            format!("{:?}", Protocol::RaydiumCLmm),
+            format!("{:?}", DexType::RaydiumCLmm),
             SubscribeRequestFilterAccounts {
                 account: pools
                     .iter()
@@ -296,7 +295,7 @@ impl GrpcSubscribeRequestGenerator for RaydiumClmmSubscribeRequestCreator {
             ..Default::default()
         };
         Some(vec![(
-            (Protocol::RaydiumCLmm, GrpcAccountUpdateType::PoolState),
+            (DexType::RaydiumCLmm, GrpcAccountUpdateType::PoolState),
             pool_request,
         )])
     }
@@ -423,7 +422,7 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                             let trade_fee_rate =
                                 amm_config_map.get(&pool_state.amm_config).unwrap().clone();
                             pools.push(Pool {
-                                protocol: Protocol::RaydiumCLmm,
+                                protocol: DexType::RaydiumCLmm,
                                 pool_id,
                                 tokens: vec![
                                     Mint {
@@ -433,7 +432,7 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                                         mint: pool_state.token_mint_1.clone(),
                                     },
                                 ],
-                                state: RaydiumCLMM {
+                                state: RaydiumCLMM(RaydiumCLMMPoolState {
                                     tick_spacing: pool_state.tick_spacing,
                                     trade_fee_rate,
                                     liquidity: pool_state.liquidity,
@@ -443,7 +442,7 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                                     tick_array_bitmap_extension,
                                     zero_to_one_tick_array_states,
                                     one_to_zero_tick_array_states,
-                                },
+                                }),
                             })
                         }
                     }
@@ -494,18 +493,12 @@ impl RaydiumClmmCacheUpdater {
 
 impl CacheUpdater for RaydiumClmmCacheUpdater {
     fn update_cache(&self, pool: &mut Pool) -> anyhow::Result<()> {
-        if let RaydiumCLMM {
-            ref mut liquidity,
-            ref mut sqrt_price_x64,
-            ref mut tick_current,
-            ref mut tick_array_bitmap,
-            ..
-        } = pool.state
+        if let RaydiumCLMM(ref mut pool_state) = pool.state
         {
-            if change_data_if_not_same(liquidity, self.liquidity)
-                || change_data_if_not_same(tick_current, self.tick_current)
-                || change_data_if_not_same(sqrt_price_x64, self.sqrt_price_x64)
-                || change_data_if_not_same(tick_array_bitmap, self.tick_array_bitmap)
+            if change_data_if_not_same(&mut pool_state.liquidity, self.liquidity)
+                || change_data_if_not_same(&mut pool_state.tick_current, self.tick_current)
+                || change_data_if_not_same(&mut pool_state.sqrt_price_x64, self.sqrt_price_x64)
+                || change_data_if_not_same(&mut pool_state.tick_array_bitmap, self.tick_array_bitmap)
             {
                 Ok(())
             } else {

@@ -1,17 +1,19 @@
 use crate::cache::{Mint, Pool, PoolState};
 use crate::dex::common::mint_vault::MintVaultSubscribe;
-use crate::dex::common::utils::change_option_ignore_none_old;
+use crate::dex::common::utils::{change_option_ignore_none_old, SwapDirection};
 use crate::dex::raydium_amm::math::CheckedCeilDiv;
-use crate::dex::raydium_amm::state::{AmmInfo, Loadable};
+use crate::dex::raydium_amm::pool_state::RaydiumAMMPoolState;
+use crate::dex::raydium_amm::state::{AmmInfo, AmmStatus, Loadable};
 use crate::interface::GrpcMessage::RaydiumAMMData;
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, GrpcAccountUpdateType, GrpcMessage,
-    GrpcSubscribeRequestGenerator, Protocol, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
+    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
+use chrono::Utc;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
@@ -29,69 +31,71 @@ use yellowstone_grpc_proto::geyser::{
 };
 
 #[derive(Clone)]
-pub struct RaydiumAmmDex {
+pub struct RaydiumAMMDex {
     pool: Pool,
-    amount_in_mint: Pubkey,
+    swap_direction: SwapDirection,
 }
 
-impl RaydiumAmmDex {
+impl RaydiumAMMDex {
     pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
+        let mint_0 = pool.mint_0();
+        let mint_1 = pool.mint_1();
+        if mint_0 != amount_in_mint && mint_1 != amount_in_mint {
+            return None;
+        }
         Some(Self {
-            amount_in_mint,
+            swap_direction: if mint_0 == amount_in_mint {
+                SwapDirection::Coin2PC
+            } else {
+                SwapDirection::PC2Coin
+            },
             pool,
         })
     }
 }
 
-impl Debug for RaydiumAmmDex {
+impl Debug for RaydiumAMMDex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "RaydiumAmmDex: {},{}",
-            self.pool.pool_id, self.amount_in_mint
+            "RaydiumAMMDex: {},{:?}",
+            self.pool.pool_id, self.swap_direction
         )
     }
 }
 
 #[async_trait::async_trait]
-impl Dex for RaydiumAmmDex {
+impl Dex for RaydiumAMMDex {
     async fn quote(&self, amount_in: u64) -> Option<u64> {
         if amount_in == u64::MIN {
             return None;
         }
         let amount_in = u128::from(amount_in);
-        if let PoolState::RaydiumAMM {
-            swap_fee_numerator,
-            swap_fee_denominator,
-            mint_0_vault_amount,
-            mint_0_need_take_pnl,
-            mint_1_vault_amount,
-            mint_1_need_take_pnl,
-            ..
-        } = self.pool.state
-        {
+        if let PoolState::RaydiumAMM(ref pool_state) = self.pool.state {
             let swap_fee = amount_in
-                .checked_mul(u128::from(swap_fee_numerator))
+                .checked_mul(u128::from(pool_state.swap_fee_numerator))
                 .unwrap()
-                .checked_ceil_div(u128::from(swap_fee_denominator))
+                .checked_ceil_div(u128::from(pool_state.swap_fee_denominator))
                 .unwrap()
                 .0;
 
             let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
 
             let mint_0_amount_without_pnl = u128::from(
-                mint_0_vault_amount
+                pool_state
+                    .mint_0_vault_amount
                     .unwrap()
-                    .checked_sub(mint_0_need_take_pnl.unwrap())
+                    .checked_sub(pool_state.mint_0_need_take_pnl.unwrap())
                     .unwrap(),
             );
             let mint_1_amount_without_pnl = u128::from(
-                mint_1_vault_amount
+                pool_state
+                    .mint_1_vault_amount
                     .unwrap()
-                    .checked_sub(mint_1_need_take_pnl.unwrap())
+                    .checked_sub(pool_state.mint_1_need_take_pnl.unwrap())
                     .unwrap(),
             );
-            let amount_out = if self.pool.mint_0() == self.amount_in_mint {
+            let amount_out = if self.swap_direction == SwapDirection::Coin2PC {
                 mint_1_amount_without_pnl
                     .checked_mul(swap_in_after_deduct_fee)
                     .unwrap()
@@ -262,7 +266,7 @@ impl GrpcSubscribeRequestGenerator for RaydiumAmmSubscribeRequestCreator {
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
         let mut subscribe_pool_accounts = HashMap::new();
         subscribe_pool_accounts.insert(
-            format!("{:?}", Protocol::RaydiumAMM),
+            format!("{:?}", DexType::RaydiumAMM),
             SubscribeRequestFilterAccounts {
                 account: pools
                     .iter()
@@ -290,16 +294,16 @@ impl GrpcSubscribeRequestGenerator for RaydiumAmmSubscribeRequestCreator {
         };
         let vault_subscribe_request = MintVaultSubscribe::mint_vault_subscribe_request(pools);
         if vault_subscribe_request.accounts.is_empty() {
-            warn!("【{}】所有池子未找到金库账户", Protocol::RaydiumAMM);
+            warn!("【{}】所有池子未找到金库账户", DexType::RaydiumAMM);
             None
         } else {
             Some(vec![
                 (
-                    (Protocol::RaydiumAMM, GrpcAccountUpdateType::PoolState),
+                    (DexType::RaydiumAMM, GrpcAccountUpdateType::PoolState),
                     pool_request,
                 ),
                 (
-                    (Protocol::RaydiumAMM, GrpcAccountUpdateType::MintVault),
+                    (DexType::RaydiumAMM, GrpcAccountUpdateType::MintVault),
                     vault_subscribe_request,
                 ),
             ])
@@ -336,6 +340,13 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                     if let Some(pool_account) = pool_account {
                         let amm_info =
                             AmmInfo::load_from_bytes(pool_account.data.as_slice()).unwrap();
+                        if !AmmStatus::from_u64(amm_info.status).swap_permission()
+                            || AmmStatus::from_u64(amm_info.status).orderbook_permission()
+                            || amm_info.status == AmmStatus::WaitingTrade as u64
+                            || amm_info.state_data.pool_open_time >= (Utc::now().timestamp() as u64)
+                        {
+                            continue;
+                        }
                         let mint_vault_amount = rpc_client
                             .get_multiple_accounts_with_commitment(
                                 &vec![amm_info.coin_vault, amm_info.pc_vault],
@@ -360,7 +371,7 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                             continue;
                         }
                         pools.push(Pool {
-                            protocol: Protocol::RaydiumAMM,
+                            protocol: DexType::RaydiumAMM,
                             pool_id: *pool_id,
                             tokens: vec![
                                 Mint {
@@ -370,20 +381,16 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                                     mint: amm_info.pc_vault_mint,
                                 },
                             ],
-                            state: PoolState::RaydiumAMM {
-                                mint_0_vault: Some(amm_info.coin_vault),
-                                mint_1_vault: Some(amm_info.pc_vault),
-                                mint_0_vault_amount: Some(
-                                    mint_vault_amount.get(0).unwrap().clone(),
-                                ),
-                                mint_1_vault_amount: Some(
-                                    mint_vault_amount.get(1).unwrap().clone(),
-                                ),
-                                mint_0_need_take_pnl: Some(amm_info.state_data.need_take_pnl_coin),
-                                mint_1_need_take_pnl: Some(amm_info.state_data.need_take_pnl_pc),
-                                swap_fee_numerator: amm_info.fees.swap_fee_numerator,
-                                swap_fee_denominator: amm_info.fees.swap_fee_denominator,
-                            },
+                            state: PoolState::RaydiumAMM(RaydiumAMMPoolState::new(
+                                Some(amm_info.coin_vault),
+                                Some(amm_info.pc_vault),
+                                Some(mint_vault_amount.get(0).unwrap().clone()),
+                                Some(mint_vault_amount.get(1).unwrap().clone()),
+                                Some(amm_info.state_data.need_take_pnl_coin),
+                                Some(amm_info.state_data.need_take_pnl_pc),
+                                amm_info.fees.swap_fee_numerator,
+                                amm_info.fees.swap_fee_denominator,
+                            )),
                         })
                     }
                 }
@@ -433,19 +440,20 @@ impl RaydiumAmmCacheUpdater {
 
 impl CacheUpdater for RaydiumAmmCacheUpdater {
     fn update_cache(&self, pool: &mut Pool) -> Result<()> {
-        if let PoolState::RaydiumAMM {
-            ref mut mint_0_vault_amount,
-            ref mut mint_1_vault_amount,
-            ref mut mint_0_need_take_pnl,
-            ref mut mint_1_need_take_pnl,
-            ..
-        } = pool.state
-        {
-            if change_option_ignore_none_old(mint_0_vault_amount, self.mint_0_vault_amount)
-                || change_option_ignore_none_old(mint_1_vault_amount, self.mint_1_vault_amount)
-                || change_option_ignore_none_old(mint_0_need_take_pnl, self.mint_0_need_take_pnl)
-                || change_option_ignore_none_old(mint_1_need_take_pnl, self.mint_1_need_take_pnl)
-            {
+        if let PoolState::RaydiumAMM(ref mut pool_state) = pool.state {
+            if change_option_ignore_none_old(
+                &mut pool_state.mint_0_vault_amount,
+                self.mint_0_vault_amount,
+            ) || change_option_ignore_none_old(
+                &mut pool_state.mint_1_vault_amount,
+                self.mint_1_vault_amount,
+            ) || change_option_ignore_none_old(
+                &mut pool_state.mint_0_need_take_pnl,
+                self.mint_0_need_take_pnl,
+            ) || change_option_ignore_none_old(
+                &mut pool_state.mint_1_need_take_pnl,
+                self.mint_1_need_take_pnl,
+            ) {
                 Ok(())
             } else {
                 Err(anyhow!(""))

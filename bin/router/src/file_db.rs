@@ -1,5 +1,5 @@
 use crate::cache::Pool;
-use crate::interface::{Protocol, DB};
+use crate::interface::{DexType, DB};
 use anyhow::anyhow;
 use anyhow::Result;
 use log::warn;
@@ -31,7 +31,7 @@ impl FileDB {
 
 #[async_trait::async_trait]
 impl DB for FileDB {
-    async fn load_token_pools(&self, protocols: &[Protocol]) -> anyhow::Result<Vec<Pool>> {
+    async fn load_token_pools(&self, protocols: &[DexType]) -> anyhow::Result<Vec<Pool>> {
         let dex_jsons: Vec<DexJson> = match File::open(FILE_DB_DIR) {
             Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
             Err(e) => {
@@ -45,7 +45,7 @@ impl DB for FileDB {
         let mut dex_pool_group = HashMap::new();
         for dex_json in dex_jsons {
             dex_pool_group
-                .entry(Protocol::from(dex_json.owner))
+                .entry(DexType::from(dex_json.owner))
                 .or_insert(Vec::new())
                 .push(dex_json.pool);
         }

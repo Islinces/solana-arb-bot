@@ -1,5 +1,6 @@
-use chrono::Local;
+use chrono::{Local, Utc};
 use router::start_bot;
+use std::path::PathBuf;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -21,8 +22,13 @@ async fn main() -> anyhow::Result<()> {
     let filter = EnvFilter::new("info")
         // .add_directive("router=debug".parse().unwrap())
         ;
-    // let file_appender = RollingFileAppender::new(Rotation::DAILY, "./logs", "app.log");
-    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    let file_appender = RollingFileAppender::builder()
+        .filename_prefix("app")
+        .filename_suffix("log")
+        .rotation(Rotation::DAILY)
+        .build("./logs")
+        .expect("TODO: panic message");
+    let (non_blocking_writer, _guard) = non_blocking(file_appender);
     tracing_subscriber::registry()
         .with(
             fmt::layer()
@@ -34,6 +40,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .with(filter)
         .init();
-    start_bot::run().await.unwrap();
+    start_bot::run().await?;
     Ok(())
 }

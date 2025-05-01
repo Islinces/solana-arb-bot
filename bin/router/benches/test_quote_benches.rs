@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use router::dex::dex::Dex;
 use router::dex::raydium_amm::math::{CheckedCeilDiv, SwapDirection};
-use router::dex::raydium_amm::raydium_amm::RaydiumAmmDex;
-use router::interface::{Mint, Pool, PoolExtra, Protocol};
+use router::dex::raydium_amm::raydium_amm::RaydiumAMMDex;
+use router::interface::{Mint, Pool, PoolExtra, DexType};
 use solana_program::pubkey::Pubkey;
 use std::ops::{Add, Div, Mul, Sub};
 use std::str::FromStr;
@@ -10,9 +10,9 @@ use std::time::Duration;
 
 fn bench_route(c: &mut Criterion) {
     let in_mint = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-    let raydium_amm_dex = RaydiumAmmDex::new(
+    let raydium_amm_dex = RaydiumAMMDex::new(
         Pool {
-            protocol: Protocol::RaydiumAMM,
+            protocol: DexType::RaydiumAMM,
             pool_id: Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2").unwrap(),
             tokens: vec![
                 Mint {

@@ -9,8 +9,8 @@ use crate::dex::pump_fun::state::GlobalConfig;
 use crate::dex::pump_fun::state::Pool as PumpFunPoolState;
 use crate::interface::GrpcMessage::{PumpFunAMMData, RaydiumAMMData};
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, GrpcAccountUpdateType, GrpcMessage,
-    GrpcSubscribeRequestGenerator, Protocol, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
+    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -21,13 +21,14 @@ use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token::state::Account;
+use std::fmt::{Debug, Formatter};
 use std::ops::{Add, Div, Mul, Sub};
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{error, warn};
 use yellowstone_grpc_proto::geyser::SubscribeRequest;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PumpFunDex {
     pool_id: Pubkey,
     mint_0: Pubkey,
@@ -41,14 +42,7 @@ pub struct PumpFunDex {
 
 impl PumpFunDex {
     pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
-        if let PoolState::PumpFunAMM {
-            mint_0_vault_amount,
-            mint_1_vault_amount,
-            lp_fee_basis_points,
-            protocol_fee_basis_points,
-            ..
-        } = pool.state
-        {
+        if let PoolState::PumpFunAMM(ref pool_state) = pool.state {
             let mint_0 = pool.mint_0();
             let mint_1 = pool.mint_1();
             let pool_id = pool.pool_id;
@@ -64,14 +58,20 @@ impl PumpFunDex {
                 } else {
                     SwapDirection::PC2Coin
                 },
-                mint_0_vault_amount,
-                mint_1_vault_amount,
-                lp_fee_basis_points,
-                protocol_fee_basis_points,
+                mint_0_vault_amount: pool_state.mint_0_vault_amount,
+                mint_1_vault_amount: pool_state.mint_1_vault_amount,
+                lp_fee_basis_points: pool_state.lp_fee_basis_points,
+                protocol_fee_basis_points: pool_state.protocol_fee_basis_points,
             })
         } else {
             None
         }
+    }
+}
+
+impl Debug for PumpFunDex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PumpFunDex: {},{:?}", self.pool_id, self.swap_direction)
     }
 }
 
@@ -124,11 +124,11 @@ impl GrpcSubscribeRequestGenerator for PumpFunGrpcSubscribeRequestGenerator {
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
         let vault_subscribe_request = MintVaultSubscribe::mint_vault_subscribe_request(pools);
         if vault_subscribe_request.accounts.is_empty() {
-            warn!("【{}】所有池子未找到金库账户", Protocol::PumpFunAMM);
+            warn!("【{}】所有池子未找到金库账户", DexType::PumpFunAMM);
             None
         } else {
             Some(vec![(
-                (Protocol::PumpFunAMM, GrpcAccountUpdateType::MintVault),
+                (DexType::PumpFunAMM, GrpcAccountUpdateType::MintVault),
                 vault_subscribe_request,
             )])
         }
@@ -190,7 +190,7 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                         mint_1_need_take_pnl: None,
                     });
                     Ok(())
-                },
+                }
                 _ => Err(anyhow!("")),
             }
         } else {
@@ -274,7 +274,10 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                             deserialize_anchor_account::<PumpFunPoolState>(&account).unwrap();
                         let vault_accounts = rpc_client
                             .get_multiple_accounts_with_commitment(
-                                &vec![pool_state.base_mint, pool_state.quote_mint],
+                                &[
+                                    pool_state.pool_base_token_account,
+                                    pool_state.pool_quote_token_account,
+                                ],
                                 CommitmentConfig::finalized(),
                             )
                             .await
@@ -296,7 +299,7 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                             continue;
                         }
                         pools.push(Pool {
-                            protocol: Protocol::PumpFunAMM,
+                            protocol: DexType::PumpFunAMM,
                             pool_id: *pool_id,
                             tokens: vec![
                                 Mint {
@@ -306,14 +309,16 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                                     mint: pool_state.quote_mint,
                                 },
                             ],
-                            state: PoolState::PumpFunAMM {
-                                mint_0_vault: pool_state.pool_base_token_account,
-                                mint_1_vault: pool_state.pool_quote_token_account,
-                                mint_0_vault_amount: vault_accounts.get(0).unwrap().amount,
-                                mint_1_vault_amount: vault_accounts.get(1).unwrap().amount,
-                                lp_fee_basis_points: global_config.lp_fee_basis_points,
-                                protocol_fee_basis_points: global_config.protocol_fee_basis_points,
-                            },
+                            state: PoolState::PumpFunAMM(
+                                crate::dex::pump_fun::pool_state::PumpFunPoolState::new(
+                                    pool_state.pool_base_token_account,
+                                    pool_state.pool_quote_token_account,
+                                    vault_accounts.first().unwrap().amount,
+                                    vault_accounts.last().unwrap().amount,
+                                    global_config.lp_fee_basis_points,
+                                    global_config.protocol_fee_basis_points,
+                                ),
+                            ),
                         })
                     }
                 }
@@ -357,15 +362,14 @@ impl PumpFunCacheUpdater {
 
 impl CacheUpdater for PumpFunCacheUpdater {
     fn update_cache(&self, pool: &mut Pool) -> Result<()> {
-        if let PoolState::PumpFunAMM {
-            ref mut mint_0_vault_amount,
-            ref mut mint_1_vault_amount,
-            ..
-        } = pool.state
-        {
-            if change_data_if_not_same(mint_0_vault_amount, self.mint_0_vault_amount.unwrap())
-                || change_data_if_not_same(mint_1_vault_amount, self.mint_1_vault_amount.unwrap())
-            {
+        if let PoolState::PumpFunAMM(ref mut pool_state) = pool.state {
+            if change_data_if_not_same(
+                &mut pool_state.mint_0_vault_amount,
+                self.mint_0_vault_amount.unwrap(),
+            ) || change_data_if_not_same(
+                &mut pool_state.mint_1_vault_amount,
+                self.mint_1_vault_amount.unwrap(),
+            ) {
                 Ok(())
             } else {
                 Err(anyhow!(""))

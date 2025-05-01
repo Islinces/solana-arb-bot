@@ -14,31 +14,19 @@ use yellowstone_grpc_proto::tonic::Status;
 
 pub struct GrpcMessageCollector {
     rpc_url: String,
-    subscribe_mints: Vec<Pubkey>,
     grpc_url: &'static str,
-    ping_interval_with_secs: u64,
 }
 
 impl GrpcMessageCollector {
-    pub fn new(
-        rpc_url: String,
-        subscribe_mints: Vec<Pubkey>,
-        grpc_url: &'static str,
-        ping_interval_with_secs: u64,
-    ) -> Self {
-        Self {
-            rpc_url,
-            subscribe_mints,
-            grpc_url,
-            ping_interval_with_secs,
-        }
+    pub fn new(rpc_url: String, grpc_url: &'static str) -> Self {
+        Self { rpc_url, grpc_url }
     }
 
     async fn connect_grpc_server(
         &self,
     ) -> anyhow::Result<StreamMap<SubscribeKey, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
-        let defi = Defi::new(&self.rpc_url, &self.subscribe_mints).await?;
+        let defi = Defi::new(&self.rpc_url).await?;
         let pools = defi.get_all_pools().unwrap();
         // TODO：支持配置GRPC参数
         let mut grpc_client = GeyserGrpcClient::build_from_static(self.grpc_url)
@@ -77,9 +65,8 @@ impl GrpcMessageCollector {
         if subscrbeitions.is_empty() {
             Err(anyhow::anyhow!("GRPC订阅: 无订阅请求生成，订阅失败"))
         } else {
-            let ping_interval = self.ping_interval_with_secs;
             tokio::spawn(async move {
-                let mut ping = tokio::time::interval(Duration::from_secs(ping_interval));
+                let mut ping = tokio::time::interval(Duration::from_secs(5));
                 ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 ping.tick().await;
                 loop {

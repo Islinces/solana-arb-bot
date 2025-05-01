@@ -1,5 +1,6 @@
 pub mod sdk;
 pub mod raydium_clmm;
+pub mod pool_state;
 
 use solana_sdk::declare_id;
 

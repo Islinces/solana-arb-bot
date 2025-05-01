@@ -1,7 +1,7 @@
 use crate::cache::PoolState::MeteoraDLMM;
 use crate::cache::{Mint, Pool};
 use crate::dex::common::utils::{change_data_if_not_same, SwapDirection};
-use crate::dex::meteora_dlmm::meteora_dlmm_pool_extra::MeteoraDLMMPoolExtra;
+use crate::dex::meteora_dlmm::pool_state::MeteoraDLMMPoolState;
 use crate::dex::meteora_dlmm::sdk::commons::pda::derive_bin_array_bitmap_extension;
 use crate::dex::meteora_dlmm::sdk::commons::quote::{
     get_bin_array_pubkeys_for_swap, quote_exact_in,
@@ -11,13 +11,14 @@ use crate::dex::meteora_dlmm::sdk::interface::accounts::{
     LbPairAccount,
 };
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, GrpcAccountUpdateType, GrpcMessage,
-    GrpcSubscribeRequestGenerator, Protocol, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
+    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
+use log::info;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
@@ -26,6 +27,7 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::error;
@@ -34,15 +36,15 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Debug, Clone)]
-pub struct MeteoraDlmmDex {
-    pool_info: MeteoraDLMMPoolExtra,
+#[derive(Clone)]
+pub struct MeteoraDLMMDex {
+    pool_info: MeteoraDLMMPoolState,
     pool_id: Pubkey,
     swap_direction: SwapDirection,
     clock: Clock,
 }
 
-impl MeteoraDlmmDex {
+impl MeteoraDLMMDex {
     pub fn new(pool: Pool, amount_in_mint: Pubkey, clock: Clock) -> Option<Self> {
         if let MeteoraDLMM(data) = &pool.state {
             let mint_0 = pool.mint_0();
@@ -66,8 +68,18 @@ impl MeteoraDlmmDex {
     }
 }
 
+impl Debug for MeteoraDLMMDex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "MeteoraDLMMDex: {},{:?}",
+            self.pool_id, self.swap_direction
+        )
+    }
+}
+
 #[async_trait::async_trait]
-impl Dex for MeteoraDlmmDex {
+impl Dex for MeteoraDLMMDex {
     async fn quote(&self, amount_in: u64) -> Option<u64> {
         if amount_in == u64::MIN {
             return None;
@@ -85,15 +97,15 @@ impl Dex for MeteoraDlmmDex {
             } else {
                 pool_info.swap_for_x_bin_array_map.clone()
             },
-            pool_info.bin_array_bitmap_extension.clone(),
+            pool_info.bin_array_bitmap_extension,
             self.clock.clone(),
-            pool_info.mint_x_transfer_fee_config.clone(),
-            pool_info.mint_y_transfer_fee_config.clone(),
+            pool_info.mint_x_transfer_fee_config,
+            pool_info.mint_y_transfer_fee_config,
         );
         match result {
             Ok(quote) => Some(quote.amount_out),
             Err(e) => {
-                error!("dlmm swap error : {:?}", e);
+                error!("dlmm swap error : {}", e);
                 None
             }
         }
@@ -113,7 +125,7 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
         let mut subscribe_pool_accounts = HashMap::new();
         subscribe_pool_accounts.insert(
-            format!("{:?}", Protocol::MeteoraDLMM),
+            format!("{:?}", DexType::MeteoraDLMM),
             SubscribeRequestFilterAccounts {
                 account: pools
                     .iter()
@@ -199,11 +211,11 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
         };
         Some(vec![
             (
-                (Protocol::MeteoraDLMM, GrpcAccountUpdateType::PoolState),
+                (DexType::MeteoraDLMM, GrpcAccountUpdateType::PoolState),
                 pool_request,
             ),
             (
-                (Protocol::MeteoraDLMM, GrpcAccountUpdateType::Clock),
+                (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
                 clock_request,
             ),
         ])
@@ -233,13 +245,17 @@ impl MeteoraDLMMSnapshotFetcher {
             .await?
             .into_iter()
             .zip(bin_arrays_for_swap.iter())
-            .map(|(account, &key)| {
-                let account = account.unwrap();
-                Some((
-                    key,
-                    BinArrayAccount::deserialize(account.data.as_ref()).ok()?.0,
-                ))
+            .filter_map(|(account, &key)| {
+                if let Some(account) = account {
+                    Some((
+                        key,
+                        BinArrayAccount::deserialize(account.data.as_ref()).ok()?.0,
+                    ))
+                } else {
+                    None
+                }
             })
+            .map(Some)
             .collect::<Option<HashMap<Pubkey, BinArray>>>()
             .context("Failed to fetch bin arrays")
     }
@@ -357,7 +373,7 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                             )
                             .await;
                         chunks_pools.push(Pool {
-                            protocol: Protocol::MeteoraDLMM,
+                            protocol: DexType::MeteoraDLMM,
                             pool_id: lb_pair_id,
                             tokens: vec![
                                 Mint {
@@ -367,7 +383,7 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                                     mint: lb_pair.token_y_mint,
                                 },
                             ],
-                            state: MeteoraDLMM(MeteoraDLMMPoolExtra::new(
+                            state: MeteoraDLMM(MeteoraDLMMPoolState::new(
                                 lb_pair,
                                 bitmap_extension,
                                 swap_for_x_bin_array_map.unwrap(),
@@ -416,15 +432,15 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
         let account = &self.update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
-            let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
-            let txn = &update_account_info
-                .txn_signature
-                .as_ref()
-                .unwrap()
-                .to_base58();
-            let txn = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::PoolState => {
+                    let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
+                    let txn = &update_account_info
+                        .txn_signature
+                        .as_ref()
+                        .unwrap()
+                        .to_base58();
+                    let txn = txn.clone();
                     let src = array_ref![data, 0, 165];
                     let (
                         volatility_accumulator,

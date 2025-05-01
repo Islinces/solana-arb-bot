@@ -1,14 +1,14 @@
-use crate::dex::Defi;
-use crate::interface::{AccountUpdate, GrpcMessage, Protocol, SourceMessage};
 use crate::arbitrage::arb_worker::Arb;
 use crate::arbitrage::message_processor::GrpcDataProcessor;
 use crate::arbitrage::Action;
+use crate::dex::Defi;
+use crate::interface::{AccountUpdate, DexType, GrpcMessage, SourceMessage};
 use async_channel::Sender;
 use burberry::{ActionSubmitter, Strategy};
+use futures_util::TryFutureExt;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
-use futures_util::TryFutureExt;
 use tokio::runtime::{Builder, Handle, RuntimeFlavor};
 use tracing::error;
 
@@ -45,17 +45,15 @@ pub struct ArbStrategy {
     event_capacity: u64,
     event_expired_mills: u64,
     grpc_worker_size: usize,
-    protocol_grpc_sender: Option<HashMap<Protocol, Sender<AccountUpdate>>>,
-    protocols: Vec<Protocol>,
+    protocol_grpc_sender: Option<HashMap<DexType, Sender<AccountUpdate>>>,
+    protocols: Vec<DexType>,
     rpc_url: String,
-    subscribe_mints: Vec<Pubkey>,
 }
 
 impl ArbStrategy {
     pub fn new(
         rpc_url: String,
-        subscribe_mints: Vec<Pubkey>,
-        protocols: Vec<Protocol>,
+        protocols: Vec<DexType>,
         event_expired_mills: Option<u64>,
         event_capacity: Option<u64>,
         grpc_worker_size: usize,
@@ -66,7 +64,6 @@ impl ArbStrategy {
             grpc_worker_size,
             protocols,
             rpc_url,
-            subscribe_mints,
             protocol_grpc_sender: None,
         }
     }
@@ -75,7 +72,7 @@ impl ArbStrategy {
 #[burberry::async_trait]
 impl Strategy<SourceMessage, Action> for ArbStrategy {
     fn name(&self) -> &str {
-        "grpc_subscribe_strategy"
+        "arb_strategy"
     }
 
     async fn sync_state(
@@ -121,13 +118,11 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
             let ready_grpc_data_receiver = ready_data_receiver.clone();
             let init_tx = init_tx.clone();
             let rpc_url = self.rpc_url.clone();
-            let subscribe_mints = self.subscribe_mints.clone();
             let _ = std::thread::Builder::new()
                 .stack_size(128 * 1024 * 1024) // 128 MB
                 .name(format!("route-worker-{:?}", index))
                 .spawn(move || {
-                    let defi =
-                        Arc::new(run_in_tokio!({ Defi::new(&rpc_url, &subscribe_mints) }).unwrap());
+                    let defi = Arc::new(run_in_tokio!({ Defi::new(&rpc_url) }).unwrap());
                     run_in_tokio!(init_tx.send(())).unwrap();
                     let arb_worker = Arb::new(defi, ready_grpc_data_receiver, swap_action_sender);
                     let _ = arb_worker.run().unwrap_or_else(|e| {
