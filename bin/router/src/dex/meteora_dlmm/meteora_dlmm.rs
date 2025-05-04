@@ -1,7 +1,8 @@
+use crate::arbitrage::types::swap::Swap;
 use crate::cache::PoolState::MeteoraDLMM;
 use crate::cache::{Mint, Pool};
-use crate::dex::common::utils::{change_data_if_not_same, SwapDirection};
-use crate::dex::meteora_dlmm::pool_state::MeteoraDLMMPoolState;
+use crate::dex::common::utils::change_data_if_not_same;
+use crate::dex::meteora_dlmm::pool_state::{MeteoraDLMMInstructionItem, MeteoraDLMMPoolState};
 use crate::dex::meteora_dlmm::sdk::commons::pda::derive_bin_array_bitmap_extension;
 use crate::dex::meteora_dlmm::sdk::commons::quote::{
     get_bin_array_pubkeys_for_swap, quote_exact_in,
@@ -10,109 +11,193 @@ use crate::dex::meteora_dlmm::sdk::interface::accounts::{
     BinArray, BinArrayAccount, BinArrayBitmapExtension, BinArrayBitmapExtensionAccount, LbPair,
     LbPairAccount,
 };
+use crate::dex::{get_ata_program, get_mint_program};
+use crate::file_db::DexJson;
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
-    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
+    InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
-use log::info;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::clock::Clock;
+use solana_program::instruction::AccountMeta;
 use solana_program::pubkey::Pubkey;
 use solana_program::sysvar::SysvarId;
 use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::error;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Clone)]
-pub struct MeteoraDLMMDex {
-    pool_info: MeteoraDLMMPoolState,
-    pool_id: Pubkey,
-    swap_direction: SwapDirection,
-    clock: Clock,
-}
+pub struct MeteoraDLMMDex;
 
-impl MeteoraDLMMDex {
-    pub fn new(pool: Pool, amount_in_mint: Pubkey, clock: Clock) -> Option<Self> {
-        if let MeteoraDLMM(data) = &pool.state {
-            let mint_0 = pool.mint_0();
-            let mint_1 = pool.mint_1();
-            if amount_in_mint != mint_0 && amount_in_mint != mint_1 {
-                return None;
-            }
-            Some(Self {
-                pool_info: data.clone(),
-                pool_id: pool.pool_id,
-                swap_direction: if mint_0 == amount_in_mint {
-                    SwapDirection::Coin2PC
+impl Quoter for MeteoraDLMMDex {
+    fn quote(
+        &self,
+        amount_in: u64,
+        in_mint: Pubkey,
+        _out_mint: Pubkey,
+        pool: &Pool,
+        clock: Arc<Clock>,
+    ) -> Option<u64> {
+        let mint_0 = pool.mint_0();
+        let mint_1 = pool.mint_1();
+        if amount_in == u64::MIN || (in_mint != mint_0 && in_mint != mint_1) {
+            return None;
+        }
+        if let MeteoraDLMM(pool_state) = &pool.state {
+            let swap_for_y = in_mint == mint_0;
+            let lp_pair_state: LbPair = pool_state.clone().into();
+            let result = quote_exact_in(
+                pool.pool_id,
+                lp_pair_state,
+                amount_in,
+                swap_for_y,
+                if swap_for_y {
+                    pool_state.swap_for_y_bin_array_map.clone()
                 } else {
-                    SwapDirection::PC2Coin
+                    pool_state.swap_for_x_bin_array_map.clone()
                 },
-                clock,
-            })
+                pool_state.bin_array_bitmap_extension,
+                clock.clone(),
+                pool_state.mint_x_transfer_fee_config,
+                pool_state.mint_y_transfer_fee_config,
+            );
+            match result {
+                Ok(quote) => Some(quote.amount_out),
+                Err(e) => {
+                    // error!(
+                    //     "dlmm swap error : {:?}, pool_id : {:?}",
+                    //     e,
+                    //     self.pool_id.to_string()
+                    // );
+                    None
+                }
+            }
         } else {
             None
         }
     }
 }
 
-impl Debug for MeteoraDLMMDex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "MeteoraDLMMDex: {},{:?}",
-            self.pool_id, self.swap_direction
-        )
+impl InstructionItemCreator for MeteoraDLMMDex {
+    fn create_instruction_item(&self, pool: &Pool, in_mint: &Pubkey) -> Option<InstructionItem> {
+        if let MeteoraDLMM(pool_state) = &pool.state {
+            let zero_to_one = in_mint == &pool.mint_0();
+            Some(InstructionItem::MeteoraDLMM(MeteoraDLMMInstructionItem {
+                pool_id: pool.pool_id,
+                mint_0: pool.mint_0(),
+                mint_1: pool.mint_1(),
+                mint_0_vault: pool_state.mint_0_vault,
+                mint_1_vault: pool_state.mint_1_vault,
+                bitmap_extension: derive_bin_array_bitmap_extension(pool.pool_id).0,
+                bin_arrays: if zero_to_one {
+                    pool_state.swap_for_y_bin_array_map.clone()
+                } else {
+                    pool_state.swap_for_x_bin_array_map.clone()
+                }
+                .keys()
+                .take(3)
+                .map(|k| k.clone())
+                .collect::<Vec<_>>(),
+                alt: pool.alt.clone(),
+                zero_to_one,
+            }))
+        } else {
+            None
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl Dex for MeteoraDLMMDex {
-    async fn quote(&self, amount_in: u64) -> Option<u64> {
-        if amount_in == u64::MIN {
-            return None;
-        }
-        let swap_for_y = self.swap_direction == SwapDirection::Coin2PC;
-        let pool_info = &self.pool_info;
-        let lp_pair_state = pool_info.clone().into();
-        let result = quote_exact_in(
-            self.pool_id,
-            lp_pair_state,
-            amount_in,
-            swap_for_y,
-            if swap_for_y {
-                pool_info.swap_for_y_bin_array_map.clone()
-            } else {
-                pool_info.swap_for_x_bin_array_map.clone()
-            },
-            pool_info.bin_array_bitmap_extension,
-            self.clock.clone(),
-            pool_info.mint_x_transfer_fee_config,
-            pool_info.mint_y_transfer_fee_config,
-        );
-        match result {
-            Ok(quote) => Some(quote.amount_out),
-            Err(e) => {
-                error!("dlmm swap error : {}", e);
-                None
+impl AccountMetaConverter for MeteoraDLMMDex {
+    fn converter(
+        &self,
+        wallet: Pubkey,
+        instruction_item: InstructionItem,
+    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+        match instruction_item {
+            InstructionItem::MeteoraDLMM(item) => {
+                let mut accounts = Vec::with_capacity(13);
+                // 1.lb pair
+                accounts.push(AccountMeta::new(item.pool_id, false));
+                // 2.bitmap extension
+                accounts.push(AccountMeta::new(item.bitmap_extension, false));
+                // 3.mint_0 vault
+                accounts.push(AccountMeta::new(item.mint_0_vault, false));
+                // 4.mint_1 vault
+                accounts.push(AccountMeta::new(item.mint_1_vault, false));
+                // 5.mint_0 ata
+                let (mint_0_ata, _) = Pubkey::find_program_address(
+                    &[
+                        &wallet.to_bytes(),
+                        &get_mint_program().to_bytes(),
+                        &item.mint_0.to_bytes(),
+                    ],
+                    &get_ata_program(),
+                );
+                accounts.push(AccountMeta::new(mint_0_ata, false));
+                // 6.mint_1 ata
+                let (mint_1_ata, _) = Pubkey::find_program_address(
+                    &[
+                        &wallet.to_bytes(),
+                        &get_mint_program().to_bytes(),
+                        &item.mint_1.to_bytes(),
+                    ],
+                    &get_ata_program(),
+                );
+                accounts.push(AccountMeta::new(mint_1_ata, false));
+                // 7.mint_0
+                accounts.push(AccountMeta::new(item.mint_0, false));
+                // 8.mint_1
+                accounts.push(AccountMeta::new(item.mint_1, false));
+                // 9.oracle
+                accounts.push(AccountMeta::new(
+                    Pubkey::from_str("39vUBP8XmUqKTb5oJWRoiEJQ7ZsKMQYdDMPohhpTEAwJ").unwrap(),
+                    false,
+                ));
+                // 10.fee account
+                accounts.push(AccountMeta::new(
+                    DexType::MeteoraDLMM.get_program_id(),
+                    true,
+                ));
+                // 11.wallet
+                accounts.push(AccountMeta::new(wallet, true));
+                // 12.mint_0 program
+                accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
+                // 13.mint_1 program
+                accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
+                // 14.Event Authority
+                accounts.push(AccountMeta::new(
+                    Pubkey::from_str("D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6").unwrap(),
+                    false,
+                ));
+                // 15.program
+                accounts.push(AccountMeta::new(
+                    DexType::MeteoraDLMM.get_program_id(),
+                    true,
+                ));
+                // 16~~.current bin array
+                let bin_arrays = item
+                    .bin_arrays
+                    .into_iter()
+                    .map(|k| AccountMeta::new(k, true))
+                    .collect::<Vec<_>>();
+                accounts.extend(bin_arrays);
+                Some((accounts, vec![item.alt]))
             }
+            _ => None,
         }
-    }
-
-    fn clone_self(&self) -> Box<dyn Dex> {
-        Box::new(self.clone())
     }
 }
 
@@ -211,7 +296,7 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
         };
         Some(vec![
             (
-                (DexType::MeteoraDLMM, GrpcAccountUpdateType::PoolState),
+                (DexType::MeteoraDLMM, GrpcAccountUpdateType::Pool),
                 pool_request,
             ),
             (
@@ -306,13 +391,23 @@ impl MeteoraDLMMSnapshotFetcher {
 impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
     async fn fetch_snapshot(
         &self,
-        pool_ids: Vec<Pubkey>,
+        pool_json: Vec<DexJson>,
         rpc_client: Arc<RpcClient>,
     ) -> Option<Vec<Pool>> {
         let mut join_set = JoinSet::new();
-        for chunks_pool_id in pool_ids.chunks(100) {
+        for chunks_dex_json in pool_json.chunks(100) {
             let rpc_client = rpc_client.clone();
-            let chunks_pool_id = chunks_pool_id.iter().map(|id| *id).collect::<Vec<Pubkey>>();
+            let chunks_pool_json = Arc::new(chunks_dex_json.to_vec());
+            let chunks_pool_id = chunks_pool_json
+                .clone()
+                .iter()
+                .map(|id| id.pool)
+                .collect::<Vec<_>>();
+            // 查询alt
+            let alt_map = self
+                .load_lookup_table_accounts(rpc_client.clone(), chunks_pool_json.clone())
+                .await
+                .unwrap();
             join_set.spawn(async move {
                 let all_pool_accounts = chunks_pool_id
                     .iter()
@@ -327,9 +422,9 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                             .value,
                     )
                     .collect::<Vec<_>>();
-                let mut chunks_pools = Vec::with_capacity(chunks_pool_id.len());
-                for (lb_pair_id, lb_pair_account) in all_pool_accounts {
-                    let lb_pair_id = *lb_pair_id;
+                let mut chunks_pools = Vec::with_capacity(all_pool_accounts.len());
+                for (index, (lb_pair_id, lb_pair_account)) in all_pool_accounts.iter().enumerate() {
+                    let lb_pair_id = **lb_pair_id;
                     if let Some(account) = lb_pair_account {
                         let lb_pair = LbPairAccount::deserialize(&account.data).unwrap().0;
                         let bitmap_extension_id = derive_bin_array_bitmap_extension(lb_pair_id).0;
@@ -372,6 +467,18 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                                 rpc_client.clone(),
                             )
                             .await;
+                        let alt = match chunks_pool_json.get(index) {
+                            None => None,
+                            Some(accounts) => Some(
+                                alt_map
+                                    .get(accounts.address_lookup_table_address.as_ref().unwrap())
+                                    .unwrap()
+                                    .clone(),
+                            ),
+                        };
+                        if alt.is_none() {
+                            continue;
+                        }
                         chunks_pools.push(Pool {
                             protocol: DexType::MeteoraDLMM,
                             pool_id: lb_pair_id,
@@ -391,13 +498,14 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                                 mint_transfer_fee_config.remove(&lb_pair.token_x_mint),
                                 mint_transfer_fee_config.remove(&lb_pair.token_y_mint),
                             )),
+                            alt: alt.unwrap(),
                         })
                     }
                 }
                 chunks_pools
             });
         }
-        let mut all_pools = Vec::with_capacity(pool_ids.len());
+        let mut all_pools = Vec::new();
         while let Some(Ok(pools)) = join_set.join_next().await {
             all_pools.extend(pools);
         }
@@ -433,7 +541,7 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
             match account_type {
-                GrpcAccountUpdateType::PoolState => {
+                GrpcAccountUpdateType::Pool => {
                     let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
                     let txn = &update_account_info
                         .txn_signature

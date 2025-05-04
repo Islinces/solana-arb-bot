@@ -2,13 +2,12 @@ use crate::dex::meteora_dlmm::pool_state::MeteoraDLMMPoolState;
 use crate::dex::pump_fun::pool_state::PumpFunPoolState;
 use crate::dex::raydium_amm::pool_state::RaydiumAMMPoolState;
 use crate::dex::raydium_clmm::pool_state::RaydiumCLMMPoolState;
-use crate::dex::raydium_clmm::sdk::tick_array::TickArrayState;
-use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use crate::interface::DexType;
+use crate::interface::{DexType, InstructionItem};
 use dashmap::DashMap;
+use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Default)]
@@ -33,6 +32,12 @@ impl PoolCache {
 }
 
 #[derive(Debug, Clone)]
+pub struct Mint {
+    pub mint: Pubkey,
+    // pub decimals: u8,
+}
+
+#[derive(Debug, Clone)]
 pub enum PoolState {
     RaydiumAMM(RaydiumAMMPoolState),
     RaydiumCLMM(RaydiumCLMMPoolState),
@@ -46,6 +51,7 @@ pub struct Pool {
     pub pool_id: Pubkey,
     pub tokens: Vec<Mint>,
     pub state: PoolState,
+    pub alt: AddressLookupTableAccount,
 }
 
 impl Pool {
@@ -55,6 +61,15 @@ impl Pool {
 
     pub fn mint_1(&self) -> Pubkey {
         self.tokens.last().unwrap().mint
+    }
+
+    pub fn another_mint(&self, mint: &Pubkey) -> Pubkey {
+        let mint_0 = self.mint_0();
+        if &mint_0 == mint {
+            self.mint_1()
+        } else {
+            mint_0
+        }
     }
 
     pub fn token_pair(&self) -> (Pubkey, Pubkey) {
@@ -74,10 +89,22 @@ impl Pool {
             PoolState::MeteoraDLMM(..) => None,
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct Mint {
-    pub mint: Pubkey,
-    // pub decimals: u8,
+    pub fn quote(
+        &self,
+        amount_in: u64,
+        in_mint: Pubkey,
+        out_mint: Pubkey,
+        clock: Arc<Clock>,
+    ) -> Option<u64> {
+        self.protocol
+            .get_quoter()
+            .quote(amount_in, in_mint, out_mint, self, clock)
+    }
+
+    pub fn to_instruction_item(&self, in_mint: &Pubkey) -> Option<InstructionItem> {
+        self.protocol
+            .get_instruction_item_creator()
+            .create_instruction_item(self, in_mint)
+    }
 }

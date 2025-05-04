@@ -4,15 +4,18 @@ use crate::dex::meteora_dlmm::sdk::commons::typedefs::SwapResult;
 use crate::dex::meteora_dlmm::sdk::extensions::bin::BinExtension;
 use crate::dex::meteora_dlmm::sdk::extensions::bin_array::BinArrayExtension;
 use crate::dex::meteora_dlmm::sdk::extensions::bin_array_bitmap::BinArrayBitmapExtExtension;
-use crate::dex::meteora_dlmm::sdk::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::sdk::interface::accounts::{
+    BinArray, BinArrayBitmapExtension, LbPair,
+};
 use crate::dex::meteora_dlmm::sdk::interface::typedefs::{ActivationType, PairStatus, PairType};
 use crate::dex::meteora_dlmm::sdk::lb_pair::LbPairExtension;
 use anchor_spl::token_2022::spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use anyhow::Result;
 use anyhow::{ensure, Context};
+use solana_program::pubkey::Pubkey;
 use solana_sdk::clock::Clock;
 use std::{collections::HashMap, ops::Deref};
-use solana_program::pubkey::Pubkey;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct SwapExactInQuote {
@@ -61,7 +64,7 @@ pub fn quote_exact_in(
     swap_for_y: bool,
     bin_arrays: HashMap<Pubkey, BinArray>,
     bitmap_extension: Option<BinArrayBitmapExtension>,
-    clock: Clock,
+    clock: Arc<Clock>,
     mint_x_account: Option<TransferFeeConfig>,
     mint_y_account: Option<TransferFeeConfig>,
 ) -> Result<SwapExactInQuote> {
@@ -88,9 +91,10 @@ pub fn quote_exact_in(
             .amount;
 
     let mut amount_left = transfer_fee_excluded_amount_in;
-
+    let mut loop_count = 0;
     // 循环swap，直到amount_in交换完
     while amount_left > 0 {
+        loop_count += 1;
         // 查找第一个有流动性的bin_array
         let active_bin_array_pubkey = get_bin_array_pubkeys_for_swap(
             lb_pair_pubkey,

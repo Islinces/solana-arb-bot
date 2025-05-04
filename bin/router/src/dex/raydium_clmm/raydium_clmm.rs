@@ -1,144 +1,82 @@
-use crate::cache::PoolState::RaydiumCLMM;
-use crate::cache::{Mint, Pool};
-use crate::dex::common::utils::{change_data_if_not_same, SwapDirection};
-use crate::dex::raydium_clmm::pool_state::RaydiumCLMMPoolState;
+use crate::cache::{Mint, Pool, PoolState};
+use crate::dex::common::utils::change_data_if_not_same;
+use crate::dex::raydium_clmm::pool_state::{RaydiumCLMMInstructionItem, RaydiumCLMMPoolState};
 use crate::dex::raydium_clmm::sdk::config::AmmConfig;
-use crate::dex::raydium_clmm::sdk::pool::PoolState;
-use crate::dex::raydium_clmm::sdk::tick_array::TickArrayState;
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::raydium_clmm::sdk::utils::{
     deserialize_anchor_account, load_cur_and_next_specify_count_tick_array,
 };
 use crate::dex::raydium_clmm::sdk::{config, utils};
+use crate::dex::{get_ata_program, get_mint_program};
+use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::RaydiumCLMMData;
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
-    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
+    InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
-use log::warn;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::address_lookup_table::AddressLookupTableAccount;
+use solana_program::clock::Clock;
+use solana_program::instruction::AccountMeta;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
-use std::collections::{HashMap, VecDeque};
-use std::fmt::{Debug, Formatter};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::{debug, error};
+use tracing::error;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Clone)]
-pub struct RaydiumCLMMDex {
-    pool_id: Pubkey,
-    swap_direction: SwapDirection,
-    mint_0: Pubkey,
-    mint_1: Pubkey,
-    tick_spacing: u16,
-    trade_fee_rate: u32,
-    liquidity: u128,
-    sqrt_price_x64: u128,
-    tick_current: i32,
-    tick_array_bitmap: [u64; 16],
-    tick_array_bitmap_extension: TickArrayBitmapExtension,
-    zero_to_one_tick_array_states: Option<VecDeque<TickArrayState>>,
-    one_to_zero_tick_array_states: Option<VecDeque<TickArrayState>>,
-}
+pub struct RaydiumCLMMDex;
 
-impl RaydiumCLMMDex {
-    pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
-        if let RaydiumCLMM(pool_state) = pool.state.clone() {
-            Some(Self {
-                swap_direction: if amount_in_mint == pool.mint_0() {
-                    SwapDirection::Coin2PC
-                } else {
-                    SwapDirection::PC2Coin
-                },
-                pool_id: pool.pool_id,
-                mint_0: pool.mint_0(),
-                mint_1: pool.mint_1(),
-                tick_current: pool_state.tick_current,
-                tick_spacing: pool_state.tick_spacing,
-                trade_fee_rate: pool_state.trade_fee_rate,
-                liquidity: pool_state.liquidity,
-                sqrt_price_x64: pool_state.sqrt_price_x64,
-                tick_array_bitmap: pool_state.tick_array_bitmap,
-                tick_array_bitmap_extension: pool_state.tick_array_bitmap_extension,
-                zero_to_one_tick_array_states: pool_state.zero_to_one_tick_array_states,
-                one_to_zero_tick_array_states: pool_state.one_to_zero_tick_array_states,
-            })
-        } else {
-            None
-        }
-    }
-
-    fn get_out_put_amount_and_remaining_accounts(
-        input_amount: u64,
-        sqrt_price_limit_x64: Option<u128>,
-        zero_for_one: bool,
-        is_base_input: bool,
-        pool_config: &AmmConfig,
-        pool_state: &PoolState,
-        tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
-        tick_arrays: &mut VecDeque<TickArrayState>,
-    ) -> Result<(u64, u64, VecDeque<i32>), &'static str> {
-        utils::get_out_put_amount_and_remaining_accounts(
-            input_amount,
-            sqrt_price_limit_x64,
-            zero_for_one,
-            is_base_input,
-            pool_config,
-            pool_state,
-            tickarray_bitmap_extension,
-            tick_arrays,
-        )
-    }
-}
-
-impl Debug for RaydiumCLMMDex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "RaydiumCLMMDex: {},{:?}",
-            self.pool_id, self.swap_direction
-        )
-    }
-}
-
-#[async_trait::async_trait]
-impl Dex for RaydiumCLMMDex {
-    async fn quote(&self, amount_in: u64) -> Option<u64> {
-        if amount_in == u64::MIN {
+impl Quoter for RaydiumCLMMDex {
+    fn quote(
+        &self,
+        amount_in: u64,
+        in_mint: Pubkey,
+        _out_mint: Pubkey,
+        pool: &Pool,
+        _clock: Arc<Clock>,
+    ) -> Option<u64> {
+        if amount_in == u64::MIN || (in_mint != pool.mint_0() && in_mint != pool.mint_1()) {
             return None;
         }
-        //TODO：优化计算参数
-        let mut amm_config = AmmConfig::default();
-        amm_config.trade_fee_rate = self.trade_fee_rate;
-        let mut pool_state = PoolState::default();
-        pool_state.tick_current = self.tick_current;
-        pool_state.tick_spacing = self.tick_spacing;
-        pool_state.tick_array_bitmap = self.tick_array_bitmap;
-        pool_state.liquidity = self.liquidity;
-        pool_state.sqrt_price_x64 = self.sqrt_price_x64;
-
-        let (zero_for_one, mut tick_arrays) = match self.swap_direction {
-            SwapDirection::PC2Coin => (false, self.one_to_zero_tick_array_states.clone()),
-            SwapDirection::Coin2PC => (true, self.zero_to_one_tick_array_states.clone()),
-        };
-        if let Some(mut tick_arrays) = tick_arrays {
-            let result = Self::get_out_put_amount_and_remaining_accounts(
+        if let PoolState::RaydiumCLMM(pool_state) = &pool.state {
+            //TODO：优化计算参数
+            let mut amm_config = AmmConfig::default();
+            amm_config.trade_fee_rate = pool_state.trade_fee_rate;
+            let mut clmm_pool_state = crate::dex::raydium_clmm::sdk::pool::PoolState::default();
+            clmm_pool_state.tick_current = pool_state.tick_current;
+            clmm_pool_state.tick_spacing = pool_state.tick_spacing;
+            clmm_pool_state.tick_array_bitmap = pool_state.tick_array_bitmap;
+            clmm_pool_state.liquidity = pool_state.liquidity;
+            clmm_pool_state.sqrt_price_x64 = pool_state.sqrt_price_x64;
+            let (zero_for_one, mut tick_arrays) = if in_mint == pool.mint_0() {
+                (
+                    true,
+                    pool_state.one_to_zero_tick_array_states.clone().unwrap(),
+                )
+            } else {
+                (
+                    false,
+                    pool_state.zero_to_one_tick_array_states.clone().unwrap(),
+                )
+            };
+            let result = utils::get_out_put_amount_and_remaining_accounts(
                 amount_in,
                 None,
                 zero_for_one,
                 true,
                 &amm_config,
-                &pool_state,
-                &Some(self.tick_array_bitmap_extension),
+                &clmm_pool_state,
+                &Some(pool_state.tick_array_bitmap_extension),
                 &mut tick_arrays,
             );
             match result {
@@ -149,27 +87,123 @@ impl Dex for RaydiumCLMMDex {
                 }
             }
         } else {
-            warn!(
-                "【RaydiumDLMM】池子【{:?}】方向【{:?}】没有TickArrayState",
-                self.pool_id, self.swap_direction
-            );
             None
         }
     }
+}
 
-    fn clone_self(&self) -> Box<dyn Dex> {
-        Box::new(self.clone())
+impl InstructionItemCreator for RaydiumCLMMDex {
+    fn create_instruction_item(&self, pool: &Pool, in_mint: &Pubkey) -> Option<InstructionItem> {
+        if let PoolState::RaydiumCLMM(pool_state) = &pool.state {
+            let zero_to_one = in_mint == &pool.mint_0();
+            Some(InstructionItem::RaydiumCLMM(RaydiumCLMMInstructionItem {
+                pool_id: pool.pool_id,
+                amm_config: pool_state.amm_config,
+                mint_0: pool.mint_0(),
+                mint_1: pool.mint_1(),
+                mint_0_vault: pool_state.mint_0_vault,
+                mint_1_vault: pool_state.mint_1_vault,
+                observation_key: pool_state.observation_key,
+                tick_arrays: if zero_to_one {
+                    pool_state.zero_to_one_tick_array_states.clone()
+                } else {
+                    pool_state.one_to_zero_tick_array_states.clone()
+                }
+                .unwrap()
+                .iter()
+                .take(3)
+                .map(|a| {
+                    Pubkey::find_program_address(
+                        &[
+                            crate::dex::raydium_clmm::sdk::tick_array::TICK_ARRAY_SEED.as_bytes(),
+                            pool.pool_id.to_bytes().as_ref(),
+                            &a.start_tick_index.to_le_bytes(),
+                        ],
+                        &DexType::RaydiumCLmm.get_program_id(),
+                    )
+                    .0
+                })
+                .collect::<Vec<_>>(),
+                alt: pool.alt.clone(),
+                zero_to_one,
+            }))
+        } else {
+            None
+        }
     }
 }
 
-pub struct RaydiumClmmGrpcMessageOperator {
+impl AccountMetaConverter for RaydiumCLMMDex {
+    fn converter(
+        &self,
+        wallet: Pubkey,
+        instruction_item: InstructionItem,
+    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+        match instruction_item {
+            InstructionItem::RaydiumCLMM(item) => {
+                let mut accounts = Vec::with_capacity(11);
+                // 1. wallet
+                accounts.push(AccountMeta::new(wallet, true));
+                // 2.amm config
+                accounts.push(AccountMeta::new_readonly(item.amm_config, false));
+                // 3.pool state
+                accounts.push(AccountMeta::new(item.pool_id, false));
+                // 4.coin mint ata
+                let (coin_ata, _) = Pubkey::find_program_address(
+                    &[
+                        &wallet.to_bytes(),
+                        &get_mint_program().to_bytes(),
+                        &item.mint_0.to_bytes(),
+                    ],
+                    &get_ata_program(),
+                );
+                accounts.push(AccountMeta::new(coin_ata, false));
+                // 5.pc mint ata
+                let (pc_ata, _) = Pubkey::find_program_address(
+                    &[
+                        &wallet.to_bytes(),
+                        &get_mint_program().to_bytes(),
+                        &item.mint_1.to_bytes(),
+                    ],
+                    &get_ata_program(),
+                );
+                accounts.push(AccountMeta::new(pc_ata, false));
+                // 6.base mint vault
+                accounts.push(AccountMeta::new(item.mint_0_vault, false));
+                // 7.quote mint vault
+                accounts.push(AccountMeta::new(item.mint_1_vault, false));
+                // 8.Observation State
+                accounts.push(AccountMeta::new(item.observation_key, false));
+                // 9.mint program
+                accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
+                // 10.current tick array
+                let mut tick_arrays = item
+                    .tick_arrays
+                    .into_iter()
+                    .map(|k| AccountMeta::new(k, false))
+                    .collect::<Vec<_>>();
+                accounts.push(tick_arrays.remove(0));
+                // 11.bitmap_extension
+                accounts.push(AccountMeta::new_readonly(
+                    TickArrayBitmapExtension::key(item.pool_id),
+                    false,
+                ));
+                accounts.extend(tick_arrays);
+                Some((accounts, vec![item.alt]))
+            }
+            _ => None,
+        }
+    }
+}
+
+pub struct RaydiumCLMMGrpcMessageOperator {
     update_account: AccountUpdate,
     txn: Option<String>,
     pool_id: Option<Pubkey>,
     grpc_message: Option<GrpcMessage>,
 }
 
-impl RaydiumClmmGrpcMessageOperator {
+impl RaydiumCLMMGrpcMessageOperator {
     pub fn new(update_account: AccountUpdate) -> Self {
         Self {
             update_account,
@@ -179,7 +213,7 @@ impl RaydiumClmmGrpcMessageOperator {
         }
     }
 }
-impl ReadyGrpcMessageOperator for RaydiumClmmGrpcMessageOperator {
+impl ReadyGrpcMessageOperator for RaydiumCLMMGrpcMessageOperator {
     fn parse_message(&mut self) -> Result<()> {
         let account_type = &self.update_account.account_type;
         let account = &self.update_account.account;
@@ -193,7 +227,7 @@ impl ReadyGrpcMessageOperator for RaydiumClmmGrpcMessageOperator {
                 .to_base58();
             let txn = txn.clone();
             match account_type {
-                GrpcAccountUpdateType::PoolState => {
+                GrpcAccountUpdateType::Pool => {
                     let src = array_ref![data, 0, 180];
                     let (
                         liquidity,
@@ -239,9 +273,9 @@ impl ReadyGrpcMessageOperator for RaydiumClmmGrpcMessageOperator {
     }
 }
 
-pub struct RaydiumClmmSubscribeRequestCreator;
+pub struct RaydiumCLMMSubscribeRequestCreator;
 
-impl GrpcSubscribeRequestGenerator for RaydiumClmmSubscribeRequestCreator {
+impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
     fn create_subscribe_requests(
         &self,
         pools: &[Pool],
@@ -295,16 +329,16 @@ impl GrpcSubscribeRequestGenerator for RaydiumClmmSubscribeRequestCreator {
             ..Default::default()
         };
         Some(vec![(
-            (DexType::RaydiumCLmm, GrpcAccountUpdateType::PoolState),
+            (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
             pool_request,
         )])
     }
 }
 
-pub struct RaydiumClmmSnapshotFetcher;
+pub struct RaydiumCLMMSnapshotFetcher;
 
-impl RaydiumClmmSnapshotFetcher {
-    fn generate_all_config_keys() -> Vec<Pubkey> {
+impl RaydiumCLMMSnapshotFetcher {
+    async fn generate_all_config_keys(&self, rpc_client: Arc<RpcClient>) -> HashMap<Pubkey, u32> {
         let mut all_amm_config_keys = Vec::new();
         for index in 0..9 {
             let index = index as u16;
@@ -314,28 +348,16 @@ impl RaydiumClmmSnapshotFetcher {
             );
             all_amm_config_keys.push(amm_config_key);
         }
-        all_amm_config_keys
-    }
-}
-
-#[async_trait::async_trait]
-impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
-    async fn fetch_snapshot(
-        &self,
-        pool_ids: Vec<Pubkey>,
-        rpc_client: Arc<RpcClient>,
-    ) -> Option<Vec<Pool>> {
-        let all_config_keys = RaydiumClmmSnapshotFetcher::generate_all_config_keys();
-        let amm_config_map = rpc_client
+        rpc_client
             .get_multiple_accounts_with_commitment(
-                all_config_keys.as_slice(),
+                all_amm_config_keys.as_slice(),
                 CommitmentConfig::finalized(),
             )
             .await
             .unwrap()
             .value
             .into_iter()
-            .zip(all_config_keys)
+            .zip(all_amm_config_keys)
             .filter_map(|(account, config_key)| {
                 if let Ok(amm_config_state) =
                     deserialize_anchor_account::<config::AmmConfig>(account.as_ref().unwrap())
@@ -345,36 +367,43 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                     None
                 }
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<HashMap<_, _>>()
+    }
+}
+
+#[async_trait::async_trait]
+impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
+    async fn fetch_snapshot(
+        &self,
+        pool_json: Vec<DexJson>,
+        rpc_client: Arc<RpcClient>,
+    ) -> Option<Vec<Pool>> {
+        let amm_config_map = self.generate_all_config_keys(rpc_client.clone()).await;
         let amm_config_map = Arc::new(amm_config_map);
         let mut join_set = JoinSet::new();
-        // pool_id 和 bitmap_extension_id 每个pool按照顺序排列
-        let pool_id_and_bitmap_extension_id_pairs = pool_ids
-            .iter()
-            .zip(
-                pool_ids
-                    .iter()
-                    .map(|pool_id| TickArrayBitmapExtension::key(*pool_id))
-                    .collect::<Vec<_>>(),
-            )
-            .flat_map(|(pool_id, bitmap_extension_id)| vec![*pool_id, bitmap_extension_id])
-            .collect::<Vec<_>>();
-        // 一次执行100个pool
-        for chunks_one_pools in pool_id_and_bitmap_extension_id_pairs.chunks(100 * 2) {
-            // chunks_one_pools[0]: pool_id
-            // chunks_one_pools[1]: bitmap_extension_id
-            let chunks_pool_ids = chunks_one_pools.to_vec();
+        let pool_ids = pool_json.iter().map(|json| json.pool).collect::<Vec<_>>();
+        for chunks_pool in pool_json.chunks(100) {
+            let chunks_pool_json = Arc::new(chunks_pool.to_vec());
+            let chunks_one_pool_keys = chunks_pool_json
+                .clone()
+                .iter()
+                .flat_map(|pool| vec![pool.pool, TickArrayBitmapExtension::key(pool.pool)])
+                .collect::<Vec<_>>();
             let rpc_client = rpc_client.clone();
             let amm_config_map = amm_config_map.clone();
+            let alt_map = self
+                .load_lookup_table_accounts(rpc_client.clone(), chunks_pool_json.clone())
+                .await
+                .unwrap();
             join_set.spawn(async move {
-                let mut pools = Vec::with_capacity(chunks_pool_ids.len());
+                let mut pools = Vec::with_capacity(chunks_one_pool_keys.len());
                 // 一次性查询100个pool和对应的bitmap_extension
-                let pool_and_bitmap_extension_account_pair = chunks_pool_ids
+                let pool_and_bitmap_extension_account_pair = chunks_one_pool_keys
                     .iter()
                     .zip(
                         rpc_client
                             .get_multiple_accounts_with_commitment(
-                                &chunks_pool_ids,
+                                &chunks_one_pool_keys,
                                 CommitmentConfig::finalized(),
                             )
                             .await
@@ -382,7 +411,9 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                             .value,
                     )
                     .collect::<Vec<_>>();
-                for one_pool_pair in pool_and_bitmap_extension_account_pair.chunks(2) {
+                for (index, one_pool_pair) in
+                    pool_and_bitmap_extension_account_pair.chunks(2).enumerate()
+                {
                     let pool_pair = &one_pool_pair[0];
                     let bitmap_extension_pair = &one_pool_pair[1];
                     if let (pool_id, Some(pool_account)) = pool_pair {
@@ -390,8 +421,10 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                         if let (_bitmap_extension_id, Some(bitmap_extension_account)) =
                             bitmap_extension_pair
                         {
-                            let pool_state =
-                                deserialize_anchor_account::<PoolState>(pool_account).unwrap();
+                            let pool_state = deserialize_anchor_account::<
+                                crate::dex::raydium_clmm::sdk::pool::PoolState,
+                            >(pool_account)
+                            .unwrap();
                             let tick_array_bitmap_extension =
                                 deserialize_anchor_account::<TickArrayBitmapExtension>(
                                     bitmap_extension_account,
@@ -421,6 +454,20 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                                 .await;
                             let trade_fee_rate =
                                 amm_config_map.get(&pool_state.amm_config).unwrap().clone();
+                            let alt = match chunks_pool_json.get(index) {
+                                None => None,
+                                Some(accounts) => Some(
+                                    alt_map
+                                        .get(
+                                            accounts.address_lookup_table_address.as_ref().unwrap(),
+                                        )
+                                        .unwrap()
+                                        .clone(),
+                                ),
+                            };
+                            if alt.is_none() {
+                                continue;
+                            }
                             pools.push(Pool {
                                 protocol: DexType::RaydiumCLmm,
                                 pool_id,
@@ -432,7 +479,11 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                                         mint: pool_state.token_mint_1.clone(),
                                     },
                                 ],
-                                state: RaydiumCLMM(RaydiumCLMMPoolState {
+                                state: PoolState::RaydiumCLMM(RaydiumCLMMPoolState {
+                                    amm_config: pool_state.amm_config,
+                                    mint_0_vault: pool_state.token_vault_0,
+                                    mint_1_vault: pool_state.token_vault_1,
+                                    observation_key: pool_state.observation_key,
                                     tick_spacing: pool_state.tick_spacing,
                                     trade_fee_rate,
                                     liquidity: pool_state.liquidity,
@@ -443,6 +494,7 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
                                     zero_to_one_tick_array_states,
                                     one_to_zero_tick_array_states,
                                 }),
+                                alt: alt.unwrap(),
                             })
                         }
                     }
@@ -462,14 +514,14 @@ impl AccountSnapshotFetcher for RaydiumClmmSnapshotFetcher {
     }
 }
 
-pub struct RaydiumClmmCacheUpdater {
+pub struct RaydiumCLMMCacheUpdater {
     tick_current: i32,
     liquidity: u128,
     sqrt_price_x64: u128,
     tick_array_bitmap: [u64; 16],
 }
 
-impl RaydiumClmmCacheUpdater {
+impl RaydiumCLMMCacheUpdater {
     pub fn new(grpc_message: GrpcMessage) -> Result<Self> {
         if let RaydiumCLMMData {
             tick_current,
@@ -491,14 +543,16 @@ impl RaydiumClmmCacheUpdater {
     }
 }
 
-impl CacheUpdater for RaydiumClmmCacheUpdater {
+impl CacheUpdater for RaydiumCLMMCacheUpdater {
     fn update_cache(&self, pool: &mut Pool) -> anyhow::Result<()> {
-        if let RaydiumCLMM(ref mut pool_state) = pool.state
-        {
+        if let PoolState::RaydiumCLMM(ref mut pool_state) = pool.state {
             if change_data_if_not_same(&mut pool_state.liquidity, self.liquidity)
                 || change_data_if_not_same(&mut pool_state.tick_current, self.tick_current)
                 || change_data_if_not_same(&mut pool_state.sqrt_price_x64, self.sqrt_price_x64)
-                || change_data_if_not_same(&mut pool_state.tick_array_bitmap, self.tick_array_bitmap)
+                || change_data_if_not_same(
+                    &mut pool_state.tick_array_bitmap,
+                    self.tick_array_bitmap,
+                )
             {
                 Ok(())
             } else {

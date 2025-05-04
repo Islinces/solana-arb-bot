@@ -1,6 +1,5 @@
-use chrono::{Local, Utc};
+use chrono::Local;
 use router::start_bot;
-use std::path::PathBuf;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -19,15 +18,13 @@ impl FormatTime for MicrosecondFormatter {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let filter = EnvFilter::new("info")
-        // .add_directive("router=debug".parse().unwrap())
-        ;
+    let filter = EnvFilter::new("info");
     let file_appender = RollingFileAppender::builder()
         .filename_prefix("app")
         .filename_suffix("log")
         .rotation(Rotation::DAILY)
         .build("./logs")
-        .expect("TODO: panic message");
+        .expect("构建file_appender失败");
     let (non_blocking_writer, _guard) = non_blocking(file_appender);
     tracing_subscriber::registry()
         .with(
@@ -36,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
                 .with_writer(non_blocking_writer)
                 .with_thread_ids(true)
                 .with_thread_names(true)
-                .with_span_events(FmtSpan::CLOSE),
+                .with_span_events(FmtSpan::NONE),
         )
         .with(filter)
         .init();

@@ -44,16 +44,19 @@ async-channel.workspace = true
 moka.workspace = true
 uint = { workspace = true }
 anchor-spl = { workspace = true }
+spl-associated-token-account.workspace = true
+reqwest.workspace = true
 arrayref = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 
 num-integer = "0.1.45"
-log = "0.4.27"
 anchor-client.workspace = true
 ruint.version = "1.3.0"
 spl-transfer-hook-interface.version = "0.5.0"
-
+log = "0.4.27"
+rand = "0.8.5"
+base64.workspace = true
 [patch.crates-io]
 # 强制所有依赖使用同一个 borsh 版本（如果兼容）
 borsh = { version = "^1.5", features = ["derive"], package = "borsh" }

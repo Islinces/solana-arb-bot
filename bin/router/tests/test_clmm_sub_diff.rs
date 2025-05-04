@@ -2,14 +2,6 @@ use base58::ToBase58;
 use chrono::Local;
 use futures_util::future::ok;
 use futures_util::stream::FuturesUnordered;
-use log::{error, info};
-use raydium_amm::state::{AmmInfo, Loadable};
-use raydium_clmm::sdk::pool;
-use raydium_clmm::sdk::pool::{PoolState, RewardInfo, REWARD_NUM};
-use raydium_clmm::sdk::tick_array::{TickArrayState, TickState, TICK_ARRAY_SIZE_USIZE};
-use raydium_clmm::sdk::tick_math::get_tick_at_sqrt_price;
-use raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use raydium_clmm::sdk::utils::{deserialize_anchor_account, deserialize_anchor_bytes};
 use serde::{Deserialize, Serialize};
 use serde_diff::{Diff, SerdeDiff};
 use solana_program::pubkey::Pubkey;
@@ -20,6 +12,14 @@ use std::io::Write;
 use std::ops::Sub;
 use std::process::exit;
 use std::time::Duration;
+use tracing::{error, info};
+use tracing_appender::non_blocking;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use yellowstone_grpc_client::{GeyserGrpcClient, GeyserGrpcClientResult, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
@@ -27,6 +27,10 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions, SubscribeUpdateAccount,
 };
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::StreamExt;
+use router::dex::common::utils::deserialize_anchor_bytes;
+use router::dex::raydium_clmm::sdk::pool::PoolState;
+use router::dex::raydium_clmm::sdk::tick_array::{TickArrayState, TickState};
+use router::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 
 #[test]
 fn test() {
@@ -34,22 +38,36 @@ fn test() {
     println!("price : {:?}", u128::from_le_bytes(slice));
 }
 
+pub struct MicrosecondFormatter;
+
+impl FormatTime for MicrosecondFormatter {
+    fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
+        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S%.6f"))
+    }
+}
+
 #[tokio::test]
 async fn main() {
-    env::set_var(
-        env_logger::DEFAULT_FILTER_ENV,
-        env::var_os(env_logger::DEFAULT_FILTER_ENV).unwrap_or_else(|| "info".into()),
-    );
-    env_logger::builder()
-        .format(|buf, record| {
-            write!(
-                buf,
-                "{} [{}] - {}\n",
-                Local::now().format("%Y-%m-%d %H:%M:%S%.9f"),
-                record.level(),
-                record.args()
-            )
-        })
+    let filter = EnvFilter::new("info")
+        // .add_directive("router=debug".parse().unwrap())
+        ;
+    let file_appender = RollingFileAppender::builder()
+        .filename_prefix("app")
+        .filename_suffix("log")
+        .rotation(Rotation::DAILY)
+        .build("./logs")
+        .expect("TODO: panic message");
+    let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                .with_timer(MicrosecondFormatter)
+                .with_writer(non_blocking_writer)
+                .with_thread_ids(true)
+                .with_thread_names(true)
+                .with_span_events(FmtSpan::CLOSE),
+        )
+        .with(filter)
         .init();
 
     let _ = sub().await;
@@ -141,7 +159,7 @@ async fn sub() -> anyhow::Result<()> {
                                 let mut tick_chaned=None;
                                 match pubkey.as_str(){
                                     "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv" =>{
-                                        let state = deserialize_anchor_bytes::<pool::PoolState>(account_info.data.as_slice()).unwrap();
+                                        let state = deserialize_anchor_bytes::<PoolState>(account_info.data.as_slice()).unwrap();
                                         let current=state.tick_current;
                                         let previous= match previous_tick_index{
                                             None=>{

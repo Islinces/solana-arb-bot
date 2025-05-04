@@ -1,33 +1,34 @@
-use crate::dex::Defi;
+use crate::dex::DexData;
 use crate::interface::{AccountUpdate, SubscribeKey};
 use burberry::{async_trait, Collector, CollectorStream};
-use solana_program::clock::Clock;
-use solana_program::pubkey::Pubkey;
-use solana_program::sysvar::SysvarId;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
-use yellowstone_grpc_proto::geyser::{SubscribeRequest, SubscribeUpdate};
+use yellowstone_grpc_proto::geyser::SubscribeUpdate;
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::{Stream, StreamExt, StreamMap};
 use yellowstone_grpc_proto::tonic::Status;
 
 pub struct GrpcMessageCollector {
-    rpc_url: String,
+    rpc_client: Arc<RpcClient>,
     grpc_url: &'static str,
 }
 
 impl GrpcMessageCollector {
-    pub fn new(rpc_url: String, grpc_url: &'static str) -> Self {
-        Self { rpc_url, grpc_url }
+    pub fn new(rpc_client: Arc<RpcClient>, grpc_url: &'static str) -> Self {
+        Self {
+            rpc_client,
+            grpc_url,
+        }
     }
 
     async fn connect_grpc_server(
         &self,
     ) -> anyhow::Result<StreamMap<SubscribeKey, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
-        let defi = Defi::new(&self.rpc_url).await?;
-        let pools = defi.get_all_pools().unwrap();
+        let dex = DexData::new_only_cache_holder(self.rpc_client.clone()).await?;
         // TODO：支持配置GRPC参数
         let mut grpc_client = GeyserGrpcClient::build_from_static(self.grpc_url)
             .tcp_nodelay(true)
@@ -43,7 +44,7 @@ impl GrpcMessageCollector {
                 anyhow::anyhow!(e)
             })?;
         let mut subscrbeitions = StreamMap::new();
-        for (protocol, pools) in pools.into_iter() {
+        for (protocol, pools) in dex.get_all_pools().unwrap().into_iter() {
             let subscribe_requests = protocol
                 .get_subscribe_request_generator()
                 .map(|generator| generator.create_subscribe_requests(&pools));
@@ -72,7 +73,6 @@ impl GrpcMessageCollector {
                 loop {
                     tokio::select! {
                         _ = ping.tick() => {
-                            debug!("GRPC订阅: PING...");
                             if let Err(e)=grpc_client.ping(1).await{
                                 error!("GRPC PING 失败，{}",e);
                             }
@@ -80,7 +80,6 @@ impl GrpcMessageCollector {
                     }
                 }
             });
-
             info!(
                 "GRPC订阅: 订阅成功列表【{:#?}】",
                 subscrbeitions
@@ -106,7 +105,6 @@ impl Collector<AccountUpdate> for GrpcMessageCollector {
                             continue;
                         }
                         if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            info!("GRPC推送消息: {:?}",protocol);
                             yield AccountUpdate{
                                 protocol,
                                 account_type,

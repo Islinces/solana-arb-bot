@@ -1,13 +1,18 @@
 use crate::dex::meteora_dlmm::sdk::interface::accounts::{
     BinArray, BinArrayBitmapExtension, LbPair,
 };
+use crate::interface::DexType;
+use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::collections::HashMap;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub struct MeteoraDLMMPoolState {
     // ======================启动时初始化即可==============================
+    pub mint_0_vault: Pubkey,
+    pub mint_1_vault: Pubkey,
     // 1，5，8，10，16，80，100
     pub bin_step: u16,
     pub status: u8,
@@ -55,6 +60,8 @@ impl MeteoraDLMMPoolState {
         mint_y_transfer_fee_config: Option<TransferFeeConfig>,
     ) -> Self {
         Self {
+            mint_0_vault: lb_pair.reserve_x,
+            mint_1_vault: lb_pair.reserve_y,
             bin_step: lb_pair.bin_step,
             status: lb_pair.status,
             activation_point: lb_pair.activation_point,
@@ -104,5 +111,30 @@ impl Into<LbPair> for MeteoraDLMMPoolState {
         lb_pair.v_parameters.index_reference = self.index_reference;
         lb_pair.v_parameters.last_update_timestamp = self.last_update_timestamp;
         lb_pair
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MeteoraDLMMInstructionItem {
+    pub pool_id: Pubkey,
+    pub mint_0: Pubkey,
+    pub mint_1: Pubkey,
+    pub mint_0_vault: Pubkey,
+    pub mint_1_vault: Pubkey,
+    pub bitmap_extension: Pubkey,
+    pub bin_arrays: Vec<Pubkey>,
+    pub alt: AddressLookupTableAccount,
+    pub zero_to_one: bool,
+}
+
+impl Display for MeteoraDLMMInstructionItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}: {},{:?}",
+            DexType::MeteoraDLMM,
+            self.pool_id,
+            self.zero_to_one
+        )
     }
 }

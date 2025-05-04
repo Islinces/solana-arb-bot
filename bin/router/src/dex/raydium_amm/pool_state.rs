@@ -1,4 +1,7 @@
+use crate::interface::DexType;
+use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub struct RaydiumAMMPoolState {
@@ -33,5 +36,28 @@ impl RaydiumAMMPoolState {
             swap_fee_numerator,
             swap_fee_denominator,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RaydiumAMMInstructionItem {
+    pub pool_id: Pubkey,
+    pub mint_0: Pubkey,
+    pub mint_1: Pubkey,
+    pub mint_0_vault: Pubkey,
+    pub mint_1_vault: Pubkey,
+    pub alt: AddressLookupTableAccount,
+    pub zero_to_one: bool,
+}
+
+impl Display for RaydiumAMMInstructionItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}: {},{:?}",
+            DexType::RaydiumAMM,
+            self.pool_id,
+            self.zero_to_one
+        )
     }
 }

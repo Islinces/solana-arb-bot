@@ -33,17 +33,9 @@ pub fn deserialize_anchor_bytes<T: AccountDeserialize>(data: &[u8]) -> anyhow::R
     T::try_deserialize(&mut data).map_err(Into::into)
 }
 
-pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> anchor_lang::Result<T> {
+pub fn deserialize_anchor_account<T: AccountDeserialize>(
+    account: &Account,
+) -> anchor_lang::Result<T> {
     let mut data: &[u8] = &account.data;
     T::try_deserialize(&mut data).map_err(Into::into)
 }
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[repr(u64)]
-pub enum SwapDirection {
-    /// Input token pc, output token coin
-    PC2Coin = 1u64,
-    /// Input token coin, output token pc
-    Coin2PC = 2u64,
-}
-

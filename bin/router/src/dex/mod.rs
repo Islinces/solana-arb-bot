@@ -1,14 +1,15 @@
 use crate::cache::{Pool, PoolCache};
 use crate::file_db::FileDB;
-use crate::interface::{Dex, DexType, GrpcMessage, DB};
+use crate::interface::{DexType, GrpcMessage, InstructionItem, DB};
 use anyhow::anyhow;
 use dashmap::{DashMap, Entry};
+use num_traits::Pow;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
 use solana_program::sysvar::SysvarId;
 use std::collections::{HashMap, HashSet};
-use std::ops::Sub;
+use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
@@ -21,44 +22,67 @@ pub mod pump_fun;
 pub mod raydium_amm;
 pub mod raydium_clmm;
 
-static INDEXER: OnceCell<Arc<DexIndexer>> = OnceCell::const_new();
+const MINT_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";
+const ATA_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 
-#[derive(Clone)]
-pub struct Defi {
-    indexer: Arc<DexIndexer>,
+pub fn get_mint_program() -> Pubkey {
+    Pubkey::from_str(MINT_PROGRAM).unwrap()
 }
 
-impl Defi {
-    pub async fn new(rpc_url: &str) -> anyhow::Result<Self> {
-        let indexer = INDEXER
-            .get_or_init(|| async {
-                let indexer = DexIndexer::new(rpc_url).await;
-                Arc::new(indexer)
-            })
+pub fn get_ata_program() -> Pubkey {
+    Pubkey::from_str(ATA_PROGRAM).unwrap()
+}
+
+pub fn get_system_program() -> Pubkey {
+    Pubkey::from_str(SYSTEM_PROGRAM).unwrap()
+}
+
+static POOL_CACHE_HOLDER: OnceCell<Arc<PoolCacheHolder>> = OnceCell::const_new();
+
+#[derive(Clone, Default)]
+pub struct DexData {
+    pool_cache_holder: Arc<PoolCacheHolder>,
+    sol_ata_amount: Arc<u64>,
+    max_amount_in_numerator: u8,
+    max_amount_in_denominator: u8,
+}
+
+impl DexData {
+    pub async fn new_only_cache_holder(rpc_client: Arc<RpcClient>) -> anyhow::Result<Self> {
+        // 单例
+        let pool_cache_holder = POOL_CACHE_HOLDER
+            .get_or_init(|| async { Arc::new(PoolCacheHolder::new(rpc_client).await) })
             .await
             .clone();
-        Ok(Self { indexer })
+        Ok(Self {
+            pool_cache_holder,
+            ..Self::default()
+        })
     }
 
-    pub fn get_pool_data(&self, pool_id: &Pubkey) -> Option<Pool> {
-        let option = self.indexer.pool_cache.pool_map.get(pool_id);
-        option.map(|pool| pool.clone())
-    }
-
-    pub fn get_support_protocols(&self) -> Vec<DexType> {
-        self.indexer
-            .pool_cache
-            .pool_map
-            .iter()
-            .map(|pool| pool.protocol.clone())
-            .collect::<HashSet<DexType>>()
-            .into_iter()
-            .collect::<Vec<DexType>>()
+    pub async fn new(
+        rpc_client: Arc<RpcClient>,
+        sol_ata_amount: Arc<u64>,
+        max_amount_in_numerator: u8,
+        max_amount_in_denominator: u8,
+    ) -> anyhow::Result<Self> {
+        // 单例
+        let pool_cache_holder = POOL_CACHE_HOLDER
+            .get_or_init(|| async { Arc::new(PoolCacheHolder::new(rpc_client).await) })
+            .await
+            .clone();
+        Ok(Self {
+            pool_cache_holder,
+            sol_ata_amount,
+            max_amount_in_numerator,
+            max_amount_in_denominator,
+        })
     }
 
     pub fn get_all_pools(&self) -> Option<HashMap<DexType, Vec<Pool>>> {
         let mut protocol_pool_map: HashMap<DexType, Vec<Pool>> = HashMap::new();
-        for pool in self.indexer.pool_cache.pool_map.iter() {
+        for pool in self.pool_cache_holder.pool_cache.pool_map.iter() {
             protocol_pool_map
                 .entry(pool.protocol.clone())
                 .or_default()
@@ -70,96 +94,146 @@ impl Defi {
     pub async fn update_cache_and_find_route(
         &self,
         grpc_message: GrpcMessage,
-    ) -> Option<Vec<(Pool, Pool)>> {
-        let indexer = self.indexer.clone();
+        profit_threshold: u64,
+    ) -> Option<DexQuoteResult> {
+        let indexer = self.pool_cache_holder.clone();
+        //TODO：不一定是以修改的池子作为开始
         if let Some(update_pool) = indexer.update_cache(grpc_message) {
             //TODO:支持配置
             let amount_in_mint =
                 Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-            if let Some(paths) = indexer.find_path(&amount_in_mint, &update_pool).await {
-                let reverse_path = paths
-                    .iter()
-                    .map(|p| {
-                        let mut path = p.clone();
-                        path.path.reverse();
-                        path
-                    })
-                    .collect::<Vec<_>>();
-                let path_result =
-                    Self::find_best_path(Arc::new(paths), Arc::new(reverse_path)).await;
-                if path_result.is_some() {
-                    info!("套利路径: {:?}", path_result.unwrap());
-                }
-            };
-            None
+            if let Some(graph) = indexer.build_graph(&amount_in_mint, &update_pool).await {
+                self.find_best_route(amount_in_mint, Arc::new(graph), profit_threshold)
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
-    async fn create_dex(
+    fn find_best_route(
+        &self,
         amount_in_mint: Pubkey,
-        pool: &Pool,
-        clock: &Clock,
-    ) -> Option<Box<dyn Dex>> {
-        let protocol = &pool.protocol;
-        protocol
-            .create_dex(amount_in_mint, pool.clone(), clock.clone())
-            .await
-    }
-
-    async fn find_best_path(
         paths: Arc<Vec<Path>>,
-        reverse_path: Arc<Vec<Path>>,
+        profit_threshold: u64,
     ) -> Option<DexQuoteResult> {
-        let mut join_set = JoinSet::new();
-        let mut start_amount_in = 1_000_000_u64;
-        for i in 1..3 {
-            start_amount_in = start_amount_in.checked_mul(10u64.pow(i)).unwrap();
+        let pool_cache = self.pool_cache_holder.pool_cache.clone();
+        let pool_map = pool_cache.pool_map;
+        let clock = Arc::new(pool_cache.clock);
+        let mut start_amount_in = 10_000_000_u64;
+        let mut global_best: Option<PathQuoteResult> = None;
+        // 每次循环递增 0.5 WSOL
+        let increase_step = 0.5_f64.mul(10.0.pow(9)) as u64;
+        for _ in 1..=240 {
+            start_amount_in = start_amount_in
+                .add(increase_step)
+                .checked_mul(self.max_amount_in_numerator as u64)
+                .unwrap()
+                .checked_div(self.max_amount_in_denominator as u64)?;
+            // 不能大于WSOL的90%
+            if start_amount_in > *self.sol_ata_amount {
+                break;
+            }
             let paths = paths.clone();
-            join_set.spawn(async move {
-                (
-                    true,
-                    Defi::find_best_path_for_single_direction_path(paths, start_amount_in).await,
-                )
-            });
-            let reverse_path = reverse_path.clone();
-            join_set.spawn(async move {
-                (
-                    false,
-                    Defi::find_best_path_for_single_direction_path(reverse_path, start_amount_in)
-                        .await,
-                )
-            });
-        }
-
-        let mut global_best: Option<(bool, (usize, u64, u64, u64))> = None;
-        while let Some(result) = join_set.join_next().await {
-            match result {
-                Ok(local_best) => {
-                    if let (is_positive, Some((path_index, amount_in, amount_out, profit))) =
-                        local_best
-                    {
-                        if global_best.is_none() || profit >= global_best.unwrap().1 .3 {
-                            global_best =
-                                Some((is_positive, (path_index, amount_in, amount_out, profit)));
-                        }
-                    }
+            let pool_map = pool_map.clone();
+            let clock = clock.clone();
+            let local_best = DexData::find_best_path_for_single_direction_path(
+                paths,
+                pool_map,
+                start_amount_in,
+                amount_in_mint,
+                clock,
+            );
+            if let Some(local_best) = local_best {
+                if global_best.is_none() || global_best.as_ref().unwrap().profit < local_best.profit
+                {
+                    global_best = Some(local_best);
                 }
-                Err(_error) => {}
             }
         }
-        if let Some((is_positive, (path_index, amount_in, amount_out, profit))) = global_best {
-            let option = if is_positive {
-                paths.get(path_index).unwrap()
-            } else {
-                reverse_path.get(path_index).unwrap()
-            };
+        // 构建executor用于生成指令的参数
+        if let Some(best_quote_result) = global_best {
+            // 过低的获利
+            if best_quote_result.profit < profit_threshold {
+                return None;
+            }
+            let mut instruction_items = Vec::with_capacity(2);
+            // 用于确定每次池子的in_mint，上一个的out_mint是下一个池子的in_mint
+            let mut previous_out_mint: Option<Pubkey> = None;
+            for pool_id in &best_quote_result.path.path {
+                let pool = pool_map.get(pool_id).unwrap();
+                if previous_out_mint.is_none() {
+                    previous_out_mint = Some(best_quote_result.in_mint);
+                } else {
+                    previous_out_mint = Some(pool.another_mint(&previous_out_mint?));
+                }
+                match pool.to_instruction_item(&previous_out_mint?) {
+                    None => return None,
+                    Some(item) => {
+                        instruction_items.push(item);
+                    }
+                }
+            }
             Some(DexQuoteResult {
-                path: vec![
-                    option.path.first().unwrap().clone_self(),
-                    option.path.last().unwrap().clone_self(),
-                ],
+                instruction_items,
+                amount_in_mint: best_quote_result.in_mint,
+                amount_in: best_quote_result.amount_in,
+                amount_out: best_quote_result.amount_out,
+                profit: best_quote_result.profit,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn find_best_path_for_single_direction_path(
+        paths: Arc<Vec<Path>>,
+        pool_map: Arc<DashMap<Pubkey, Pool>>,
+        start_amount_in: u64,
+        amount_in_mint: Pubkey,
+        clock: Arc<Clock>,
+    ) -> Option<PathQuoteResult> {
+        let mut local_best: Option<(&Path, &Pubkey, u64, u64, u64)> = None;
+        for path in paths.iter() {
+            let clock = clock.clone();
+            let first_pool = pool_map.get(path.path.first().unwrap())?;
+            let first_pool_amount_out = first_pool.quote(
+                start_amount_in,
+                amount_in_mint,
+                first_pool.another_mint(&amount_in_mint),
+                clock.clone(),
+            );
+            if let Some(f_amount_out) = first_pool_amount_out {
+                let second_pool = pool_map.get(path.path.last().unwrap())?;
+                let second_pool_amount_out = second_pool.quote(
+                    f_amount_out,
+                    first_pool.another_mint(&amount_in_mint),
+                    amount_in_mint,
+                    clock,
+                );
+                if second_pool_amount_out.is_none() {
+                    continue;
+                }
+                let second_pool_amount_out = second_pool_amount_out.unwrap();
+                if second_pool_amount_out < start_amount_in {
+                    continue;
+                }
+                if local_best.is_none() || second_pool_amount_out > local_best.as_ref().unwrap().3 {
+                    local_best = Some((
+                        path,
+                        &amount_in_mint,
+                        start_amount_in,
+                        second_pool_amount_out,
+                        second_pool_amount_out.sub(start_amount_in),
+                    ))
+                }
+            }
+        }
+        if let Some((path, in_mint, amount_in, amount_out, profit)) = local_best {
+            Some(PathQuoteResult {
+                path: path.clone(),
+                in_mint: *in_mint,
                 amount_in,
                 amount_out,
                 profit,
@@ -168,36 +242,20 @@ impl Defi {
             None
         }
     }
-
-    async fn find_best_path_for_single_direction_path(
-        paths: Arc<Vec<Path>>,
-        start_amount_in: u64,
-    ) -> Option<(usize, u64, u64, u64)> {
-        let mut local_best: Option<(usize, u64, u64, u64)> = None;
-        for (index, path) in paths.iter().enumerate() {
-            if let Some(f_amount_out) = path.path[0].quote(start_amount_in).await {
-                if let Some(s_amount_out) = path.path[1].quote(f_amount_out).await {
-                    if s_amount_out < start_amount_in {
-                        continue;
-                    }
-                    if local_best.is_none() || s_amount_out > local_best.unwrap().2 {
-                        local_best = Some((
-                            index,
-                            start_amount_in,
-                            s_amount_out,
-                            s_amount_out.sub(start_amount_in),
-                        ))
-                    }
-                }
-            }
-        }
-        local_best
-    }
 }
 
-#[derive(Debug)]
+struct PathQuoteResult {
+    pub path: Path,
+    pub in_mint: Pubkey,
+    pub amount_in: u64,
+    pub amount_out: u64,
+    pub profit: u64,
+}
+
+#[derive(Debug, Clone)]
 pub struct DexQuoteResult {
-    pub path: Vec<Box<dyn Dex>>,
+    pub instruction_items: Vec<InstructionItem>,
+    pub amount_in_mint: Pubkey,
     pub amount_in: u64,
     pub amount_out: u64,
     pub profit: u64,
@@ -212,19 +270,15 @@ pub fn supported_protocols() -> Vec<DexType> {
     ]
 }
 
-#[derive(Clone)]
-pub struct DexIndexer {
+#[derive(Clone, Default)]
+pub struct PoolCacheHolder {
     pool_cache: PoolCache,
-    // db: Arc<dyn DB>,
 }
 
-impl DexIndexer {
-    pub async fn new(rpc_url: &str) -> Self {
-        let rpc_db = FileDB::new(rpc_url);
-        let pools = rpc_db
-            .load_token_pools(supported_protocols().as_slice())
-            .await
-            .unwrap();
+impl PoolCacheHolder {
+    pub async fn new(rpc_client: Arc<RpcClient>) -> Self {
+        let rpc_db = FileDB::new(rpc_client.clone());
+        let pools = rpc_db.load_token_pools().await.unwrap();
         let pool_map = DashMap::new();
         let mut edges = HashMap::new();
         for pool in pools.into_iter() {
@@ -241,7 +295,7 @@ impl DexIndexer {
                 .push((mint_pair.0, pool_id));
         }
         let clock: Clock = bincode::deserialize(
-            RpcClient::new(rpc_url.to_string())
+            rpc_client
                 .get_account(&Clock::id())
                 .await
                 .unwrap()
@@ -254,16 +308,15 @@ impl DexIndexer {
         }
     }
 
-    pub async fn find_path(
+    pub async fn build_graph(
         &self,
         amount_in_mint: &Pubkey,
         update_pool: &Pubkey,
     ) -> Option<Vec<Path>> {
         let pool_cache = self.pool_cache.clone();
         let edges = pool_cache.edges;
-        let pool_map = pool_cache.pool_map;
-        let clock = pool_cache.clock;
         let mut paths = Vec::new();
+        // 返回的path已经包含了update_pool作为输入和作为输出的path
         if let Some(first_pools) = edges.get(amount_in_mint) {
             for (f_pool_out_mint, f_pool) in first_pools {
                 if let Some(second_pools) = edges.get(f_pool_out_mint) {
@@ -275,30 +328,13 @@ impl DexIndexer {
                         if f_pool != update_pool && s_pool != update_pool {
                             continue;
                         }
-                        if let Some(f_dex) = Defi::create_dex(
-                            *amount_in_mint,
-                            &pool_map.get(f_pool).unwrap(),
-                            &clock,
-                        )
-                        .await
-                        {
-                            if let Some(s_dex) = Defi::create_dex(
-                                *f_pool_out_mint,
-                                &pool_map.get(s_pool).unwrap().clone(),
-                                &clock,
-                            )
-                            .await
-                            {
-                                paths.push(Path {
-                                    path: vec![f_dex, s_dex],
-                                });
-                            }
-                        }
+                        paths.push(Path {
+                            path: vec![*f_pool, *s_pool],
+                        })
                     }
                 }
             }
         }
-
         if paths.is_empty() {
             None
         } else {
@@ -330,7 +366,7 @@ impl DexIndexer {
             Entry::Vacant(_) => Err(anyhow!("")),
         };
         if successful.is_ok() {
-            info!("更新缓存: 成功 {:?}", pool_id);
+            // info!("更新缓存: 成功 {:?}", pool_id);
             Some(successful.unwrap())
         } else {
             info!("更新缓存: 未发生变化{:?}", pool_id);
@@ -339,14 +375,15 @@ impl DexIndexer {
     }
 }
 
+#[derive(Clone)]
 pub struct Path {
-    path: Vec<Box<dyn Dex>>,
+    path: Vec<Pubkey>,
 }
 
-impl Clone for Path {
-    fn clone(&self) -> Self {
-        Self {
-            path: self.path.iter().map(|path| path.clone_self()).collect(),
-        }
-    }
-}
+// impl Clone for Path {
+//     fn clone(&self) -> Self {
+//         Self {
+//             path: self.path.iter().map(|path| path.clone_self()).collect(),
+//         }
+//     }
+// }

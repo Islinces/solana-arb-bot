@@ -1,12 +1,13 @@
 use crate::arbitrage::arb_worker::Arb;
 use crate::arbitrage::message_processor::GrpcDataProcessor;
 use crate::arbitrage::Action;
-use crate::dex::Defi;
+use crate::dex;
+use crate::dex::DexData;
 use crate::interface::{AccountUpdate, DexType, GrpcMessage, SourceMessage};
 use async_channel::Sender;
 use burberry::{ActionSubmitter, Strategy};
 use futures_util::TryFutureExt;
-use solana_program::pubkey::Pubkey;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Handle, RuntimeFlavor};
@@ -44,26 +45,36 @@ macro_rules! run_in_tokio {
 pub struct ArbStrategy {
     event_capacity: u64,
     event_expired_mills: u64,
-    grpc_worker_size: usize,
+    arb_worker_size: usize,
+    sol_ata_amount: Arc<u64>,
+    max_amount_in_numerator: u8,
+    max_amount_in_denominator: u8,
+    profit_threshold: u64,
     protocol_grpc_sender: Option<HashMap<DexType, Sender<AccountUpdate>>>,
-    protocols: Vec<DexType>,
-    rpc_url: String,
+    rpc_client: Arc<RpcClient>,
 }
 
 impl ArbStrategy {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        rpc_url: String,
-        protocols: Vec<DexType>,
+        rpc_client: Arc<RpcClient>,
+        arb_worker_size: usize,
+        sol_ata_amount: Arc<u64>,
+        max_amount_in_numerator: u8,
+        max_amount_in_denominator: u8,
+        profit_threshold: u64,
         event_expired_mills: Option<u64>,
         event_capacity: Option<u64>,
-        grpc_worker_size: usize,
     ) -> Self {
         Self {
             event_expired_mills: event_expired_mills.unwrap_or(1000),
             event_capacity: event_capacity.unwrap_or(1000),
-            grpc_worker_size,
-            protocols,
-            rpc_url,
+            arb_worker_size,
+            sol_ata_amount,
+            max_amount_in_numerator,
+            max_amount_in_denominator,
+            profit_threshold,
+            rpc_client,
             protocol_grpc_sender: None,
         }
     }
@@ -79,12 +90,14 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
         &mut self,
         submitter: Arc<dyn ActionSubmitter<Action>>,
     ) -> eyre::Result<()> {
-        let (init_tx, mut init_rx) = tokio::sync::mpsc::channel(self.protocols.len());
+        let protocols = dex::supported_protocols();
+        let protocol_size = protocols.len();
+        let (init_tx, mut init_rx) = tokio::sync::mpsc::channel(protocol_size);
         let (ready_data_sender, ready_data_receiver) = async_channel::unbounded::<GrpcMessage>();
         let mut grpc_message_sender_maps = HashMap::new();
         let event_expired_mills = self.event_expired_mills;
         let event_capacity = self.event_capacity;
-        for protocol in self.protocols.clone() {
+        for protocol in protocols {
             let (grpc_message_sender, grpc_message_receiver) =
                 async_channel::unbounded::<AccountUpdate>();
             grpc_message_sender_maps.insert(protocol.clone(), grpc_message_sender);
@@ -108,29 +121,48 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
                     });
                 });
         }
-        for _ in 0..self.protocols.len() {
+        for _ in 0..protocol_size {
             init_rx.recv().await.expect("worker initialization failed");
         }
         self.protocol_grpc_sender = Some(grpc_message_sender_maps);
-        let (init_tx, mut init_rx) = tokio::sync::mpsc::channel(self.grpc_worker_size);
-        for index in 0..self.grpc_worker_size {
+        let (init_tx, mut init_rx) = tokio::sync::mpsc::channel(self.arb_worker_size);
+        for index in 0..self.arb_worker_size {
             let swap_action_sender = submitter.clone();
             let ready_grpc_data_receiver = ready_data_receiver.clone();
             let init_tx = init_tx.clone();
-            let rpc_url = self.rpc_url.clone();
+            let rpc_client = self.rpc_client.clone();
+            let sol_ata_amount = self.sol_ata_amount.clone();
+            let max_amount_in_numerator = self.max_amount_in_numerator;
+            let max_amount_in_denominator = self.max_amount_in_denominator;
+            let profit_threshold = self.profit_threshold;
             let _ = std::thread::Builder::new()
                 .stack_size(128 * 1024 * 1024) // 128 MB
                 .name(format!("route-worker-{:?}", index))
                 .spawn(move || {
-                    let defi = Arc::new(run_in_tokio!({ Defi::new(&rpc_url) }).unwrap());
+                    let dex = Arc::new(
+                        run_in_tokio!({
+                            DexData::new(
+                                rpc_client,
+                                sol_ata_amount,
+                                max_amount_in_numerator,
+                                max_amount_in_denominator,
+                            )
+                        })
+                        .unwrap(),
+                    );
                     run_in_tokio!(init_tx.send(())).unwrap();
-                    let arb_worker = Arb::new(defi, ready_grpc_data_receiver, swap_action_sender);
+                    let arb_worker = Arb::new(
+                        dex,
+                        ready_grpc_data_receiver,
+                        swap_action_sender,
+                        profit_threshold,
+                    );
                     let _ = arb_worker.run().unwrap_or_else(|e| {
-                        panic!("worker of [route-worker-{index}] panicked: {e:?}")
+                        panic!("worker of [arb-worker-{index}] panicked: {e:?}")
                     });
                 });
         }
-        for _ in 0..self.grpc_worker_size {
+        for _ in 0..self.arb_worker_size {
             init_rx.recv().await.expect("worker initialization failed");
         }
         Ok(())

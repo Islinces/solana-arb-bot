@@ -2,7 +2,6 @@ use crate::cache::Pool;
 use crate::interface::{DexType, DB};
 use anyhow::anyhow;
 use anyhow::Result;
-use log::warn;
 use serde::{Deserialize, Deserializer};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
@@ -12,26 +11,20 @@ use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub const FILE_DB_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/data/dex_data.json");
 
-#[derive(Debug, Clone)]
 pub struct FileDB {
-    rpc_url: String,
+    rpc_client: Arc<RpcClient>,
 }
 
 impl FileDB {
-    pub fn new(rpc_url: &str) -> Self {
-        Self {
-            rpc_url: String::from(rpc_url),
-        }
+    pub fn new(rpc_client: Arc<RpcClient>) -> Self {
+        Self { rpc_client }
     }
-}
 
-#[async_trait::async_trait]
-impl DB for FileDB {
-    async fn load_token_pools(&self, protocols: &[DexType]) -> anyhow::Result<Vec<Pool>> {
+    pub fn load_dex_json(&self) -> Result<Vec<DexJson>> {
         let dex_jsons: Vec<DexJson> = match File::open(FILE_DB_DIR) {
             Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
             Err(e) => {
@@ -40,22 +33,32 @@ impl DB for FileDB {
             }
         };
         if dex_jsons.is_empty() {
-            return Err(anyhow!("文件【dex_data.json】无池子数据"));
+            Err(anyhow!("文件【dex_data.json】无池子数据"))
+        } else {
+            Ok(dex_jsons)
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl DB for FileDB {
+    async fn load_token_pools(&self) -> Result<Vec<Pool>> {
+        let dex_jsons = self.load_dex_json()?;
         let mut dex_pool_group = HashMap::new();
         for dex_json in dex_jsons {
+            if dex_json.address_lookup_table_address.is_none() {
+                continue;
+            }
             dex_pool_group
                 .entry(DexType::from(dex_json.owner))
                 .or_insert(Vec::new())
-                .push(dex_json.pool);
+                .push(dex_json);
         }
-        let rpc_url = &self.rpc_url;
         let mut join_set = JoinSet::new();
-        let rpc_client = Arc::new(RpcClient::new(rpc_url.clone()));
         for (protocol, pool_ids) in dex_pool_group {
             let snapshot_fetcher = protocol.get_snapshot_fetcher();
             if let Ok(fetcher) = snapshot_fetcher {
-                let rpc_client = rpc_client.clone();
+                let rpc_client = self.rpc_client.clone();
                 join_set.spawn(async move {
                     let fetched_snapshots = fetcher.fetch_snapshot(pool_ids, rpc_client).await;
                     if let Some(snapshots) = fetched_snapshots.as_ref() {
@@ -93,6 +96,8 @@ pub struct DexJson {
     pub pool: Pubkey,
     #[serde(deserialize_with = "deserialize_pubkey")]
     pub owner: Pubkey,
+    #[serde(deserialize_with = "deserialize_option_pubkey",rename = "addressLookupTableAddress")]
+    pub address_lookup_table_address: Option<Pubkey>,
 }
 
 fn deserialize_pubkey<'de, D>(deserializer: D) -> Result<Pubkey, D::Error>
@@ -101,4 +106,15 @@ where
 {
     let s: String = Deserialize::deserialize(deserializer)?;
     Ok(Pubkey::from_str(s.as_str()).unwrap())
+}
+
+fn deserialize_option_pubkey<'de, D>(deserializer: D) -> Result<Option<Pubkey>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Result<String, _> = Deserialize::deserialize(deserializer);
+    if s.is_err() {
+        return Ok(None);
+    }
+    Ok(Some(Pubkey::from_str(s?.as_str()).unwrap()))
 }

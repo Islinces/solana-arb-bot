@@ -1,13 +1,15 @@
 use crate::cache::{Mint, Pool, PoolState};
-use crate::dex::common::mint_vault::MintVaultSubscribe;
-use crate::dex::common::utils::{change_option_ignore_none_old, SwapDirection};
+use crate::dex::common::utils::change_option_ignore_none_old;
 use crate::dex::raydium_amm::math::CheckedCeilDiv;
-use crate::dex::raydium_amm::pool_state::RaydiumAMMPoolState;
+use crate::dex::raydium_amm::pool_state::{RaydiumAMMInstructionItem, RaydiumAMMPoolState};
 use crate::dex::raydium_amm::state::{AmmInfo, AmmStatus, Loadable};
+use crate::dex::{get_ata_program, get_mint_program};
+use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::RaydiumAMMData;
 use crate::interface::{
-    AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType, GrpcAccountUpdateType,
-    GrpcMessage, GrpcSubscribeRequestGenerator, ReadyGrpcMessageOperator, SubscribeKey,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
+    InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -15,12 +17,14 @@ use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
 use chrono::Utc;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::address_lookup_table::AddressLookupTableAccount;
+use solana_program::clock::Clock;
+use solana_program::instruction::AccountMeta;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token::state::Account;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
 use std::ops::Add;
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -30,109 +34,156 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterAccounts,
 };
 
-#[derive(Clone)]
-pub struct RaydiumAMMDex {
-    pool_id: Pubkey,
-    mint_0_vault_amount: Option<u64>,
-    mint_1_vault_amount: Option<u64>,
-    mint_0_need_take_pnl: Option<u64>,
-    mint_1_need_take_pnl: Option<u64>,
-    swap_fee_numerator: u64,
-    swap_fee_denominator: u64,
-    swap_direction: SwapDirection,
-}
+pub struct RaydiumAmmDex;
 
-impl RaydiumAMMDex {
-    pub fn new(pool: Pool, amount_in_mint: Pubkey) -> Option<Self> {
+impl Quoter for RaydiumAmmDex {
+    fn quote(
+        &self,
+        amount_in: u64,
+        in_mint: Pubkey,
+        _out_mint: Pubkey,
+        pool: &Pool,
+        _clock: Arc<Clock>,
+    ) -> Option<u64> {
+        if amount_in == u64::MIN || (in_mint != pool.mint_0() && in_mint != pool.mint_1()) {
+            return None;
+        }
         if let PoolState::RaydiumAMM(pool_state) = &pool.state {
-            let mint_0 = pool.mint_0();
-            let mint_1 = pool.mint_1();
-            if mint_0 != amount_in_mint && mint_1 != amount_in_mint {
-                return None;
-            }
-            Some(Self {
-                swap_direction: if mint_0 == amount_in_mint {
-                    SwapDirection::Coin2PC
-                } else {
-                    SwapDirection::PC2Coin
-                },
-                pool_id: pool.pool_id,
-                mint_0_vault_amount: pool_state.mint_0_vault_amount,
-                mint_1_vault_amount: pool_state.mint_1_vault_amount,
-                mint_0_need_take_pnl: pool_state.mint_0_need_take_pnl,
-                mint_1_need_take_pnl: pool_state.mint_1_need_take_pnl,
-                swap_fee_numerator: pool_state.swap_fee_numerator,
-                swap_fee_denominator: pool_state.swap_fee_denominator,
-            })
+            let amount_in = u128::from(amount_in);
+            let swap_fee = amount_in
+                .checked_mul(u128::from(pool_state.swap_fee_numerator))
+                .unwrap()
+                .checked_ceil_div(u128::from(pool_state.swap_fee_denominator))
+                .unwrap()
+                .0;
+
+            let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
+
+            let mint_0_amount_without_pnl = u128::from(
+                pool_state
+                    .mint_0_vault_amount
+                    .unwrap()
+                    .checked_sub(pool_state.mint_0_need_take_pnl.unwrap())
+                    .unwrap(),
+            );
+            let mint_1_amount_without_pnl = u128::from(
+                pool_state
+                    .mint_1_vault_amount
+                    .unwrap()
+                    .checked_sub(pool_state.mint_1_need_take_pnl.unwrap())
+                    .unwrap(),
+            );
+            let amount_out = if in_mint == pool.mint_0() {
+                mint_1_amount_without_pnl
+                    .checked_mul(swap_in_after_deduct_fee)
+                    .unwrap()
+                    .checked_div(
+                        mint_0_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
+                    )
+                    .unwrap()
+            } else {
+                mint_0_amount_without_pnl
+                    .checked_mul(swap_in_after_deduct_fee)
+                    .unwrap()
+                    .checked_div(
+                        mint_1_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
+                    )
+                    .unwrap()
+            };
+            Some(amount_out.try_into().unwrap_or_else(|_| {
+                eprintln!("amount_out is too large");
+                u64::MIN
+            }))
         } else {
             None
         }
     }
 }
 
-impl Debug for RaydiumAMMDex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "RaydiumAMMDex: {},{:?}",
-            self.pool.pool_id, self.swap_direction
-        )
+impl InstructionItemCreator for RaydiumAmmDex {
+    fn create_instruction_item(&self, pool: &Pool, in_mint: &Pubkey) -> Option<InstructionItem> {
+        if let PoolState::RaydiumAMM(pool_state) = &pool.state {
+            Some(InstructionItem::RaydiumAMM(RaydiumAMMInstructionItem {
+                pool_id: pool.pool_id,
+                mint_0: pool.mint_0(),
+                mint_1: pool.mint_1(),
+                mint_0_vault: pool_state.mint_0_vault.unwrap(),
+                mint_1_vault: pool_state.mint_1_vault.unwrap(),
+                alt: pool.alt.clone(),
+                zero_to_one: in_mint == &pool.mint_0(),
+            }))
+        } else {
+            None
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl Dex for RaydiumAMMDex {
-    async fn quote(&self, amount_in: u64) -> Option<u64> {
-        if amount_in == u64::MIN {
-            return None;
+impl AccountMetaConverter for RaydiumAmmDex {
+    fn converter(
+        &self,
+        wallet: Pubkey,
+        instruction_item: InstructionItem,
+    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+        match instruction_item {
+            InstructionItem::RaydiumAMM(item) => {
+                let mut accounts = Vec::with_capacity(17);
+                // 1.mint program
+                accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
+                // 2.pool
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 3.authority id
+                accounts.push(AccountMeta::new_readonly(
+                    crate::dex::raydium_amm::RAYDIUM_AUTHORITY_ID,
+                    false,
+                ));
+                // 4.open order
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 5.coin vault
+                accounts.push(AccountMeta::new(item.mint_0_vault, false));
+                // 6.pc vault
+                accounts.push(AccountMeta::new(item.mint_1_vault, false));
+                // 7.Serum Program Id
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 8.Serum Market
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 9.Serum Bids
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 10.Serum Asks
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 11.Serum Event Queue
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 12.Serum Coin Vault Account
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 13.Serum Pc Vault Account
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 14.Serum Vault Signer
+                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                // 15.coin mint ata
+                let (coin_ata, _) = Pubkey::find_program_address(
+                    &[
+                        &wallet.to_bytes(),
+                        &get_mint_program().to_bytes(),
+                        &item.mint_0.to_bytes(),
+                    ],
+                    &get_ata_program(),
+                );
+                accounts.push(AccountMeta::new(coin_ata, false));
+                // 16.pc mint ata
+                let (pc_ata, _) = Pubkey::find_program_address(
+                    &[
+                        &wallet.to_bytes(),
+                        &get_mint_program().to_bytes(),
+                        &item.mint_0.to_bytes(),
+                    ],
+                    &get_ata_program(),
+                );
+                accounts.push(AccountMeta::new(pc_ata, false));
+                // 17.wallet
+                accounts.push(AccountMeta::new(wallet, true));
+                Some((accounts, vec![item.alt]))
+            }
+            _ => None,
         }
-        let amount_in = u128::from(amount_in);
-        let swap_fee = amount_in
-            .checked_mul(u128::from(self.swap_fee_numerator))
-            .unwrap()
-            .checked_ceil_div(u128::from(self.swap_fee_denominator))
-            .unwrap()
-            .0;
-
-        let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
-
-        let mint_0_amount_without_pnl = u128::from(
-            self.mint_0_vault_amount
-                .unwrap()
-                .checked_sub(self.mint_0_need_take_pnl.unwrap())
-                .unwrap(),
-        );
-        let mint_1_amount_without_pnl = u128::from(
-            self.mint_1_vault_amount
-                .unwrap()
-                .checked_sub(self.mint_1_need_take_pnl.unwrap())
-                .unwrap(),
-        );
-        let amount_out = if self.swap_direction == SwapDirection::Coin2PC {
-            mint_1_amount_without_pnl
-                .checked_mul(swap_in_after_deduct_fee)
-                .unwrap()
-                .checked_div(
-                    mint_0_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
-                )
-                .unwrap()
-        } else {
-            mint_0_amount_without_pnl
-                .checked_mul(swap_in_after_deduct_fee)
-                .unwrap()
-                .checked_div(
-                    mint_1_amount_without_pnl.add(swap_in_after_deduct_fee), // .unwrap(),
-                )
-                .unwrap()
-        };
-        Some(amount_out.try_into().unwrap_or_else(|_| {
-            eprintln!("amount_out is too large");
-            u64::MIN
-        }))
-    }
-
-    fn clone_self(&self) -> Box<dyn Dex> {
-        Box::new(self.clone())
     }
 }
 
@@ -167,7 +218,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                 .to_base58();
             let txn = txn.clone();
             match account_type {
-                GrpcAccountUpdateType::PoolState => {
+                GrpcAccountUpdateType::Pool => {
                     let src = array_ref![data, 0, 16];
                     let (need_take_pnl_coin, need_take_pnl_pc) = array_refs![src, 8, 8];
                     let pool_id = Pubkey::try_from(update_account_info.pubkey.as_slice())?;
@@ -302,14 +353,14 @@ impl GrpcSubscribeRequestGenerator for RaydiumAmmSubscribeRequestCreator {
             ],
             ..Default::default()
         };
-        let vault_subscribe_request = MintVaultSubscribe::mint_vault_subscribe_request(pools);
+        let vault_subscribe_request = self.mint_vault_subscribe_request(pools);
         if vault_subscribe_request.accounts.is_empty() {
             warn!("【{}】所有池子未找到金库账户", DexType::RaydiumAMM);
             None
         } else {
             Some(vec![
                 (
-                    (DexType::RaydiumAMM, GrpcAccountUpdateType::PoolState),
+                    (DexType::RaydiumAMM, GrpcAccountUpdateType::Pool),
                     pool_request,
                 ),
                 (
@@ -328,25 +379,38 @@ pub struct RaydiumAmmSnapshotFetcher;
 impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
     async fn fetch_snapshot(
         &self,
-        pool_ids: Vec<Pubkey>,
+        pool_json: Vec<DexJson>,
         rpc_client: Arc<RpcClient>,
     ) -> Option<Vec<Pool>> {
         let mut join_set = JoinSet::new();
-        for chunks_pool_ids in pool_ids.chunks(100) {
-            let chunks_pool_ids = chunks_pool_ids.to_vec();
+        for chunks_pools in pool_json.chunks(100) {
             let rpc_client = rpc_client.clone();
+            let chunks_pool_json = Arc::new(chunks_pools.to_vec());
+            let chunks_pool_ids = chunks_pool_json
+                .clone()
+                .iter()
+                .map(|id| id.pool)
+                .collect::<Vec<_>>();
+            let alt_map = self
+                .load_lookup_table_accounts(rpc_client.clone(), chunks_pool_json.clone())
+                .await
+                .unwrap();
             join_set.spawn(async move {
                 let mut pools = Vec::with_capacity(chunks_pool_ids.len());
-                for (pool_id, pool_account) in chunks_pool_ids.iter().zip(
-                    rpc_client
-                        .get_multiple_accounts_with_commitment(
-                            &chunks_pool_ids,
-                            CommitmentConfig::finalized(),
-                        )
-                        .await
-                        .unwrap()
-                        .value,
-                ) {
+                for (index, (pool_id, pool_account)) in chunks_pool_ids
+                    .iter()
+                    .zip(
+                        rpc_client
+                            .get_multiple_accounts_with_commitment(
+                                &chunks_pool_ids,
+                                CommitmentConfig::finalized(),
+                            )
+                            .await
+                            .unwrap()
+                            .value,
+                    )
+                    .enumerate()
+                {
                     if let Some(pool_account) = pool_account {
                         let amm_info =
                             AmmInfo::load_from_bytes(pool_account.data.as_slice()).unwrap();
@@ -380,6 +444,18 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                         if mint_vault_amount.len() != 2 {
                             continue;
                         }
+                        let alt = match chunks_pool_json.get(index) {
+                            None => None,
+                            Some(accounts) => Some(
+                                alt_map
+                                    .get(accounts.address_lookup_table_address.as_ref().unwrap())
+                                    .unwrap()
+                                    .clone(),
+                            ),
+                        };
+                        if alt.is_none() {
+                            continue;
+                        }
                         pools.push(Pool {
                             protocol: DexType::RaydiumAMM,
                             pool_id: *pool_id,
@@ -401,13 +477,14 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                                 amm_info.fees.swap_fee_numerator,
                                 amm_info.fees.swap_fee_denominator,
                             )),
+                            alt: alt.unwrap(),
                         })
                     }
                 }
                 pools
             });
         }
-        let mut all_pools = Vec::with_capacity(pool_ids.len());
+        let mut all_pools = Vec::with_capacity(pool_json.len());
         while let Some(Ok(pools)) = join_set.join_next().await {
             all_pools.extend(pools);
         }

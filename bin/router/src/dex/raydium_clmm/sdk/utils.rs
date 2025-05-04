@@ -13,7 +13,7 @@ use solana_sdk::account::Account;
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Neg};
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, info};
 
 // the top level state of the swap, the results of which are recorded in storage at the end
 #[derive(Debug)]
