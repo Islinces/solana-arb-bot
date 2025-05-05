@@ -279,8 +279,15 @@ fn swap_compute(
                 if zero_for_one {
                     liquidity_net = liquidity_net.neg();
                 }
-                state.liquidity =
-                    liquidity_math::add_delta(state.liquidity, liquidity_net).unwrap();
+                let result = liquidity_math::add_delta(state.liquidity, liquidity_net);
+                match result {
+                    Ok(result) => {state.liquidity =
+                        result}
+                    Err(e) => {
+                        error!("clmm quote error: {}, pool_id:{}", e,tickarray_bitmap_extension.unwrap().pool_id);
+                    }
+                }
+                ;
             }
 
             state.tick = if zero_for_one {

@@ -485,7 +485,7 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                     mint_1_vault: pool_state.token_vault_1,
                                     observation_key: pool_state.observation_key,
                                     tick_spacing: pool_state.tick_spacing,
-                                    trade_fee_rate: trade_fee_rate.unwrap().clone(),
+                                    trade_fee_rate,
                                     liquidity: pool_state.liquidity,
                                     sqrt_price_x64: pool_state.sqrt_price_x64,
                                     tick_current: pool_state.tick_current,

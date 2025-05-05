@@ -167,9 +167,9 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                     false,
                 ));
                 // 10.fee account
-                accounts.push(AccountMeta::new(
+                accounts.push(AccountMeta::new_readonly(
                     DexType::MeteoraDLMM.get_program_id(),
-                    true,
+                    false,
                 ));
                 // 11.wallet
                 accounts.push(AccountMeta::new(wallet, true));

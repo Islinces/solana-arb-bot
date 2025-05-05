@@ -1,11 +1,11 @@
 use crate::dex::raydium_clmm::sdk::big_num::U128;
 use crate::dex::raydium_clmm::sdk::big_num::U256;
-use crate::dex::raydium_clmm::sdk::tick_math;
+use crate::dex::raydium_clmm::sdk::{fixed_point_64, tick_math};
 use crate::dex::raydium_clmm::sdk::full_math::MulDiv;
 use crate::dex::raydium_clmm::sdk::unsafe_math::UnsafeMathTrait;
 use crate::dex::raydium_clmm::sdk::error::ErrorCode;
 use anchor_lang::prelude::*;
-use crate::dex::raydium_clmm::sdk::fixed_point_64;
+use std::ops::Sub;
 
 /// Add a signed liquidity delta to liquidity and revert if it overflows or underflows
 ///

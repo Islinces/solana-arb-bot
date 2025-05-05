@@ -196,15 +196,6 @@ impl JitoArbExecutor {
         for (index, item) in quote_result.instruction_items.into_iter().enumerate() {
             let swap = item.get_swap_type();
             if let Some((accounts, item_alts)) = item.parse_account_meta(wallet) {
-                let mut signers = HashSet::new();
-                for a in accounts.iter() {
-                    if a.is_signer && a.is_writable {
-                        signers.insert(a.pubkey);
-                    }
-                }
-                if signers.len() > 1 {
-                    info!("多的signer：{:?}", signers);
-                }
                 remaining_accounts.extend(accounts);
                 alts.extend(item_alts);
                 route_plan.push(RoutePlanStep {

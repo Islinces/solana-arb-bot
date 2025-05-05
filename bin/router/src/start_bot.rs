@@ -10,6 +10,7 @@ use solana_program::hash::Hash;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use std::ops::Mul;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -47,7 +48,12 @@ pub async fn run() -> anyhow::Result<()> {
         jito_uuid: None,
     });
     // 钱包已有的mint的ata账户
-    let mint_ata: Arc<DashMap<Pubkey, Pubkey>> = Arc::new(DashMap::new());
+    let mut mint_ata: Arc<DashMap<Pubkey, Pubkey>> = Arc::new(DashMap::new());
+    // TODO 随便写的，测试用的
+    mint_ata.insert(
+        Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+        Pubkey::new_unique(),
+    );
     let arb_executor = match executor_type {
         ExecutorType::JITO(jito_config) => JitoArbExecutor::new(
             bot_name,
