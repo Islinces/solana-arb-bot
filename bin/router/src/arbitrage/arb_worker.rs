@@ -33,7 +33,7 @@ impl Arb {
         loop {
             tokio::select! {
                 message = self.ready_grpc_data_receiver.recv() => {
-                    if let Some(quote_result) = self.dex.update_cache_and_find_route(message.context("").unwrap(),self.profit_threshold).await{
+                    if let Some(quote_result) = self.dex.update_cache_and_find_route(message.context("").unwrap(),self.profit_threshold) {
                         self.swap_sender.submit(Action::SWAP(quote_result));
                     }
                 }

@@ -76,7 +76,7 @@ impl Quoter for PumpFunDex {
                     .div(quote_vault.add(effective_amount))
             };
             Some(amount_out.try_into().unwrap_or_else(|_| {
-                error!("amount_out is too large");
+                // error!("amount_out is too large");
                 u64::MIN
             }))
         } else {

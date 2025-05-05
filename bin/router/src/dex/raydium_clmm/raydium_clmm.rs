@@ -28,7 +28,7 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, info};
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
@@ -82,7 +82,7 @@ impl Quoter for RaydiumCLMMDex {
             match result {
                 Ok((amount_out, _, _)) => Some(amount_out),
                 Err(e) => {
-                    error!("get_out_put_amount_and_remaining_accounts error: {:?}", e);
+                    // error!("get_out_put_amount_and_remaining_accounts error: {:?}", e);
                     None
                 }
             }
@@ -174,7 +174,7 @@ impl AccountMetaConverter for RaydiumCLMMDex {
                 accounts.push(AccountMeta::new(item.mint_1_vault, false));
                 // 8.Observation State
                 accounts.push(AccountMeta::new(item.observation_key, false));
-                // 9.mint program
+                // 9.token program
                 accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
                 // 10.current tick array
                 let mut tick_arrays = item
@@ -340,7 +340,7 @@ pub struct RaydiumCLMMSnapshotFetcher;
 impl RaydiumCLMMSnapshotFetcher {
     async fn generate_all_config_keys(&self, rpc_client: Arc<RpcClient>) -> HashMap<Pubkey, u32> {
         let mut all_amm_config_keys = Vec::new();
-        for index in 0..9 {
+        for index in 0..=12 {
             let index = index as u16;
             let (amm_config_key, __bump) = Pubkey::find_program_address(
                 &[config::AMM_CONFIG_SEED.as_bytes(), &index.to_be_bytes()],
@@ -485,7 +485,7 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                     mint_1_vault: pool_state.token_vault_1,
                                     observation_key: pool_state.observation_key,
                                     tick_spacing: pool_state.tick_spacing,
-                                    trade_fee_rate,
+                                    trade_fee_rate: trade_fee_rate.unwrap().clone(),
                                     liquidity: pool_state.liquidity,
                                     sqrt_price_x64: pool_state.sqrt_price_x64,
                                     tick_current: pool_state.tick_current,

@@ -91,7 +91,6 @@ impl Quoter for RaydiumAmmDex {
                     .unwrap()
             };
             Some(amount_out.try_into().unwrap_or_else(|_| {
-                eprintln!("amount_out is too large");
                 u64::MIN
             }))
         } else {

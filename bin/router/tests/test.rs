@@ -6,6 +6,7 @@ use router::dex::meteora_dlmm::sdk::interface::accounts::{
     BinArray, BinArrayAccount, BinArrayBitmapExtension, BinArrayBitmapExtensionAccount, LbPair,
     LbPairAccount,
 };
+use router::dex::meteora_dlmm::sdk::interface::typedefs::{StaticParameters, VariableParameters};
 use solana_client::rpc_client::RpcClient;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
@@ -16,10 +17,22 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::HashMap;
 use std::mem::offset_of;
 use std::str::FromStr;
-use router::dex::meteora_dlmm::sdk::interface::typedefs::{StaticParameters, VariableParameters};
+use std::thread::sleep;
+use std::time::{Duration, Instant};
+use solana_program::hash::{hash, Hash};
+use solana_sdk::signature::Keypair;
+use solana_sdk::signer::Signer;
+use tracing::{info, instrument};
+use tracing_appender::non_blocking;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter};
 
 #[test]
 fn test1() {
+    let start = Instant::now();
     println!(
         "{:?}",
         Pubkey::from([
@@ -27,6 +40,13 @@ fn test1() {
             203, 46, 53, 64, 102, 156, 255, 0, 79, 166, 113, 16, 67
         ])
     );
+    println!("{:#?}", start.elapsed());
+    sleep(Duration::from_secs(1));
+    println!("{:#?}",Hash::default().to_string().get(28..));
+    let keypair = Keypair::new();
+    for x in 0..10 {
+        println!("{:?}", keypair.pubkey().to_string());
+    }
 }
 
 #[test]
@@ -105,13 +125,32 @@ fn calac_lb_pair_sub_field_offset() {
 
 #[test]
 fn test() {
+    let filter = EnvFilter::new("info");
+    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                // .with_timer(MicrosecondFormatter)
+                .with_writer(non_blocking_writer)
+                .with_thread_ids(true)
+                .with_thread_names(true)
+                .with_span_events(FmtSpan::NONE),
+        )
+        .with(filter)
+        .init();
+    test11();
+    info!("finished");
+}
+
+#[instrument]
+fn test11() {
     let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com".to_string());
     let mint_x = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
     let mint_y = Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
     let lb_pair_pubkey = Pubkey::from_str("3msVd34R5KxonDzyNSV5nT19UtUeJ2RF1NaQhvVPNLxL").unwrap();
     let bitmap_extension_pubkey = derive_bin_array_bitmap_extension(lb_pair_pubkey).0;
-    println!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
-    println!("bitmap_extension_pubkey : {:?}", bitmap_extension_pubkey);
+    info!("lb_pair_pubkey : {:?}", lb_pair_pubkey);
+    info!("bitmap_extension_pubkey : {:?}", bitmap_extension_pubkey);
     let clock_id = Clock::id();
     let accounts = rpc_client
         .get_multiple_accounts(&[
@@ -161,8 +200,8 @@ fn test() {
         3,
         &rpc_client,
     );
-    println!("left bin arrays : {:?}", &left_bin_arrays.keys());
-    println!("right bin arrays : {:?}", &right_bin_arrays.keys());
+    info!("left bin arrays : {:?}", &left_bin_arrays.keys());
+    info!("right bin arrays : {:?}", &right_bin_arrays.keys());
 }
 
 fn mint_transfer_fee_config(

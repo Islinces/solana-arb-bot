@@ -12,9 +12,8 @@ use std::collections::{HashMap, HashSet};
 use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::OnceCell;
-use tokio::task::JoinSet;
-use tracing::info;
 
 pub mod common;
 pub mod meteora_dlmm;
@@ -40,7 +39,7 @@ pub fn get_system_program() -> Pubkey {
 
 static POOL_CACHE_HOLDER: OnceCell<Arc<PoolCacheHolder>> = OnceCell::const_new();
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DexData {
     pool_cache_holder: Arc<PoolCacheHolder>,
     sol_ata_amount: Arc<u64>,
@@ -91,19 +90,26 @@ impl DexData {
         Some(protocol_pool_map)
     }
 
-    pub async fn update_cache_and_find_route(
+    pub fn update_cache_and_find_route(
         &self,
         grpc_message: GrpcMessage,
         profit_threshold: u64,
     ) -> Option<DexQuoteResult> {
+        let start_time = Instant::now();
         let indexer = self.pool_cache_holder.clone();
         //TODO：不一定是以修改的池子作为开始
         if let Some(update_pool) = indexer.update_cache(grpc_message) {
             //TODO:支持配置
             let amount_in_mint =
                 Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-            if let Some(graph) = indexer.build_graph(&amount_in_mint, &update_pool).await {
-                self.find_best_route(amount_in_mint, Arc::new(graph), profit_threshold)
+            if let Some(graph) = indexer.build_graph(&amount_in_mint, &update_pool) {
+                let mut dex_quote_result =
+                    self.find_best_route(amount_in_mint, Arc::new(graph), profit_threshold);
+                if let Some(result) = &mut dex_quote_result {
+                    result.start_time = Some(start_time);
+                    result.route_calculate_cost = Some(start_time.elapsed());
+                }
+                dex_quote_result
             } else {
                 None
             }
@@ -181,6 +187,7 @@ impl DexData {
                 amount_in: best_quote_result.amount_in,
                 amount_out: best_quote_result.amount_out,
                 profit: best_quote_result.profit,
+                ..Default::default()
             })
         } else {
             None
@@ -252,13 +259,15 @@ struct PathQuoteResult {
     pub profit: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DexQuoteResult {
     pub instruction_items: Vec<InstructionItem>,
     pub amount_in_mint: Pubkey,
     pub amount_in: u64,
     pub amount_out: u64,
     pub profit: u64,
+    pub start_time: Option<Instant>,
+    pub route_calculate_cost: Option<Duration>,
 }
 
 pub fn supported_protocols() -> Vec<DexType> {
@@ -270,7 +279,7 @@ pub fn supported_protocols() -> Vec<DexType> {
     ]
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PoolCacheHolder {
     pool_cache: PoolCache,
 }
@@ -308,11 +317,7 @@ impl PoolCacheHolder {
         }
     }
 
-    pub async fn build_graph(
-        &self,
-        amount_in_mint: &Pubkey,
-        update_pool: &Pubkey,
-    ) -> Option<Vec<Path>> {
+    pub fn build_graph(&self, amount_in_mint: &Pubkey, update_pool: &Pubkey) -> Option<Vec<Path>> {
         let pool_cache = self.pool_cache.clone();
         let edges = pool_cache.edges;
         let mut paths = Vec::new();
@@ -369,13 +374,13 @@ impl PoolCacheHolder {
             // info!("更新缓存: 成功 {:?}", pool_id);
             Some(successful.unwrap())
         } else {
-            info!("更新缓存: 未发生变化{:?}", pool_id);
+            // info!("更新缓存: 未发生变化{:?}", pool_id);
             None
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Path {
     path: Vec<Pubkey>,
 }

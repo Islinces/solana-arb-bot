@@ -80,8 +80,7 @@ impl GrpcDataProcessor {
                     let protocol = update.protocol.clone();
                     if let Ok(operator)=protocol.get_grpc_message_operator(update){
                         if let Some(grpc_message)= self.get_ready_data(operator){
-                            info!("发送更新缓存消息: {:?}",protocol);
-                            if let Err(e)=self.ready_update_data_sender.send(grpc_message).await{
+                            if let Err(e)= self.ready_update_data_sender.send(grpc_message).await{
                                 error!("触发Route：发送消息失败，原因：{}",e);
                             }
                         }

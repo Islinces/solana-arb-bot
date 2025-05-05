@@ -84,7 +84,7 @@ async fn blockhash_refresher(
             Ok(blockhash) => {
                 let mut guard = cached_blockhash.lock().await;
                 *guard = blockhash;
-                info!("Blockhash refreshed: {}", blockhash);
+                // info!("Blockhash refreshed: {}", blockhash);
             }
             Err(e) => {
                 error!("Failed to refresh blockhash: {:?}", e);

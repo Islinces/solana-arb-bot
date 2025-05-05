@@ -158,9 +158,9 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                 );
                 accounts.push(AccountMeta::new(mint_1_ata, false));
                 // 7.mint_0
-                accounts.push(AccountMeta::new(item.mint_0, false));
+                accounts.push(AccountMeta::new_readonly(item.mint_0, false));
                 // 8.mint_1
-                accounts.push(AccountMeta::new(item.mint_1, false));
+                accounts.push(AccountMeta::new_readonly(item.mint_1, false));
                 // 9.oracle
                 accounts.push(AccountMeta::new(
                     Pubkey::from_str("39vUBP8XmUqKTb5oJWRoiEJQ7ZsKMQYdDMPohhpTEAwJ").unwrap(),
@@ -183,15 +183,15 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                     false,
                 ));
                 // 15.program
-                accounts.push(AccountMeta::new(
+                accounts.push(AccountMeta::new_readonly(
                     DexType::MeteoraDLMM.get_program_id(),
-                    true,
+                    false,
                 ));
                 // 16~~.current bin array
                 let bin_arrays = item
                     .bin_arrays
                     .into_iter()
-                    .map(|k| AccountMeta::new(k, true))
+                    .map(|k| AccountMeta::new(k, false))
                     .collect::<Vec<_>>();
                 accounts.extend(bin_arrays);
                 Some((accounts, vec![item.alt]))
@@ -281,28 +281,28 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
             ],
             ..Default::default()
         };
-        let mut clock_account = HashMap::new();
-        clock_account.insert(
-            "Clock".to_string(),
-            SubscribeRequestFilterAccounts {
-                account: vec![Clock::id().to_string()],
-                ..Default::default()
-            },
-        );
-        let clock_request = SubscribeRequest {
-            accounts: clock_account,
-            commitment: Some(CommitmentLevel::Finalized).map(|x| x as i32),
-            ..Default::default()
-        };
+        // let mut clock_account = HashMap::new();
+        // clock_account.insert(
+        //     "Clock".to_string(),
+        //     SubscribeRequestFilterAccounts {
+        //         account: vec![Clock::id().to_string()],
+        //         ..Default::default()
+        //     },
+        // );
+        // let clock_request = SubscribeRequest {
+        //     accounts: clock_account,
+        //     commitment: Some(CommitmentLevel::Finalized).map(|x| x as i32),
+        //     ..Default::default()
+        // };
         Some(vec![
             (
                 (DexType::MeteoraDLMM, GrpcAccountUpdateType::Pool),
                 pool_request,
             ),
-            (
-                (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
-                clock_request,
-            ),
+            // (
+            //     (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
+            //     clock_request,
+            // ),
         ])
     }
 }

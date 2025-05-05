@@ -25,11 +25,13 @@ use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use solana_sdk::transaction::VersionedTransaction;
+use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::instruction::transfer;
-use std::ops::{Div, Mul};
+use std::ops::{Div, Mul, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 const DEFAULT_TIP_ACCOUNTS: [&str; 8] = [
@@ -76,9 +78,19 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
     }
 
     async fn execute(&self, quote_result: DexQuoteResult) -> eyre::Result<()> {
-        warn!("套利路径: {:#?}", quote_result);
-        match self.create_jito_bundle(quote_result).await {
-            Ok(bundle) => {
+        let start_time = quote_result.start_time;
+        let route_calculate_cost = quote_result.route_calculate_cost;
+        let amount_in = quote_result.amount_in;
+        let latest_blockhash = {
+            let guard = self.cached_blockhash.lock().await;
+            *guard
+        };
+        match self
+            .create_jito_bundle(latest_blockhash, quote_result)
+            .await
+        {
+            Ok((bundle,instruction_cost)) => {
+                let jito_request_start = Instant::now();
                 let bundles = bundle
                     .into_iter()
                     .map(|item| bincode::serialize(&item).unwrap())
@@ -97,8 +109,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     "method":"sendBundle",
                     "params": params
                 });
-                //TODO
-                info!("<UNK>: {:#?}", data);
+                let bundle_id = "";
                 // let jito_response = self
                 //     .client
                 //     .clone()
@@ -116,9 +127,19 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                 //         error!("Jito error: {}", e);
                 //     }
                 // }
+                let send_jito_request_cost = jito_request_start.elapsed();
+                info!("总耗时: {}ms, 路由计算耗时: {}ms, 构建指令耗时: {}ms, 发送耗时: {}ms, Size: {}, BlockHash(后4位): {:?}, JitoBundleId: {}",
+                    start_time.unwrap().elapsed().as_nanos().div_floor(&1_000_000_000_u128),
+                    route_calculate_cost.unwrap().as_nanos().div_floor(&1_000_000_000_u128),
+                    instruction_cost.as_nanos().div_floor(&1_000_000_000_u128),
+                    send_jito_request_cost.as_nanos().div_floor(&1_000_000_000_u128),
+                    (amount_in as f64).div(10_i32.pow(9) as f64),
+                    latest_blockhash.to_string().get(28..).unwrap(),
+                    bundle_id
+                );
                 Ok(())
             }
-            Err(e) => Err(eyre!("Jito生成bundle失败, {}", e)),
+            Err(e) => Err(eyre!("Jito生成bundle失败, {:?}", e)),
         }
     }
 }
@@ -174,7 +195,16 @@ impl JitoArbExecutor {
         let mut route_plan = Vec::with_capacity(quote_result.instruction_items.len());
         for (index, item) in quote_result.instruction_items.into_iter().enumerate() {
             let swap = item.get_swap_type();
-            if let Some((accounts, item_alts)) = item.parse_account_meta(self.keypair.pubkey()) {
+            if let Some((accounts, item_alts)) = item.parse_account_meta(wallet) {
+                let mut signers = HashSet::new();
+                for a in accounts.iter() {
+                    if a.is_signer && a.is_writable {
+                        signers.insert(a.pubkey);
+                    }
+                }
+                if signers.len() > 1 {
+                    info!("多的signer：{:?}", signers);
+                }
                 remaining_accounts.extend(accounts);
                 alts.extend(item_alts);
                 route_plan.push(RoutePlanStep {
@@ -187,7 +217,8 @@ impl JitoArbExecutor {
                 return None;
             }
         }
-        let in_mint_ata = *self.mint_ata.get(&amount_in_mint)?.value();
+        // let in_mint_ata = *self.mint_ata.get(&amount_in_mint)?.value();
+        let in_mint_ata = Pubkey::default();
         route_builder
             .user_transfer_authority(wallet)
             .user_source_token_account(in_mint_ata)
@@ -205,17 +236,15 @@ impl JitoArbExecutor {
 
     async fn create_jito_bundle(
         &self,
+        latest_blockhash: Hash,
         dex_quote_result: DexQuoteResult,
-    ) -> anyhow::Result<Vec<VersionedTransaction>> {
-        let latest_blockhash = {
-            let guard = self.cached_blockhash.lock().await;
-            *guard
-        };
+    ) -> anyhow::Result<(Vec<VersionedTransaction>, Duration)> {
+        let start = Instant::now();
         // ======================第一个Transaction====================
         // TODO: 使用参数tip_bps
         let tip = dex_quote_result.profit.mul(7).div(10);
 
-        let mut first_instructions = vec![];
+        let mut first_instructions = Vec::with_capacity(6);
         // 设置 CU
         first_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(
             self.calculate_compute_unit(),
@@ -238,15 +267,15 @@ impl JitoArbExecutor {
         // 生成临时钱包
         let dst_keypair = Keypair::new();
         // 生成临时钱包WSOL ATA账户地址
-        let dst_ata = Pubkey::find_program_address(
-            &[spl_token::native_mint::id().as_ref()],
+        let dst_ata = get_associated_token_address_with_program_id(
             &dst_keypair.pubkey(),
-        )
-        .0;
+            &spl_token::native_mint::id(),
+            &get_mint_program(),
+        );
         // 生成ATA账户执行
         first_instructions.push(create_associated_token_account_idempotent(
-            &dst_ata,
             &self.keypair.pubkey(),
+            &dst_keypair.pubkey(),
             &spl_token::native_mint::id(),
             &get_mint_program(),
         ));
@@ -317,7 +346,7 @@ impl JitoArbExecutor {
             solana_sdk::message::VersionedMessage::V0(second_message),
             &[&dst_keypair],
         )?;
-        Ok(vec![first_transaction, second_transaction])
+        Ok((vec![first_transaction, second_transaction], start.elapsed()))
     }
 
     fn calculate_compute_unit(&self) -> u32 {
