@@ -28,12 +28,13 @@ use solana_sdk::transaction::VersionedTransaction;
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::instruction::transfer;
+use std::collections::HashMap;
 use std::ops::{Div, Mul, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::{error, info, instrument, warn};
 const DEFAULT_TIP_ACCOUNTS: [&str; 8] = [
     "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
     "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
@@ -51,7 +52,7 @@ fn get_jito_fee_account_with_rand() -> Pubkey {
 }
 
 pub struct JitoConfig {
-    pub jito_regin: String,
+    pub jito_region: String,
     pub jito_uuid: Option<String>,
 }
 
@@ -60,13 +61,14 @@ struct JitoResponse {
     result: String,
 }
 
+#[derive(Debug)]
 pub struct JitoArbExecutor {
     cached_blockhash: Arc<Mutex<Hash>>,
-    rpc_client: Arc<RpcClient>,
     keypair: Keypair,
     bot_name: Option<String>,
     // mint --> mint ata
-    mint_ata: Arc<DashMap<Pubkey, Pubkey>>,
+    mint_ata: Arc<DashMap<Pubkey, u64>>,
+    native_ata: Pubkey,
     client: Arc<Client>,
     jito_url: String,
 }
@@ -85,11 +87,8 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
             let guard = self.cached_blockhash.lock().await;
             *guard
         };
-        match self
-            .create_jito_bundle(latest_blockhash, quote_result)
-            .await
-        {
-            Ok((bundle,instruction_cost)) => {
+        match self.create_jito_bundle(latest_blockhash, quote_result) {
+            Ok((bundle, instruction_cost)) => {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
                     .into_iter()
@@ -128,13 +127,14 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                 //     }
                 // }
                 let send_jito_request_cost = jito_request_start.elapsed();
-                info!("总耗时: {}ms, 路由计算耗时: {}ms, 构建指令耗时: {}ms, 发送耗时: {}ms, Size: {}, BlockHash(后4位): {:?}, JitoBundleId: {}",
-                    start_time.unwrap().elapsed().as_nanos().div_floor(&1_000_000_000_u128),
-                    route_calculate_cost.unwrap().as_nanos().div_floor(&1_000_000_000_u128),
-                    instruction_cost.as_nanos().div_floor(&1_000_000_000_u128),
-                    send_jito_request_cost.as_nanos().div_floor(&1_000_000_000_u128),
+                let x = (amount_in as f64).div(10_i32.pow(9) as f64);
+                info!("耗时: {}ms, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}",
+                    start_time.unwrap().elapsed().as_millis(),
+                    route_calculate_cost.unwrap(),
+                    instruction_cost.as_nanos(),
+                    send_jito_request_cost.as_millis(),
                     (amount_in as f64).div(10_i32.pow(9) as f64),
-                    latest_blockhash.to_string().get(28..).unwrap(),
+                    latest_blockhash.to_string().get(40..).unwrap(),
                     bundle_id
                 );
                 Ok(())
@@ -148,17 +148,17 @@ impl JitoArbExecutor {
     pub fn new(
         bot_name: Option<String>,
         keypair: Keypair,
-        mint_ata: Arc<DashMap<Pubkey, Pubkey>>,
-        rpc_client: Arc<RpcClient>,
+        mint_ata: Arc<DashMap<Pubkey, u64>>,
+        native_ata: Pubkey,
         cached_blockhash: Arc<Mutex<Hash>>,
         jito_config: JitoConfig,
     ) -> Self {
-        let jito_host = if jito_config.jito_regin == "mainnet".to_string() {
+        let jito_host = if jito_config.jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
         } else {
             format!(
                 "https://{}.mainnet.block-engine.jito.wtf",
-                jito_config.jito_regin
+                jito_config.jito_region
             )
         };
         let jito_url = if jito_config.jito_uuid.is_none() {
@@ -173,16 +173,16 @@ impl JitoArbExecutor {
         Self {
             bot_name,
             cached_blockhash,
-            rpc_client,
             keypair,
             mint_ata,
-            // TODO: http配置
+            native_ata,
+            //TODO: http配置
             client: Arc::new(Client::new()),
             jito_url,
         }
     }
 
-    fn build_jupiter_swap_ix(
+    pub fn build_jupiter_swap_ix(
         &self,
         quote_result: DexQuoteResult,
         tip: u64,
@@ -225,12 +225,13 @@ impl JitoArbExecutor {
         Some((route_builder.instruction(), alts))
     }
 
-    async fn create_jito_bundle(
+    pub fn create_jito_bundle(
         &self,
         latest_blockhash: Hash,
         dex_quote_result: DexQuoteResult,
     ) -> anyhow::Result<(Vec<VersionedTransaction>, Duration)> {
         let start = Instant::now();
+        let wallet = self.keypair.pubkey();
         // ======================第一个Transaction====================
         // TODO: 使用参数tip_bps
         let tip = dex_quote_result.profit.mul(7).div(10);
@@ -257,43 +258,39 @@ impl JitoArbExecutor {
         }
         // 生成临时钱包
         let dst_keypair = Keypair::new();
+        let dst_wallet = dst_keypair.pubkey();
         // 生成临时钱包WSOL ATA账户地址
         let dst_ata = get_associated_token_address_with_program_id(
-            &dst_keypair.pubkey(),
+            &dst_wallet,
             &spl_token::native_mint::id(),
             &get_mint_program(),
         );
         // 生成ATA账户执行
         first_instructions.push(create_associated_token_account_idempotent(
-            &self.keypair.pubkey(),
-            &dst_keypair.pubkey(),
+            &wallet,
+            &dst_wallet,
             &spl_token::native_mint::id(),
             &get_mint_program(),
         ));
-        let source_ata = self
-            .mint_ata
-            .clone()
-            .get(&spl_token::native_mint::id())
-            .unwrap()
-            .clone();
+        let source_ata = self.native_ata.clone();
         // 转移WSQL到ATA账户中
         first_instructions.push(transfer(
             &get_mint_program(),
             &source_ata,
             &dst_ata,
-            &self.keypair.pubkey(),
+            &wallet,
             &[],
             tip + 10000,
         )?);
         // 转移SQL，用于支付账户租金+签名费
         first_instructions.push(solana_program::system_instruction::transfer(
-            &self.keypair.pubkey(),
-            &dst_keypair.pubkey(),
+            &wallet,
+            &dst_wallet,
             2039280 + 5000,
         ));
         // 生成Transaction
         let first_message = Message::try_compile(
-            &self.keypair.pubkey(),
+            &wallet,
             &first_instructions,
             alts.as_slice(),
             latest_blockhash,
@@ -310,29 +307,25 @@ impl JitoArbExecutor {
         second_instructions.push(spl_token::instruction::close_account(
             &get_mint_program(),
             &dst_ata,
-            &dst_keypair.pubkey(),
-            &dst_keypair.pubkey(),
+            &dst_wallet,
+            &dst_wallet,
             &[],
         )?);
         // 给JITO发小费
         second_instructions.push(solana_program::system_instruction::transfer(
-            &dst_keypair.pubkey(),
+            &dst_wallet,
             &get_jito_fee_account_with_rand(),
             tip,
         ));
         // 转移临时钱包SOL到主钱包
         second_instructions.push(solana_program::system_instruction::transfer(
-            &dst_keypair.pubkey(),
-            &self.keypair.pubkey(),
+            &dst_wallet,
+            &wallet,
             2039280 + 2039280 + 10000,
         ));
         // 生成Transaction
-        let second_message = Message::try_compile(
-            &dst_keypair.pubkey(),
-            &second_instructions,
-            &[],
-            latest_blockhash,
-        )?;
+        let second_message =
+            Message::try_compile(&dst_wallet, &second_instructions, &[], latest_blockhash)?;
         let second_transaction = VersionedTransaction::try_new(
             solana_sdk::message::VersionedMessage::V0(second_message),
             &[&dst_keypair],

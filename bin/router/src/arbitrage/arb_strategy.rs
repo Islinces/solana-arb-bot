@@ -11,6 +11,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Handle, RuntimeFlavor};
+use tokio::sync::Mutex;
 use tracing::error;
 
 #[macro_export]
@@ -46,12 +47,12 @@ pub struct ArbStrategy {
     event_capacity: u64,
     event_expired_mills: u64,
     arb_worker_size: usize,
-    sol_ata_amount: Arc<u64>,
-    max_amount_in_numerator: u8,
-    max_amount_in_denominator: u8,
+    sol_ata_amount: Arc<Mutex<u64>>,
     profit_threshold: u64,
     protocol_grpc_sender: Option<HashMap<DexType, Sender<AccountUpdate>>>,
     rpc_client: Arc<RpcClient>,
+    dex_json_path: String,
+    start_amount_in: u64,
 }
 
 impl ArbStrategy {
@@ -59,23 +60,23 @@ impl ArbStrategy {
     pub fn new(
         rpc_client: Arc<RpcClient>,
         arb_worker_size: usize,
-        sol_ata_amount: Arc<u64>,
-        max_amount_in_numerator: u8,
-        max_amount_in_denominator: u8,
+        sol_ata_amount: Arc<Mutex<u64>>,
         profit_threshold: u64,
         event_expired_mills: Option<u64>,
         event_capacity: Option<u64>,
+        dex_json_path: String,
+        start_amount_in: u64,
     ) -> Self {
         Self {
             event_expired_mills: event_expired_mills.unwrap_or(1000),
             event_capacity: event_capacity.unwrap_or(1000),
             arb_worker_size,
             sol_ata_amount,
-            max_amount_in_numerator,
-            max_amount_in_denominator,
             profit_threshold,
             rpc_client,
             protocol_grpc_sender: None,
+            dex_json_path,
+            start_amount_in,
         }
     }
 }
@@ -132,23 +133,15 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
             let init_tx = init_tx.clone();
             let rpc_client = self.rpc_client.clone();
             let sol_ata_amount = self.sol_ata_amount.clone();
-            let max_amount_in_numerator = self.max_amount_in_numerator;
-            let max_amount_in_denominator = self.max_amount_in_denominator;
             let profit_threshold = self.profit_threshold;
+            let dex_json_path = self.dex_json_path.clone();
+            let start_amount_in = self.start_amount_in.clone();
             let _ = std::thread::Builder::new()
                 .stack_size(128 * 1024 * 1024) // 128 MB
                 .name(format!("route-worker-{:?}", index))
                 .spawn(move || {
                     let dex = Arc::new(
-                        run_in_tokio!({
-                            DexData::new(
-                                rpc_client,
-                                sol_ata_amount,
-                                max_amount_in_numerator,
-                                max_amount_in_denominator,
-                            )
-                        })
-                        .unwrap(),
+                        run_in_tokio!({ DexData::new(rpc_client, dex_json_path) }).unwrap(),
                     );
                     run_in_tokio!(init_tx.send(())).unwrap();
                     let arb_worker = Arb::new(
@@ -156,6 +149,8 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
                         ready_grpc_data_receiver,
                         swap_action_sender,
                         profit_threshold,
+                        start_amount_in,
+                        sol_ata_amount,
                     );
                     let _ = arb_worker.run().unwrap_or_else(|e| {
                         panic!("worker of [arb-worker-{index}] panicked: {e:?}")

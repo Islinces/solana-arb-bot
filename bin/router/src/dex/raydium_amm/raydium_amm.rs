@@ -26,9 +26,10 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token::state::Account;
 use std::collections::HashMap;
 use std::ops::Add;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::warn;
+use tracing::{instrument, warn};
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
@@ -36,8 +37,9 @@ use yellowstone_grpc_proto::geyser::{
 
 pub struct RaydiumAmmDex;
 
+#[async_trait::async_trait]
 impl Quoter for RaydiumAmmDex {
-    fn quote(
+    async fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
@@ -90,9 +92,7 @@ impl Quoter for RaydiumAmmDex {
                     )
                     .unwrap()
             };
-            Some(amount_out.try_into().unwrap_or_else(|_| {
-                u64::MIN
-            }))
+            Some(amount_out.try_into().unwrap_or_else(|_| u64::MIN))
         } else {
             None
         }
@@ -371,7 +371,7 @@ impl GrpcSubscribeRequestGenerator for RaydiumAmmSubscribeRequestCreator {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RaydiumAmmSnapshotFetcher;
 
 #[async_trait::async_trait]
@@ -420,6 +420,15 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                         {
                             continue;
                         }
+                        // if amm_info.coin_vault_mint
+                        //     != Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        //         .unwrap()
+                        //     && amm_info.pc_vault_mint
+                        //         != Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+                        //             .unwrap()
+                        // {
+                        //     continue;
+                        // }
                         let mint_vault_amount = rpc_client
                             .get_multiple_accounts_with_commitment(
                                 &vec![amm_info.coin_vault, amm_info.pc_vault],

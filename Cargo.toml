@@ -45,3 +45,16 @@ bincode = "1.3.3"
 burberry = { git = "https://github.com/tonyke-bot/burberry.git", rev = "8bdb3cadf18e9be01622f9acbe562ee2d4f65ac2", default-features = false }
 eyre = "0.6.12"
 async-channel = "2.1"
+
+[profile.bench]
+debug = true
+opt-level = 3 # 启用优化
+
+[profile.release]
+opt-level = 3            # 最高优化
+lto = "fat"              # 全程序链接时优化
+codegen-units = 1        # 单线程生成代码，优化一致性
+panic = "abort"          # panic 时直接终止，提高速度
+incremental = false      # 禁用增量编译，确保完整优化
+debug = false            # 禁用调试信息
+strip = "symbols"        # 去除符号表，减小体积（需要 Rust 1.60

@@ -4,12 +4,19 @@ version = "0.0.1"
 edition = "2021"
 license = "MIT"
 authors = ["solana"]
+build = "build.rs"
+
 
 [lib]
 doctest = false
 
+[profile.bench]
+debug = true
+opt-level = 3 # 启用优化
+
 [dependencies]
 borsh = "^1.5"
+clap = {version = "4.5.37",features = ["derive"]}
 anchor-lang = { version = "0.29.0", features = ["derive"], package = "anchor-lang" }
 
 serde.workspace = true
@@ -57,14 +64,17 @@ spl-transfer-hook-interface.version = "0.5.0"
 log = "0.4.27"
 rand = "0.8.5"
 base64.workspace = true
+rayon = "1.10.0"
+# keypair
+rand_core = "0.6.4"
+argon2 = "0.5.3"
+aes-gcm = "0.10"
+rpassword = "7.4.0"
+
 [patch.crates-io]
 # 强制所有依赖使用同一个 borsh 版本（如果兼容）
 borsh = { version = "^1.5", features = ["derive"], package = "borsh" }
-
-
-[[bench]]
-name = "test_quote_benches"
-harness = false
+clap = { version = "4.5.37", features = ["derive", "env"] }
 
 [[test]]
 name = "test_pool_quote"
@@ -84,9 +94,39 @@ path = "tests/test_pump_fun_sub.rs"
 [[test]]
 name = "test_dlmm_sub"
 path = "tests/test_dlmm_sub.rs"
+[[test]]
+name = "test"
+path = "tests/test.rs"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 serde-diff = "0.4"
+flamegraph = "0.6.8"
+tempfile = "3.19.1"
+
+[[bench]]
+name = "test_create_instruction"
+harness = false
+[[bench]]
+name = "test_route_quote"
+harness = false
+[[bench]]
+name = "test_hashmap"
+harness = false
+[[bench]]
+name = "test_dashmap"
+harness = false
+[[bench]]
+name = "test_build_graph"
+harness = false
+
+[profile.release]
+opt-level = 3            # 最高优化
+lto = "fat"              # 全程序链接时优化
+codegen-units = 1        # 单线程生成代码，优化一致性
+panic = "abort"          # panic 时直接终止，提高速度
+incremental = false      # 禁用增量编译，确保完整优化
+debug = false            # 禁用调试信息
+strip = "symbols"        # 去除符号表，减小体积（需要 Rust 1.60
 
 

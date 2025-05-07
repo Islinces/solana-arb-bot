@@ -1,7 +1,9 @@
 use crate::dex::DexData;
 use crate::interface::{AccountUpdate, SubscribeKey};
 use burberry::{async_trait, Collector, CollectorStream};
+use log::warn;
 use solana_client::nonblocking::rpc_client::RpcClient;
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info};
@@ -13,14 +15,16 @@ use yellowstone_grpc_proto::tonic::Status;
 
 pub struct GrpcMessageCollector {
     rpc_client: Arc<RpcClient>,
-    grpc_url: &'static str,
+    grpc_url: String,
+    dex_json_path: String,
 }
 
 impl GrpcMessageCollector {
-    pub fn new(rpc_client: Arc<RpcClient>, grpc_url: &'static str) -> Self {
+    pub fn new(rpc_client: Arc<RpcClient>, grpc_url: String, dex_json_path: String) -> Self {
         Self {
             rpc_client,
             grpc_url,
+            dex_json_path,
         }
     }
 
@@ -28,9 +32,10 @@ impl GrpcMessageCollector {
         &self,
     ) -> anyhow::Result<StreamMap<SubscribeKey, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
-        let dex = DexData::new_only_cache_holder(self.rpc_client.clone()).await?;
-        // TODO：支持配置GRPC参数
-        let mut grpc_client = GeyserGrpcClient::build_from_static(self.grpc_url)
+        let dex =
+            DexData::new_only_cache_holder(self.rpc_client.clone(), self.dex_json_path.clone())
+                .await?;
+        let mut grpc_client = GeyserGrpcClient::build_from_shared(self.grpc_url.clone())?
             .tcp_nodelay(true)
             .http2_adaptive_window(true)
             .buffer_size(65536)
@@ -112,7 +117,7 @@ impl Collector<AccountUpdate> for GrpcMessageCollector {
                                 account,
                             };
                         }
-                    },
+                    }else => warn!("subscrbeitions closed"),
                 }
             }
         };

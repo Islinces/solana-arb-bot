@@ -1,6 +1,7 @@
 use crate::interface::DexType;
 use solana_program::pubkey::Pubkey;
 use std::fmt::{Debug, Display, Formatter};
+use serde::{Deserialize, Serialize};
 use solana_program::address_lookup_table::AddressLookupTableAccount;
 
 #[derive(Debug, Clone)]

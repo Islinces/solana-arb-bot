@@ -181,7 +181,7 @@ fn swap_compute(
             if let Some(next_vaild_tick_array) = option {
                 tick_array_current = next_vaild_tick_array;
             } else {
-                error!("tick_arrays is empty");
+                // error!("tick_arrays is empty");
             }
 
             if next_vaild_tick_array_start_index.is_none() {

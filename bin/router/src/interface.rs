@@ -24,18 +24,20 @@ use crate::dex::raydium_clmm::raydium_clmm::{
 use crate::file_db::DexJson;
 use crate::interface::SourceMessage::Account;
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::address_lookup_table::state::AddressLookupTable;
 use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::clock::Clock;
 use solana_program::instruction::AccountMeta;
+use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
+use tokio::io::join;
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, instrument};
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts, SubscribeUpdateAccount,
@@ -43,7 +45,7 @@ use yellowstone_grpc_proto::geyser::{
 
 pub type SubscribeKey = (DexType, GrpcAccountUpdateType);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DexType {
     RaydiumAMM,
     RaydiumCLmm,
@@ -464,8 +466,9 @@ pub trait Dex: Send + Sync + Debug {
     ) -> InstructionItem;
 }
 
-pub trait Quoter {
-    fn quote(
+#[async_trait::async_trait]
+pub trait Quoter: Send + Sync {
+    async fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,

@@ -5,6 +5,7 @@ use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display, Formatter};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct RaydiumCLMMPoolState {

@@ -38,8 +38,9 @@ use yellowstone_grpc_proto::geyser::SubscribeRequest;
 
 pub struct PumpFunDex;
 
+#[async_trait::async_trait]
 impl Quoter for PumpFunDex {
-    fn quote(
+    async fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
@@ -352,6 +353,15 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                     if let Some(account) = pool_account {
                         let pool_state =
                             deserialize_anchor_account::<PumpFunPool>(&account).unwrap();
+                        // if pool_state.quote_mint
+                        //     != Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        //         .unwrap()
+                        //     && pool_state.base_mint
+                        //         != Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+                        //             .unwrap()
+                        // {
+                        //     continue;
+                        // }
                         let vault_accounts = rpc_client
                             .get_multiple_accounts_with_commitment(
                                 &[

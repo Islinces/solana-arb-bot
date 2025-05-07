@@ -87,7 +87,7 @@ impl GrpcDataProcessor {
                     }else{
                         warn!("更新缓存失败：未找到【{:?}】的【ReadyGrpcMessageOperator】实现",protocol)
                     }
-                }
+                }else => warn!("source_message_receiver closed")
             }
         }
     }

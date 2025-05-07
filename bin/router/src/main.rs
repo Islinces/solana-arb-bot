@@ -1,5 +1,8 @@
+use std::env;
 use chrono::Local;
+use clap::Parser;
 use router::start_bot;
+use tracing::info;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -25,19 +28,18 @@ async fn main() -> anyhow::Result<()> {
         .rotation(Rotation::DAILY)
         .build("./logs")
         .expect("构建file_appender失败");
-    let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    // let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
     tracing_subscriber::registry()
         .with(
             fmt::layer()
                 .with_timer(MicrosecondFormatter)
                 .with_writer(non_blocking_writer)
-                .with_thread_ids(true)
-                .with_thread_names(true)
                 .with_span_events(FmtSpan::NONE),
         )
         .with(filter)
         .init();
+    info!("arb-bot开始启动");
     start_bot::run().await?;
     Ok(())
 }

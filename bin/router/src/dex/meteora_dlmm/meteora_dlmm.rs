@@ -42,8 +42,9 @@ use yellowstone_grpc_proto::geyser::{
 
 pub struct MeteoraDLMMDex;
 
+#[async_trait::async_trait]
 impl Quoter for MeteoraDLMMDex {
-    fn quote(
+    async fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
@@ -427,6 +428,10 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                     let lb_pair_id = **lb_pair_id;
                     if let Some(account) = lb_pair_account {
                         let lb_pair = LbPairAccount::deserialize(&account.data).unwrap().0;
+                        // if lb_pair.token_x_mint!=Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap()
+                        //     &&lb_pair.token_y_mint!=Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(){
+                        //     continue;
+                        // }
                         let bitmap_extension_id = derive_bin_array_bitmap_extension(lb_pair_id).0;
                         let bitmap_extension = if let Ok(bitmap_extension_account) =
                             rpc_client.get_account_data(&bitmap_extension_id).await

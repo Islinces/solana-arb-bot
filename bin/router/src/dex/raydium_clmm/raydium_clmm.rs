@@ -26,9 +26,9 @@ use solana_program::instruction::AccountMeta;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::{error, info};
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
@@ -36,8 +36,9 @@ use yellowstone_grpc_proto::geyser::{
 
 pub struct RaydiumCLMMDex;
 
+#[async_trait::async_trait]
 impl Quoter for RaydiumCLMMDex {
-    fn quote(
+    async fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
@@ -425,6 +426,10 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                 crate::dex::raydium_clmm::sdk::pool::PoolState,
                             >(pool_account)
                             .unwrap();
+                            // if pool_state.token_mint_0!=Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap()
+                            //     &&pool_state.token_mint_1!=Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(){
+                            //     continue;
+                            // }
                             let tick_array_bitmap_extension =
                                 deserialize_anchor_account::<TickArrayBitmapExtension>(
                                     bitmap_extension_account,

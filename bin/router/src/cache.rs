@@ -9,6 +9,7 @@ use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default)]
 pub struct PoolCache {
@@ -90,7 +91,7 @@ impl Pool {
         }
     }
 
-    pub fn quote(
+    pub async fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
@@ -100,6 +101,7 @@ impl Pool {
         self.protocol
             .get_quoter()
             .quote(amount_in, in_mint, out_mint, self, clock)
+            .await
     }
 
     pub fn to_instruction_item(&self, in_mint: &Pubkey) -> Option<InstructionItem> {

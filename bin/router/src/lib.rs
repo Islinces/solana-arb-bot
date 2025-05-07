@@ -3,9 +3,10 @@ use solana_sdk::declare_id;
 pub mod dex;
 pub mod start_bot;
 pub mod arbitrage;
-mod cache;
+pub mod cache;
 pub mod interface;
 pub mod file_db;
+mod keypair;
 
 #[cfg(feature = "devnet")]
 declare_id!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");

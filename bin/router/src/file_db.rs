@@ -13,19 +13,23 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 
-pub const FILE_DB_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/data/dex_data.json");
+pub const FILE_DB_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "");
 
 pub struct FileDB {
     rpc_client: Arc<RpcClient>,
+    dex_json_path: String,
 }
 
 impl FileDB {
-    pub fn new(rpc_client: Arc<RpcClient>) -> Self {
-        Self { rpc_client }
+    pub fn new(rpc_client: Arc<RpcClient>, dex_json_path: String) -> Self {
+        Self {
+            rpc_client,
+            dex_json_path,
+        }
     }
 
     pub fn load_dex_json(&self) -> Result<Vec<DexJson>> {
-        let dex_jsons: Vec<DexJson> = match File::open(FILE_DB_DIR) {
+        let dex_jsons: Vec<DexJson> = match File::open(self.dex_json_path.clone().as_str()) {
             Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
             Err(e) => {
                 error!("{}", e);
@@ -96,7 +100,10 @@ pub struct DexJson {
     pub pool: Pubkey,
     #[serde(deserialize_with = "deserialize_pubkey")]
     pub owner: Pubkey,
-    #[serde(deserialize_with = "deserialize_option_pubkey",rename = "addressLookupTableAddress")]
+    #[serde(
+        deserialize_with = "deserialize_option_pubkey",
+        rename = "addressLookupTableAddress"
+    )]
     pub address_lookup_table_address: Option<Pubkey>,
 }
 
