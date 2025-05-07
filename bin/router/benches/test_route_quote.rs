@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use dashmap::DashMap;
+use moka::sync::Cache;
 use router::cache::PoolCache;
 use router::dex::meteora_dlmm::meteora_dlmm::MeteoraDLMMSnapshotFetcher;
 use router::dex::pump_fun::pump_fun::PumpFunAccountSnapshotFetcher;
@@ -31,7 +32,7 @@ fn init_async_data() {
     DEX_DATA
         .set(DexData {
             pool_cache_holder: Arc::new(data),
-            sol_ata_amount: Arc::new(10000000000000),
+            increase_step: 0,
         })
         .unwrap()
 }
@@ -53,9 +54,8 @@ fn bench_route(c: &mut Criterion) {
     group.warm_up_time(Duration::from_secs(5));
     group.measurement_time(std::time::Duration::from_secs(5));
     group.bench_function("bench_route", |b| {
-        b.iter(||
-            async {
-                dex_data.find_best_route(in_mint, path0.clone(), path1.clone(), 0)
+        b.iter(|| async {
+            dex_data.find_best_route(in_mint, path0.clone(), path1.clone(), 0, 1000000, 0)
         });
     });
     let arc = pool_cache.pool_cache.clone().pool_map;
@@ -120,7 +120,7 @@ fn bench_route(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches,bench_route);
+criterion_group!(benches, bench_route);
 criterion_main!(benches);
 
 async fn create_pool_cache() -> PoolCacheHolder {
@@ -210,5 +210,9 @@ async fn create_pool_cache() -> PoolCacheHolder {
     .unwrap();
     PoolCacheHolder {
         pool_cache: PoolCache::new(edges, pool_map, clock),
+        path_cache: Cache::builder()
+            .max_capacity(10000)
+            .time_to_live(Duration::from_secs(60))
+            .build(),
     }
 }

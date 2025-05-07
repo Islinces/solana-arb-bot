@@ -38,9 +38,8 @@ use yellowstone_grpc_proto::geyser::SubscribeRequest;
 
 pub struct PumpFunDex;
 
-#[async_trait::async_trait]
 impl Quoter for PumpFunDex {
-    async fn quote(
+    fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,

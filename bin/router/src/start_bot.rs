@@ -133,17 +133,17 @@ pub async fn run() -> anyhow::Result<()> {
     let wallet_all_ata_amount_cache = wallet_all_ata_amount.clone();
     let native_mint_amount_cache = native_mint_amount.clone();
     let wallet_ata_refresher_rpc_client = rpc_client.clone();
-    tokio::spawn(async move {
-        wallet_ata_refresher(
-            wallet_ata_refresher_rpc_client.clone(),
-            wallet,
-            wallet_all_ata_amount_cache,
-            native_mint_amount_cache,
-            native_mint_ata,
-            Duration::from_secs(60),
-        )
-        .await;
-    });
+    // tokio::spawn(async move {
+    //     wallet_ata_refresher(
+    //         wallet_ata_refresher_rpc_client.clone(),
+    //         wallet,
+    //         wallet_all_ata_amount_cache,
+    //         native_mint_amount_cache,
+    //         native_mint_ata,
+    //         Duration::from_secs(60),
+    //     )
+    //     .await;
+    // });
 
     let executor_type = ExecutorType::JITO(JitoConfig {
         jito_region,
@@ -209,10 +209,13 @@ async fn init_wallet_ata_account(
         .iter()
         .map(|a| (Pubkey::from_str(&a.pubkey).unwrap(), a.account.lamports))
         .collect::<DashMap<_, _>>();
-    let native_mint_ata_amount = wallet_all_ata_account
-        .get(&native_mint_ata)
-        .unwrap()
-        .clone();
+    let native_mint_ata_amount = 1000000000000;
+    // wallet_all_ata_account
+    // .get(&native_mint_ata)
+    // .unwrap()
+    // .clone();
+    // TODO 测试
+    wallet_all_ata_account.insert(native_mint_ata, 1000000000000);
     (wallet_all_ata_account, native_mint_ata_amount)
 }
 
@@ -242,6 +245,8 @@ async fn wallet_ata_refresher(
                     .get(&native_mint_ata)
                     .unwrap()
                     .clone();
+                *guard = native_mint_ata_amount;
+                drop(guard);
                 current_wallet_ata_amount.into_iter().for_each(|(a, b)| {
                     wallet_ata_amount.entry(a).or_insert(b);
                     wallet_ata_amount.entry(a).and_modify(|exist| *exist = b);

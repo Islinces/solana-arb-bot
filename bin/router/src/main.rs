@@ -28,8 +28,8 @@ async fn main() -> anyhow::Result<()> {
         .rotation(Rotation::DAILY)
         .build("./logs")
         .expect("构建file_appender失败");
-    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    // let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
     tracing_subscriber::registry()
         .with(
             fmt::layer()

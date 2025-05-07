@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use dashmap::{DashMap, Entry};
 use moka::sync::{Cache, CacheBuilder};
 use num_traits::Pow;
+use rayon::prelude::*;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
@@ -107,6 +108,7 @@ impl DexData {
             if let Some((positive_paths, reverse_paths)) =
                 indexer.build_graph(&amount_in_mint, &update_pool)
             {
+                let all_path_size = positive_paths.len() + reverse_paths.len();
                 let quote_start = Instant::now();
                 let mut dex_quote_result = self
                     .find_best_route(
@@ -121,7 +123,10 @@ impl DexData {
                 if let Some(result) = &mut dex_quote_result {
                     result.start_time = Some(start_time);
                     result.route_calculate_cost = Some(quote_start.elapsed().as_nanos());
-                    info!("find_best_route cost: {:?}", result.route_calculate_cost);
+                    info!(
+                        "find_best_route cost: {:?}, path size : {:?}",
+                        result.route_calculate_cost, all_path_size
+                    );
                 }
                 dex_quote_result
             } else {
@@ -144,69 +149,33 @@ impl DexData {
         let pool_cache = self.pool_cache_holder.pool_cache.clone();
         let pool_map = pool_cache.pool_map;
         let clock = Arc::new(pool_cache.clock);
-        let mut start_amount_in = start_amount_in;
-        let increase_step = self.increase_step;
-        let mut join_set = JoinSet::new();
-        let sol_ata_amount_threshold = sol_ata_amount.checked_mul(9)?.checked_div(10)?;
-        for index in 1..5 {
-            let clock = clock.clone();
-            let path0 = path0.clone();
-            let path1 = path1.clone();
-            let pool_map = pool_map.clone();
-            join_set.spawn(async move {
-                let mut start_amount_in = start_amount_in;
-                let mut global_best: Option<PathQuoteResult> = None;
-                let pool_map = pool_map.clone();
-                for index in (index - 1).mul(50)..index.mul(50) {
-                    start_amount_in += (index as u64).mul(increase_step);
-                    if start_amount_in.gt(&sol_ata_amount_threshold) {
-                        break;
-                    }
-                    let clock = clock.clone();
-                    let pool_map = pool_map.clone();
-                    let local_best0 = DexData::find_best_path_for_single_direction_path(
-                        true,
-                        path0.clone(),
-                        pool_map.clone(),
-                        start_amount_in,
-                        amount_in_mint,
-                        clock.clone(),
-                    )
-                    .await;
-                    let local_best1 = DexData::find_best_path_for_single_direction_path(
-                        false,
-                        path1.clone(),
-                        pool_map,
-                        start_amount_in,
-                        amount_in_mint,
-                        clock.clone(),
-                    )
-                    .await;
-                    if let Some(local_best) = local_best0 {
-                        if global_best.is_none()
-                            || global_best.as_ref().unwrap().profit < local_best.profit
-                        {
-                            global_best = Some(local_best);
-                        }
-                    }
-                    if let Some(local_best) = local_best1 {
-                        if global_best.is_none()
-                            || global_best.as_ref().unwrap().profit < local_best.profit
-                        {
-                            global_best = Some(local_best);
-                        }
-                    }
-                }
-                global_best
-            });
+        let clock = clock.clone();
+        let pool_map = pool_map.clone();
+        let positive_local_best = DexData::find_best_path_for_positive_path(
+            path0.clone(),
+            pool_map.clone(),
+            start_amount_in,
+            amount_in_mint,
+            clock.clone(),
+        );
+        let reverse_local_best = DexData::find_best_path_for_reverse_path(
+            path1.clone(),
+            pool_map.clone(),
+            start_amount_in,
+            amount_in_mint,
+            clock.clone(),
+        );
+        let mut global_best = None;
+        if let Some(local_best) = positive_local_best {
+            global_best = Some(local_best);
         }
-        let mut global_best: Option<PathQuoteResult> = None;
-        while let Some(Ok(local_best)) = join_set.join_next().await {
-            if let Some(local_best) = local_best {
-                if global_best.is_none() || global_best.as_ref().unwrap().profit < local_best.profit
-                {
+        if let Some(local_best) = reverse_local_best {
+            if let Some(ref global) = global_best {
+                if global.profit < local_best.profit {
                     global_best = Some(local_best);
                 }
+            } else {
+                global_best = Some(local_best);
             }
         }
         // 构建executor用于生成指令的参数
@@ -245,79 +214,93 @@ impl DexData {
         }
     }
 
-    async fn find_best_path_for_single_direction_path(
-        is_positive_paths: bool,
+    fn find_best_path_for_positive_path(
         paths: Arc<Vec<Path>>,
         pool_map: Arc<DashMap<Pubkey, Pool>>,
         start_amount_in: u64,
         amount_in_mint: Pubkey,
         clock: Arc<Clock>,
     ) -> Option<PathQuoteResult> {
-        let mut local_best: Option<(&Path, &Pubkey, u64, u64, u64)> = None;
-        let mut first_pool_amount_out = None;
-        let mut another_mint = None;
-        if is_positive_paths {
-            let first_pool = pool_map
-                .get(paths.get(0).unwrap().path.first().unwrap())
-                .unwrap();
-            another_mint = Some(first_pool.another_mint(&amount_in_mint));
-            first_pool_amount_out = first_pool
-                .quote(
-                    start_amount_in,
+        let first_pool = pool_map
+            .get(paths.get(0).unwrap().path.first().unwrap())
+            .unwrap();
+        let another_mint = Some(first_pool.another_mint(&amount_in_mint)).unwrap();
+        let first_pool_amount_out =
+            first_pool.quote(start_amount_in, amount_in_mint, another_mint, clock.clone());
+        if first_pool_amount_out.as_ref().is_none() {
+            return None;
+        }
+        paths
+            .par_iter()
+            .filter_map(|path| {
+                let second_pool = pool_map.get(path.path.last().unwrap()).unwrap();
+                let second_pool_amount_out = second_pool.quote(
+                    first_pool_amount_out.unwrap(),
+                    another_mint,
                     amount_in_mint,
-                    another_mint?,
                     clock.clone(),
-                )
-                .await;
-        }
-        for path in paths.iter() {
-            if !is_positive_paths {
-                // let clock = clock.clone();
-                let first_pool = pool_map.get(path.path.first().unwrap())?;
-                another_mint = Some(first_pool.another_mint(&amount_in_mint));
-                first_pool_amount_out = first_pool
-                    .quote(
-                        start_amount_in,
-                        amount_in_mint,
-                        another_mint?,
-                        clock.clone(),
-                    )
-                    .await;
-            }
-            if let Some(f_amount_out) = first_pool_amount_out {
-                let second_pool = pool_map.get(path.path.last().unwrap())?;
-                let second_pool_amount_out = second_pool
-                    .quote(f_amount_out, another_mint?, amount_in_mint, clock.clone())
-                    .await;
-                if second_pool_amount_out.is_none() {
-                    continue;
-                }
-                let second_pool_amount_out = second_pool_amount_out.unwrap();
-                if second_pool_amount_out < start_amount_in {
-                    continue;
-                }
-                if local_best.is_none() || second_pool_amount_out > local_best.as_ref().unwrap().3 {
-                    local_best = Some((
+                );
+                if second_pool_amount_out.unwrap_or(0).gt(&start_amount_in) {
+                    Some((
                         path,
-                        &amount_in_mint,
-                        start_amount_in,
-                        second_pool_amount_out,
-                        second_pool_amount_out.sub(start_amount_in),
+                        second_pool_amount_out.unwrap_or(0).sub(&start_amount_in),
                     ))
+                } else {
+                    None
                 }
-            }
-        }
-        if let Some((path, in_mint, amount_in, amount_out, profit)) = local_best {
-            Some(PathQuoteResult {
+            })
+            .max_by(|(_, profit_a), (_, profit_b)| profit_a.partial_cmp(profit_b).unwrap())
+            .map(|(path, profit)| PathQuoteResult {
                 path: path.clone(),
-                in_mint: *in_mint,
-                amount_in,
-                amount_out,
+                in_mint: amount_in_mint,
+                amount_in: start_amount_in,
+                amount_out: 0,
                 profit,
             })
-        } else {
-            None
-        }
+    }
+
+    fn find_best_path_for_reverse_path(
+        paths: Arc<Vec<Path>>,
+        pool_map: Arc<DashMap<Pubkey, Pool>>,
+        start_amount_in: u64,
+        amount_in_mint: Pubkey,
+        clock: Arc<Clock>,
+    ) -> Option<PathQuoteResult> {
+        paths
+            .par_iter()
+            .filter_map(|path| {
+                let first_pool = pool_map.get(path.path.first().unwrap())?;
+                let another_mint = first_pool.another_mint(&amount_in_mint);
+                let first_pool_amount_out =
+                    first_pool.quote(start_amount_in, amount_in_mint, another_mint, clock.clone());
+                if let Some(f_amount_out) = first_pool_amount_out {
+                    let second_pool = pool_map.get(path.path.last().unwrap())?;
+                    let second_pool_amount_out = second_pool.quote(
+                        f_amount_out,
+                        another_mint,
+                        amount_in_mint,
+                        clock.clone(),
+                    );
+                    if second_pool_amount_out.is_none() {
+                        return None;
+                    }
+                    let second_pool_amount_out = second_pool_amount_out.unwrap();
+                    if second_pool_amount_out <= start_amount_in {
+                        return None;
+                    }
+                    Some((path, second_pool_amount_out.sub(start_amount_in)))
+                } else {
+                    None
+                }
+            })
+            .max_by(|(_, profit_a), (_, profit_b)| profit_a.partial_cmp(profit_b).unwrap())
+            .map(|(path, profit)| PathQuoteResult {
+                path: path.clone(),
+                in_mint: amount_in_mint,
+                amount_in: start_amount_in,
+                amount_out: 0,
+                profit,
+            })
     }
 }
 
@@ -352,7 +335,7 @@ pub fn supported_protocols() -> Vec<DexType> {
 #[derive(Clone, Debug)]
 pub struct PoolCacheHolder {
     pub pool_cache: PoolCache,
-    pub path_cache: Cache<(Pubkey, Pubkey), [Vec<Path>; 2]>,
+    pub path_cache: Cache<(Pubkey, Pubkey), Option<(Vec<Path>, Vec<Path>)>>,
 }
 
 impl PoolCacheHolder {
@@ -383,11 +366,10 @@ impl PoolCacheHolder {
                 .as_ref(),
         )
         .unwrap();
-        info!("{:?}", serde_json::to_string(&edges));
         Self {
             pool_cache: PoolCache::new(edges, pool_map, clock),
             path_cache: Cache::builder()
-                .max_capacity(1000)
+                .max_capacity(10000)
                 .time_to_live(Duration::from_secs(60))
                 .build(),
         }
@@ -432,18 +414,16 @@ impl PoolCacheHolder {
                         }
                     }
                 }
-                [positive_paths, reverse_paths]
+                if positive_paths.is_empty() || reverse_paths.is_empty() {
+                    None
+                } else {
+                    Some((positive_paths, reverse_paths))
+                }
             })
             .value()
             .clone();
-        let positive_paths = &path_array[0];
-        let reverse_paths = &path_array[1];
         info!("build_graph cost: {:?}", start.elapsed().as_nanos());
-        if positive_paths.is_empty() && reverse_paths.is_empty() {
-            None
-        } else {
-            Some((positive_paths.clone(), reverse_paths.clone()))
-        }
+        path_array
     }
 
     pub fn update_cache(&self, grpc_message: GrpcMessage) -> Option<Pubkey> {

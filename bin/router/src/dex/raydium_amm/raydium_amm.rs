@@ -37,9 +37,8 @@ use yellowstone_grpc_proto::geyser::{
 
 pub struct RaydiumAmmDex;
 
-#[async_trait::async_trait]
 impl Quoter for RaydiumAmmDex {
-    async fn quote(
+    fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
@@ -512,6 +511,7 @@ pub struct RaydiumAmmCacheUpdater {
 }
 
 impl RaydiumAmmCacheUpdater {
+
     pub fn new(grpc_message: GrpcMessage) -> Result<Self> {
         if let RaydiumAMMData {
             mint_0_vault_amount,

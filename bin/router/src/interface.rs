@@ -466,9 +466,8 @@ pub trait Dex: Send + Sync + Debug {
     ) -> InstructionItem;
 }
 
-#[async_trait::async_trait]
 pub trait Quoter: Send + Sync {
-    async fn quote(
+    fn quote(
         &self,
         amount_in: u64,
         in_mint: Pubkey,
