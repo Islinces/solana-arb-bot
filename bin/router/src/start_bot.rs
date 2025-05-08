@@ -29,8 +29,8 @@ use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 pub struct Command {
-    #[arg(long, required = true)]
-    keypair_path: String,
+    #[arg(long)]
+    keypair_path: Option<String>,
     #[arg(long)]
     dex_json_path: Option<String>,
     #[arg(long, required = true)]
@@ -58,7 +58,7 @@ pub enum ExecutorType {
 pub async fn run() -> anyhow::Result<()> {
     let command = Command::parse();
     let mut keypair = None;
-    let keypair_path = command.keypair_path;
+    let keypair_path = command.keypair_path.unwrap_or("key.bin".to_string());
     loop {
         println!("请输入密码：");
         let input_password = read_password().expect("读取密码失败");
@@ -133,18 +133,17 @@ pub async fn run() -> anyhow::Result<()> {
     let wallet_all_ata_amount_cache = wallet_all_ata_amount.clone();
     let native_mint_amount_cache = native_mint_amount.clone();
     let wallet_ata_refresher_rpc_client = rpc_client.clone();
-    // tokio::spawn(async move {
-    //     wallet_ata_refresher(
-    //         wallet_ata_refresher_rpc_client.clone(),
-    //         wallet,
-    //         wallet_all_ata_amount_cache,
-    //         native_mint_amount_cache,
-    //         native_mint_ata,
-    //         Duration::from_secs(60),
-    //     )
-    //     .await;
-    // });
-
+    tokio::spawn(async move {
+        wallet_ata_refresher(
+            wallet_ata_refresher_rpc_client.clone(),
+            wallet,
+            wallet_all_ata_amount_cache,
+            native_mint_amount_cache,
+            native_mint_ata,
+            Duration::from_secs(60),
+        )
+        .await;
+    });
     let executor_type = ExecutorType::JITO(JitoConfig {
         jito_region,
         jito_uuid,
@@ -209,13 +208,10 @@ async fn init_wallet_ata_account(
         .iter()
         .map(|a| (Pubkey::from_str(&a.pubkey).unwrap(), a.account.lamports))
         .collect::<DashMap<_, _>>();
-    let native_mint_ata_amount = 1000000000000;
-    // wallet_all_ata_account
-    // .get(&native_mint_ata)
-    // .unwrap()
-    // .clone();
-    // TODO 测试
-    wallet_all_ata_account.insert(native_mint_ata, 1000000000000);
+    let native_mint_ata_amount = wallet_all_ata_account
+        .get(&native_mint_ata)
+        .unwrap()
+        .clone();
     (wallet_all_ata_account, native_mint_ata_amount)
 }
 
