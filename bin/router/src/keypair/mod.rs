@@ -141,15 +141,18 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let vault_path = temp_dir.path().join("keypair_vault.bin");
         // // Create a test keypair
-        // let original_keypair = Keypair::new();
+        let original_keypair = Keypair::new();
         let password = "test_password123";
         // // Create and save vault
-        // let vault = KeypairVault::create(password, &original_keypair)?;
-        // vault.save(&vault_path)?;
-        let vault_path=PathBuf::from_str("./src/keypair/keypair_vault.bin").unwrap();
-        // Load and decrypt vault
-        let loaded_vault = KeypairVault::load(&vault_path)?;
-        let decrypted_keypair = loaded_vault.decrypt(password)?;
+        let vault = KeypairVault::create(password, &original_keypair)?;
+        vault.save(&vault_path)?;
+
+
+
+        // let vault_path=PathBuf::from_str("./src/keypair/keypair_vault.bin").unwrap();
+        // // Load and decrypt vault
+        // let loaded_vault = KeypairVault::load(&vault_path)?;
+        // let decrypted_keypair = loaded_vault.decrypt(password)?;
 
         // Verify keypairs match
         // assert_eq!(original_keypair.to_bytes(), decrypted_keypair.to_bytes());

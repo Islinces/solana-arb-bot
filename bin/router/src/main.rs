@@ -1,7 +1,7 @@
-use std::env;
 use chrono::Local;
 use clap::Parser;
 use router::start_bot;
+use std::env;
 use tracing::info;
 use tracing_appender::non_blocking;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
