@@ -132,7 +132,8 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                 // 1.lb pair
                 accounts.push(AccountMeta::new(item.pool_id, false));
                 // 2.bitmap extension
-                accounts.push(AccountMeta::new(item.bitmap_extension, false));
+                // accounts.push(AccountMeta::new(item.bitmap_extension, false));
+                accounts.push(AccountMeta::new(DexType::MeteoraDLMM.get_program_id(), false));
                 // 3.mint_0 vault
                 accounts.push(AccountMeta::new(item.mint_0_vault, false));
                 // 4.mint_1 vault

@@ -112,17 +112,7 @@ impl InstructionItemCreator for RaydiumCLMMDex {
                 .unwrap()
                 .iter()
                 .take(3)
-                .map(|a| {
-                    Pubkey::find_program_address(
-                        &[
-                            crate::dex::raydium_clmm::sdk::tick_array::TICK_ARRAY_SEED.as_bytes(),
-                            pool.pool_id.to_bytes().as_ref(),
-                            &a.start_tick_index.to_le_bytes(),
-                        ],
-                        &DexType::RaydiumCLmm.get_program_id(),
-                    )
-                    .0
-                })
+                .map(|a| a.key())
                 .collect::<Vec<_>>(),
                 alt: pool.alt.clone(),
                 zero_to_one,
@@ -184,7 +174,7 @@ impl AccountMetaConverter for RaydiumCLMMDex {
                     .collect::<Vec<_>>();
                 accounts.push(tick_arrays.remove(0));
                 // 11.bitmap_extension
-                accounts.push(AccountMeta::new_readonly(
+                accounts.push(AccountMeta::new(
                     TickArrayBitmapExtension::key(item.pool_id),
                     false,
                 ));
