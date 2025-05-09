@@ -18,7 +18,7 @@ use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::hash::Hash;
-use solana_program::instruction::Instruction;
+use solana_program::instruction::{AccountMeta, Instruction};
 use solana_program::message::v0::Message;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
@@ -194,8 +194,9 @@ impl JitoArbExecutor {
         let mut alts = Vec::with_capacity(2);
         let mut route_plan = Vec::with_capacity(quote_result.instruction_items.len());
         for (index, item) in quote_result.instruction_items.into_iter().enumerate() {
-            let swap = item.get_swap_type();
+            let (swap, program_id) = item.get_swap_type();
             if let Some((accounts, item_alts)) = item.parse_account_meta(wallet) {
+                remaining_accounts.push(AccountMeta::new_readonly(program_id, false));
                 remaining_accounts.extend(accounts);
                 alts.extend(item_alts);
                 route_plan.push(RoutePlanStep {
@@ -208,12 +209,17 @@ impl JitoArbExecutor {
                 return None;
             }
         }
-        // let in_mint_ata = *self.mint_ata.get(&amount_in_mint)?.value();
-        let in_mint_ata = Pubkey::default();
+        // info!(
+        //     "remaining_accounts: {:#?}",
+        //     remaining_accounts
+        //         .iter()
+        //         .map(|a| a.pubkey.to_string())
+        //         .collect::<Vec<_>>()
+        // );
         route_builder
             .user_transfer_authority(wallet)
-            .user_source_token_account(in_mint_ata)
-            .user_destination_token_account(in_mint_ata)
+            .user_source_token_account(self.native_ata)
+            .user_destination_token_account(self.native_ata)
             .destination_mint(amount_in_mint)
             .program(crate::arbitrage::JUPITER_ID)
             .in_amount(quote_result.amount_in)

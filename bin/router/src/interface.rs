@@ -188,18 +188,21 @@ pub enum InstructionItem {
 }
 
 impl InstructionItem {
-    pub fn get_swap_type(&self) -> Swap {
+    pub fn get_swap_type(&self) -> (Swap, Pubkey) {
         match self {
-            InstructionItem::RaydiumAMM(_) => Raydium,
-            InstructionItem::RaydiumCLMM(_) => RaydiumClmm,
-            InstructionItem::PumpFunAMM(item) => {
+            InstructionItem::RaydiumAMM(_) => (Raydium, DexType::RaydiumAMM.get_program_id()),
+            InstructionItem::RaydiumCLMM(_) => (RaydiumClmm, DexType::RaydiumCLmm.get_program_id()),
+            InstructionItem::PumpFunAMM(item) => (
                 if item.zero_to_one {
                     Swap::PumpdotfunAmmSell
                 } else {
                     Swap::PumpdotfunAmmBuy
-                }
+                },
+                DexType::PumpFunAMM.get_program_id(),
+            ),
+            InstructionItem::MeteoraDLMM(_) => {
+                (Swap::MeteoraDlmm, DexType::MeteoraDLMM.get_program_id())
             }
-            InstructionItem::MeteoraDLMM(_) => Swap::MeteoraDlmm,
         }
     }
 

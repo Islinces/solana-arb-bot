@@ -151,10 +151,17 @@ impl AccountMetaConverter for PumpFunDex {
                     crate::dex::pump_fun::get_fee_account_with_rand(),
                     false,
                 ));
-                // 11.pump fun sol小费账户
-                // TODO 是否固定
+                // 11.pump fun sol ata 小费账户
                 accounts.push(AccountMeta::new(
-                    Pubkey::from_str("BWXT6RUhit9FfJQM3pBmqeFLPYmuxgmyhMGC5sGr8RbA").unwrap(),
+                    Pubkey::find_program_address(
+                        &[
+                            &wallet.to_bytes(),
+                            &get_mint_program().to_bytes(),
+                            &spl_token::native_mint::id().to_bytes(),
+                        ],
+                        &get_ata_program(),
+                    )
+                    .0,
                     false,
                 ));
                 // 12.base quote program
