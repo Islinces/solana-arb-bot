@@ -108,24 +108,34 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     "method":"sendBundle",
                     "params": params
                 });
-                let bundle_id = "";
-                // let jito_response = self
-                //     .client
-                //     .clone()
-                //     .post(self.jito_url.clone())
-                //     .header("Content-Type", "application/json")
-                //     .json(&data.to_string())
-                //     .send()
-                //     .await;
-                // match jito_response {
-                //     Ok(response) => {
-                //         let bundle_id = response.json::<JitoResponse>().await?.result;
-                //         info!("Jito successful, bundle : {}", bundle_id);
-                //     }
-                //     Err(e) => {
-                //         error!("Jito error: {}", e);
-                //     }
-                // }
+                let mut bundle_id;
+                let jito_response = self
+                    .client
+                    .clone()
+                    .post(self.jito_url.clone())
+                    .header("Content-Type", "application/json")
+                    .json(&data)
+                    .send()
+                    .await;
+                match jito_response {
+                    Ok(response) => {
+                        match response.text().await {
+                            Ok(result) => {
+                                bundle_id = result;
+                            }
+                            Err(err) => {
+                                error!("Jito error: {:#?}", err);
+                                bundle_id = "".to_string();
+                            }
+                        }
+                        // bundle_id = response.json::<String>().await?;
+                        // info!("Jito successful, bundle : {}", bundle_id);
+                    }
+                    Err(e) => {
+                        bundle_id = "".to_string();
+                        error!("Jito error: {}", e);
+                    }
+                }
                 let send_jito_request_cost = jito_request_start.elapsed();
                 let x = (amount_in as f64).div(10_i32.pow(9) as f64);
                 info!("耗时: {}ms, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}",

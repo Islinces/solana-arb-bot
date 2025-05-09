@@ -81,16 +81,11 @@ pub async fn run() -> anyhow::Result<()> {
     let start_amount_in = command.amount_in;
     let wallet = keypair.pubkey();
     // RPC
-    let grpc_url = command
-        .grpc_url
-        .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
-    let rpc_url = command
-        .rpc_url
-        .unwrap_or("https://solana-rpc.publicnode.com".to_string());
+    let grpc_url = command.grpc_url.unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
+
+    let rpc_url = command.rpc_url.unwrap_or("https://solana-rpc.publicnode.com".to_string());
     // JITO
-    let jito_region = command
-        .jito_region
-        .unwrap_or_else(|| "frankfurt".to_string());
+    let jito_region = command.jito_region.unwrap_or_else(|| "frankfurt".to_string());
     let jito_uuid = command.jito_uuid;
 
     info!(
@@ -142,7 +137,7 @@ pub async fn run() -> anyhow::Result<()> {
             native_mint_ata,
             Duration::from_secs(60),
         )
-        .await;
+            .await;
     });
     let executor_type = ExecutorType::JITO(JitoConfig {
         jito_region,

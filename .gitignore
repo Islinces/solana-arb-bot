@@ -10,3 +10,4 @@ target/
 
 # vs code
 .vscode/
+.idea
