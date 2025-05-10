@@ -108,6 +108,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     "method":"sendBundle",
                     "params": params
                 });
+                // info!("{}", data.to_string());
                 let mut bundle_id;
                 let jito_response = self
                     .client
@@ -166,19 +167,12 @@ impl JitoArbExecutor {
         let jito_host = if jito_config.jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
         } else {
-            format!(
-                "https://{}.mainnet.block-engine.jito.wtf",
-                jito_config.jito_region
-            )
+            format!("https://{}.mainnet.block-engine.jito.wtf", jito_config.jito_region)
         };
         let jito_url = if jito_config.jito_uuid.is_none() {
             format!("{}/api/v1/bundles", jito_host)
         } else {
-            format!(
-                "{}/api/v1/bundles?uuid={}",
-                jito_host,
-                jito_config.jito_uuid.unwrap()
-            )
+            format!("{}/api/v1/bundles?uuid={}", jito_host, jito_config.jito_uuid.unwrap())
         };
         Self {
             bot_name,
@@ -311,6 +305,8 @@ impl JitoArbExecutor {
             alts.as_slice(),
             latest_blockhash,
         )?;
+        // info!("alt {:#?}", alts.as_slice());
+        info!("first_message {:#?}", first_message);
         let first_transaction = VersionedTransaction::try_new(
             solana_sdk::message::VersionedMessage::V0(first_message),
             &[&self.keypair],
