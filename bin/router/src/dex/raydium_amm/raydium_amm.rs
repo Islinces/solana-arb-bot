@@ -7,7 +7,7 @@ use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::RaydiumAMMData;
 use crate::interface::{
-    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
     InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
@@ -499,62 +499,6 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
             None
         } else {
             Some(all_pools)
-        }
-    }
-}
-
-pub struct RaydiumAmmCacheUpdater {
-    mint_0_vault_amount: Option<u64>,
-    mint_1_vault_amount: Option<u64>,
-    mint_0_need_take_pnl: Option<u64>,
-    mint_1_need_take_pnl: Option<u64>,
-}
-
-impl RaydiumAmmCacheUpdater {
-
-    pub fn new(grpc_message: GrpcMessage) -> Result<Self> {
-        if let RaydiumAMMData {
-            mint_0_vault_amount,
-            mint_1_vault_amount,
-            mint_0_need_take_pnl,
-            mint_1_need_take_pnl,
-            ..
-        } = grpc_message
-        {
-            Ok(Self {
-                mint_0_vault_amount,
-                mint_1_vault_amount,
-                mint_0_need_take_pnl,
-                mint_1_need_take_pnl,
-            })
-        } else {
-            Err(anyhow!("生成CachePoolUpdater失败：传入的参数类型不支持"))
-        }
-    }
-}
-
-impl CacheUpdater for RaydiumAmmCacheUpdater {
-    fn update_cache(&self, pool: &mut Pool) -> Result<()> {
-        if let PoolState::RaydiumAMM(ref mut pool_state) = pool.state {
-            if change_option_ignore_none_old(
-                &mut pool_state.mint_0_vault_amount,
-                self.mint_0_vault_amount,
-            ) || change_option_ignore_none_old(
-                &mut pool_state.mint_1_vault_amount,
-                self.mint_1_vault_amount,
-            ) || change_option_ignore_none_old(
-                &mut pool_state.mint_0_need_take_pnl,
-                self.mint_0_need_take_pnl,
-            ) || change_option_ignore_none_old(
-                &mut pool_state.mint_1_need_take_pnl,
-                self.mint_1_need_take_pnl,
-            ) {
-                Ok(())
-            } else {
-                Err(anyhow!(""))
-            }
-        } else {
-            Err(anyhow!(""))
         }
     }
 }

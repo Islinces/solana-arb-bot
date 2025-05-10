@@ -13,7 +13,7 @@ use crate::dex::{get_ata_program, get_mint_program, get_system_program};
 use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::{PumpFunAMMData, RaydiumAMMData};
 use crate::interface::{
-    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate,  Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
     InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
@@ -47,7 +47,7 @@ impl Quoter for PumpFunDex {
         pool: &Pool,
         _clock: Arc<Clock>,
     ) -> Option<u64> {
-        if amount_in == u64::MIN || (in_mint != pool.mint_0() && in_mint != pool.mint_1()) {
+        if amount_in == 0 || (in_mint != pool.mint_0() && in_mint != pool.mint_1()) {
             return None;
         }
         if let PoolState::PumpFunAMM(pool_state) = &pool.state {
@@ -440,49 +440,6 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
             None
         } else {
             Some(all_pools)
-        }
-    }
-}
-
-pub struct PumpFunCacheUpdater {
-    mint_0_vault_amount: Option<u64>,
-    mint_1_vault_amount: Option<u64>,
-}
-
-impl PumpFunCacheUpdater {
-    pub fn new(grpc_message: GrpcMessage) -> Result<Self> {
-        if let PumpFunAMMData {
-            mint_0_vault_amount,
-            mint_1_vault_amount,
-            ..
-        } = grpc_message
-        {
-            Ok(Self {
-                mint_0_vault_amount,
-                mint_1_vault_amount,
-            })
-        } else {
-            Err(anyhow!("生成CachePoolUpdater失败：传入的参数类型不支持"))
-        }
-    }
-}
-
-impl CacheUpdater for PumpFunCacheUpdater {
-    fn update_cache(&self, pool: &mut Pool) -> Result<()> {
-        if let PoolState::PumpFunAMM(ref mut pool_state) = pool.state {
-            if change_data_if_not_same(
-                &mut pool_state.mint_0_vault_amount,
-                self.mint_0_vault_amount.unwrap(),
-            ) || change_data_if_not_same(
-                &mut pool_state.mint_1_vault_amount,
-                self.mint_1_vault_amount.unwrap(),
-            ) {
-                Ok(())
-            } else {
-                Err(anyhow!(""))
-            }
-        } else {
-            Err(anyhow!(""))
         }
     }
 }

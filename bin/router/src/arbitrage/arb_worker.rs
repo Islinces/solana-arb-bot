@@ -5,7 +5,7 @@ use async_channel::Receiver;
 use burberry::ActionSubmitter;
 use eyre::Context;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing::warn;
 
 pub struct Arb {
@@ -14,7 +14,7 @@ pub struct Arb {
     swap_sender: Arc<dyn ActionSubmitter<Action>>,
     profit_threshold: u64,
     start_amount_in: u64,
-    sol_ata_amount: Arc<Mutex<u64>>,
+    sol_ata_amount: Arc<RwLock<u64>>,
 }
 
 impl Arb {
@@ -24,7 +24,7 @@ impl Arb {
         swap_sender: Arc<dyn ActionSubmitter<Action>>,
         profit_threshold: u64,
         start_amount_in: u64,
-        sol_ata_amount: Arc<Mutex<u64>>,
+        sol_ata_amount: Arc<RwLock<u64>>,
     ) -> Self {
         Self {
             dex,
@@ -41,9 +41,10 @@ impl Arb {
         loop {
             tokio::select! {
                 message = self.ready_grpc_data_receiver.recv() => {
-                    let guard = self.sol_ata_amount.lock().await;
-                    let sol_ata_amount = guard.clone();
-                    drop(guard);
+                    let sol_ata_amount = {
+                        let  guard = self.sol_ata_amount.read().await;
+                        *guard
+                    };
                     if let Some(quote_result) = self.dex.update_cache_and_find_route(
                         message.context("").unwrap(),
                         self.profit_threshold,

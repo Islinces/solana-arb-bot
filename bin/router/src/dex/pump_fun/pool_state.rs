@@ -1,8 +1,11 @@
-use crate::interface::DexType;
-use solana_program::pubkey::Pubkey;
-use std::fmt::{Debug, Display, Formatter};
+use crate::cache::PoolState;
+use crate::dex::common::utils::change_data_if_not_same;
+use crate::interface::{DexType, GrpcMessage};
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use solana_program::address_lookup_table::AddressLookupTableAccount;
+use solana_program::pubkey::Pubkey;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub struct PumpFunPoolState {
@@ -30,6 +33,31 @@ impl PumpFunPoolState {
             mint_1_vault_amount,
             lp_fee_basis_points,
             protocol_fee_basis_points,
+        }
+    }
+
+    pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
+        match grpc_message {
+            GrpcMessage::PumpFunAMMData {
+                mint_0_vault_amount,
+                mint_1_vault_amount,
+                ..
+            } => {
+                let mut changed = change_data_if_not_same(
+                    &mut self.mint_0_vault_amount,
+                    mint_0_vault_amount.unwrap(),
+                );
+                changed |= change_data_if_not_same(
+                    &mut self.mint_1_vault_amount,
+                    mint_1_vault_amount.unwrap(),
+                );
+                if changed {
+                    Ok(())
+                } else {
+                    Err(anyhow!(""))
+                }
+            }
+            _ => Err(anyhow!("")),
         }
     }
 }

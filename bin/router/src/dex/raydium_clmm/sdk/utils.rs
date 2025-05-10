@@ -1,3 +1,4 @@
+use crate::dex::raydium_clmm::pool_state::{Tick, TickArray};
 use crate::dex::raydium_clmm::sdk::big_num::U128;
 use crate::dex::raydium_clmm::sdk::config::{AmmConfig, FEE_RATE_DENOMINATOR_VALUE};
 use crate::dex::raydium_clmm::sdk::pool::PoolState;

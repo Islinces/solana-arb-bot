@@ -11,7 +11,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Handle, RuntimeFlavor};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing::error;
 
 #[macro_export]
@@ -47,7 +47,7 @@ pub struct ArbStrategy {
     event_capacity: u64,
     event_expired_mills: u64,
     arb_worker_size: usize,
-    sol_ata_amount: Arc<Mutex<u64>>,
+    sol_ata_amount: Arc<RwLock<u64>>,
     profit_threshold: u64,
     protocol_grpc_sender: Option<HashMap<DexType, Sender<AccountUpdate>>>,
     rpc_client: Arc<RpcClient>,
@@ -60,7 +60,7 @@ impl ArbStrategy {
     pub fn new(
         rpc_client: Arc<RpcClient>,
         arb_worker_size: usize,
-        sol_ata_amount: Arc<Mutex<u64>>,
+        sol_ata_amount: Arc<RwLock<u64>>,
         profit_threshold: u64,
         event_expired_mills: Option<u64>,
         event_capacity: Option<u64>,

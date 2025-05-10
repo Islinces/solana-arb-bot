@@ -1,8 +1,11 @@
-use crate::interface::DexType;
+use crate::cache::PoolState;
+use crate::dex::common::utils::change_option_ignore_none_old;
+use crate::interface::{DexType, GrpcMessage};
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
 use std::fmt::{Debug, Display, Formatter};
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct RaydiumAMMPoolState {
@@ -36,6 +39,41 @@ impl RaydiumAMMPoolState {
             mint_1_need_take_pnl,
             swap_fee_numerator,
             swap_fee_denominator,
+        }
+    }
+
+    pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
+        match grpc_message {
+            GrpcMessage::RaydiumAMMData {
+                mint_0_vault_amount,
+                mint_1_vault_amount,
+                mint_0_need_take_pnl,
+                mint_1_need_take_pnl,
+                ..
+            } => {
+                let mut changed = change_option_ignore_none_old(
+                    &mut self.mint_0_vault_amount,
+                    mint_0_vault_amount,
+                );
+                changed |= change_option_ignore_none_old(
+                    &mut self.mint_1_vault_amount,
+                    mint_1_vault_amount,
+                );
+                changed |= change_option_ignore_none_old(
+                    &mut self.mint_0_need_take_pnl,
+                    mint_0_need_take_pnl,
+                );
+                changed |= change_option_ignore_none_old(
+                    &mut self.mint_1_need_take_pnl,
+                    mint_1_need_take_pnl,
+                );
+                if changed {
+                    Ok(())
+                } else {
+                    Err(anyhow!(""))
+                }
+            }
+            _ => Err(anyhow!("")),
         }
     }
 }

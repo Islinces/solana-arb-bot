@@ -14,7 +14,7 @@ use crate::dex::meteora_dlmm::sdk::interface::accounts::{
 use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
 use crate::interface::{
-    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
     InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
@@ -35,9 +35,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
-    SubscribeRequestFilterAccounts,
+    SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter,
 };
 
 pub struct MeteoraDLMMDex;
@@ -59,31 +60,25 @@ impl Quoter for MeteoraDLMMDex {
         if let MeteoraDLMM(pool_state) = &pool.state {
             let swap_for_y = in_mint == mint_0;
             let lp_pair_state: LbPair = pool_state.clone().into();
-            let result = quote_exact_in(
-                pool.pool_id,
-                lp_pair_state,
-                amount_in,
-                swap_for_y,
-                if swap_for_y {
-                    pool_state.swap_for_y_bin_array_map.clone()
-                } else {
-                    pool_state.swap_for_x_bin_array_map.clone()
-                },
-                pool_state.bin_array_bitmap_extension,
-                clock.clone(),
-                pool_state.mint_x_transfer_fee_config,
-                pool_state.mint_y_transfer_fee_config,
-            );
-            match result {
-                Ok(quote) => Some(quote.amount_out),
-                Err(e) => {
-                    // error!(
-                    //     "dlmm swap error : {:?}, pool_id : {:?}",
-                    //     e,
-                    //     self.pool_id.to_string()
-                    // );
-                    None
+            match pool_state.get_bin_array_map(pool.pool_id, swap_for_y, 3) {
+                Ok(bin_array_map) => {
+                    let result = quote_exact_in(
+                        pool.pool_id,
+                        lp_pair_state,
+                        amount_in,
+                        swap_for_y,
+                        bin_array_map,
+                        pool_state.bin_array_bitmap_extension,
+                        clock.clone(),
+                        pool_state.mint_x_transfer_fee_config,
+                        pool_state.mint_y_transfer_fee_config,
+                    );
+                    match result {
+                        Ok(quote) => Some(quote.amount_out),
+                        Err(_) => None,
+                    }
                 }
+                Err(_) => None,
             }
         } else {
             None
@@ -102,15 +97,7 @@ impl InstructionItemCreator for MeteoraDLMMDex {
                 mint_0_vault: pool_state.mint_0_vault,
                 mint_1_vault: pool_state.mint_1_vault,
                 bitmap_extension: derive_bin_array_bitmap_extension(pool.pool_id).0,
-                bin_arrays: if zero_to_one {
-                    pool_state.swap_for_y_bin_array_map.clone()
-                } else {
-                    pool_state.swap_for_x_bin_array_map.clone()
-                }
-                .keys()
-                .take(3)
-                .map(|k| k.clone())
-                .collect::<Vec<_>>(),
+                bin_arrays: pool_state.get_bin_array_keys(pool.pool_id, zero_to_one, 3),
                 alt: pool.alt.clone(),
                 zero_to_one,
             }))
@@ -128,12 +115,15 @@ impl AccountMetaConverter for MeteoraDLMMDex {
     ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
         match instruction_item {
             InstructionItem::MeteoraDLMM(item) => {
-                let mut accounts = Vec::with_capacity(13);
+                let mut accounts = Vec::with_capacity(20);
                 // 1.lb pair
                 accounts.push(AccountMeta::new(item.pool_id, false));
                 // 2.bitmap extension
                 // accounts.push(AccountMeta::new(item.bitmap_extension, false));
-                accounts.push(AccountMeta::new(DexType::MeteoraDLMM.get_program_id(), false));
+                accounts.push(AccountMeta::new(
+                    DexType::MeteoraDLMM.get_program_id(),
+                    false,
+                ));
                 // 3.mint_0 vault
                 accounts.push(AccountMeta::new(item.mint_0_vault, false));
                 // 4.mint_1 vault
@@ -282,28 +272,52 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
             ],
             ..Default::default()
         };
-        // let mut clock_account = HashMap::new();
-        // clock_account.insert(
-        //     "Clock".to_string(),
-        //     SubscribeRequestFilterAccounts {
-        //         account: vec![Clock::id().to_string()],
-        //         ..Default::default()
-        //     },
-        // );
-        // let clock_request = SubscribeRequest {
-        //     accounts: clock_account,
-        //     commitment: Some(CommitmentLevel::Finalized).map(|x| x as i32),
-        //     ..Default::default()
-        // };
+        let mut clock_account = HashMap::new();
+        clock_account.insert(
+            "Clock".to_string(),
+            SubscribeRequestFilterAccounts {
+                account: vec![Clock::id().to_string()],
+                ..Default::default()
+            },
+        );
+        let clock_request = SubscribeRequest {
+            accounts: clock_account,
+            commitment: Some(CommitmentLevel::Finalized).map(|x| x as i32),
+            ..Default::default()
+        };
+        let mut bin_arrays_subscribe_accounts = HashMap::new();
+        bin_arrays_subscribe_accounts.insert(
+            format!(
+                "{:?}:{:?}",
+                DexType::MeteoraDLMM,
+                GrpcAccountUpdateType::BinArray
+            ),
+            SubscribeRequestFilterAccounts {
+                account: vec![],
+                owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
+                filters: vec![SubscribeRequestFilterAccountsFilter {
+                    filter: Some(Filter::Datasize(10136)),
+                }],
+            },
+        );
+        let bin_arrays_subscribe_request = SubscribeRequest {
+            accounts: bin_arrays_subscribe_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            ..Default::default()
+        };
         Some(vec![
             (
                 (DexType::MeteoraDLMM, GrpcAccountUpdateType::Pool),
                 pool_request,
             ),
-            // (
-            //     (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
-            //     clock_request,
-            // ),
+            (
+                (DexType::MeteoraDLMM, GrpcAccountUpdateType::BinArray),
+                bin_arrays_subscribe_request,
+            ),
+            (
+                (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
+                clock_request,
+            ),
         ])
     }
 }
@@ -428,10 +442,6 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
                     let lb_pair_id = **lb_pair_id;
                     if let Some(account) = lb_pair_account {
                         let lb_pair = LbPairAccount::deserialize(&account.data).unwrap().0;
-                        // if lb_pair.token_x_mint!=Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap()
-                        //     &&lb_pair.token_y_mint!=Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(){
-                        //     continue;
-                        // }
                         let bitmap_extension_id = derive_bin_array_bitmap_extension(lb_pair_id).0;
                         let bitmap_extension = if let Ok(bitmap_extension_account) =
                             rpc_client.get_account_data(&bitmap_extension_id).await
@@ -570,7 +580,7 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                     ) = array_refs![src, 4, 4, 4, 8, 1, 4, 2, 1, 1, 128, 8];
                     self.txn = Some(txn);
                     self.pool_id = Some(pool_id);
-                    self.grpc_message = Some(GrpcMessage::MeteoraDLMMData {
+                    self.grpc_message = Some(GrpcMessage::MeteoraDLMMPoolData {
                         pool_id,
                         active_id: i32::from_le_bytes(*active_id),
                         bin_array_bitmap: bin_array_bitmap
@@ -584,6 +594,12 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                         index_reference: i32::from_le_bytes(*index_reference),
                         last_update_timestamp: i64::from_le_bytes(*last_update_timestamp),
                     });
+                    Ok(())
+                }
+                GrpcAccountUpdateType::BinArray => {
+                    self.grpc_message = Some(GrpcMessage::MeteoraDLMMBinArrayData(
+                        BinArrayAccount::deserialize(data)?.0,
+                    ));
                     Ok(())
                 }
                 GrpcAccountUpdateType::Clock => {
@@ -610,66 +626,5 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
 
     fn get_insert_data(&self) -> GrpcMessage {
         self.grpc_message.as_ref().unwrap().clone()
-    }
-}
-
-pub struct MeteoraDLMMCacheUpdater {
-    active_id: i32,
-    bin_array_bitmap: [u64; 16],
-    volatility_accumulator: u32,
-    volatility_reference: u32,
-    index_reference: i32,
-    last_update_timestamp: i64,
-}
-
-impl MeteoraDLMMCacheUpdater {
-    pub fn new(grpc_message: GrpcMessage) -> Result<Self> {
-        if let GrpcMessage::MeteoraDLMMData {
-            active_id,
-            bin_array_bitmap,
-            volatility_accumulator,
-            volatility_reference,
-            index_reference,
-            last_update_timestamp,
-            ..
-        } = grpc_message
-        {
-            Ok(Self {
-                active_id,
-                bin_array_bitmap,
-                volatility_accumulator,
-                volatility_reference,
-                index_reference,
-                last_update_timestamp,
-            })
-        } else {
-            Err(anyhow!("生成CachePoolUpdater失败：传入的参数类型不支持"))
-        }
-    }
-}
-
-impl CacheUpdater for MeteoraDLMMCacheUpdater {
-    fn update_cache(&self, pool: &mut Pool) -> anyhow::Result<()> {
-        if let MeteoraDLMM(ref mut cache_data) = pool.state {
-            let active_id = &mut cache_data.active_id;
-            let bin_array_bit_map = &mut cache_data.bin_array_bitmap;
-            let volatility_accumulator = &mut cache_data.volatility_accumulator;
-            let volatility_reference = &mut cache_data.volatility_reference;
-            let index_reference = &mut cache_data.index_reference;
-            let last_update_timestamp = &mut cache_data.last_update_timestamp;
-            if change_data_if_not_same(active_id, self.active_id)
-                || change_data_if_not_same(bin_array_bit_map, self.bin_array_bitmap)
-                || change_data_if_not_same(volatility_accumulator, self.volatility_accumulator)
-                || change_data_if_not_same(volatility_reference, self.volatility_reference)
-                || change_data_if_not_same(index_reference, self.index_reference)
-                || change_data_if_not_same(last_update_timestamp, self.last_update_timestamp)
-            {
-                Ok(())
-            } else {
-                Err(anyhow!(""))
-            }
-        } else {
-            Err(anyhow!(""))
-        }
     }
 }

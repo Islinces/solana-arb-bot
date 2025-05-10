@@ -1,11 +1,17 @@
-use crate::dex::raydium_clmm::sdk::tick_array::TickArrayState;
+use crate::dex::common::utils::change_data_if_not_same;
+use crate::dex::raydium_clmm::sdk::pool::PoolState;
+use crate::dex::raydium_clmm::sdk::tick_array::{
+    TickArrayState, TickState, TICK_ARRAY_SEED, TICK_ARRAY_SIZE, TICK_ARRAY_SIZE_USIZE,
+};
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use crate::interface::DexType;
+use crate::interface::{DexType, GrpcMessage};
+use anyhow::anyhow;
+use borsh::BorshDeserialize;
+use serde::Deserialize;
 use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct RaydiumCLMMPoolState {
@@ -20,8 +26,165 @@ pub struct RaydiumCLMMPoolState {
     pub tick_current: i32,
     pub tick_array_bitmap: [u64; 16],
     pub tick_array_bitmap_extension: TickArrayBitmapExtension,
-    pub zero_to_one_tick_array_states: Option<VecDeque<TickArrayState>>,
-    pub one_to_zero_tick_array_states: Option<VecDeque<TickArrayState>>,
+    pub tick_array_map: HashMap<Pubkey, TickArray>,
+    pub tick_array_index_range: Vec<(i32, Pubkey)>,
+}
+
+impl RaydiumCLMMPoolState {
+    pub fn new(
+        pool_id: &Pubkey,
+        pool_state: PoolState,
+        trade_fee_rate: u32,
+        bitmap_extension: TickArrayBitmapExtension,
+        left_tick_arrays: Option<VecDeque<TickArrayState>>,
+        right_tick_arrays: Option<VecDeque<TickArrayState>>,
+    ) -> Self {
+        let mut tick_array_map = HashMap::with_capacity(20);
+        let mut tick_array_index = HashSet::with_capacity(20);
+        for tick_array_state in left_tick_arrays.unwrap_or(VecDeque::new()) {
+            let index = unsafe { tick_array_state.start_tick_index };
+            tick_array_index.insert((index, TickArrayState::key_(&pool_id, &index)));
+            tick_array_map.insert(tick_array_state.key(), TickArray::from(tick_array_state));
+        }
+        for tick_array_state in right_tick_arrays.unwrap_or(VecDeque::new()) {
+            let index = unsafe { tick_array_state.start_tick_index };
+            tick_array_index.insert((index, TickArrayState::key_(&pool_id, &index)));
+            tick_array_map.insert(tick_array_state.key(), TickArray::from(tick_array_state));
+        }
+        let mut tick_array_index = tick_array_index.into_iter().collect::<Vec<_>>();
+        tick_array_index.sort_unstable();
+        let threshold = 10 * (pool_state.tick_spacing * 60) as i32;
+        let min_index = tick_array_index
+            .first()
+            .unwrap()
+            .0
+            .checked_sub(threshold)
+            .unwrap();
+        let max_index = tick_array_index
+            .first()
+            .unwrap()
+            .0
+            .checked_add(threshold)
+            .unwrap_or(i32::MAX);
+        tick_array_index.insert(0, (min_index, TickArrayState::key_(pool_id, &min_index)));
+        tick_array_index.push((max_index, TickArrayState::key_(pool_id, &max_index)));
+        Self {
+            amm_config: pool_state.amm_config,
+            mint_0_vault: pool_state.token_vault_0,
+            mint_1_vault: pool_state.token_vault_1,
+            observation_key: pool_state.observation_key,
+            tick_spacing: pool_state.tick_spacing,
+            trade_fee_rate,
+            liquidity: pool_state.liquidity,
+            sqrt_price_x64: pool_state.sqrt_price_x64,
+            tick_current: pool_state.tick_current,
+            tick_array_bitmap: pool_state.tick_array_bitmap,
+            tick_array_bitmap_extension: bitmap_extension,
+            tick_array_map,
+            tick_array_index_range: tick_array_index,
+        }
+    }
+
+    pub fn get_tick_array_keys(&self, zero_to_one: bool, take_count: u8) -> Vec<Pubkey> {
+        let start_index =
+            TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing);
+        let mut tick_array_keys = self.tick_array_index_range.iter().filter(|(index, _)| {
+            if zero_to_one {
+                index <= &start_index
+            } else {
+                index >= &start_index
+            }
+        });
+        if zero_to_one {
+            tick_array_keys
+                .rev()
+                .take(take_count.into())
+                .filter_map(|(index, tick_array_key)| {
+                    self.tick_array_map
+                        .contains_key(&tick_array_key)
+                        .then(|| tick_array_key.clone())
+                })
+                .collect::<Vec<_>>()
+        } else {
+            tick_array_keys
+                .take(take_count.into())
+                .filter_map(|(index, tick_array_key)| {
+                    self.tick_array_map
+                        .contains_key(&tick_array_key)
+                        .then(|| tick_array_key.clone())
+                })
+                .collect::<Vec<_>>()
+        }
+    }
+
+    pub fn get_tick_arrays(&self, zero_to_one: bool, take_count: u8) -> VecDeque<TickArrayState> {
+        let start_index =
+            TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing);
+        let tick_arrays = self.tick_array_index_range.iter().filter(|(index, _)| {
+            if zero_to_one {
+                index <= &start_index
+            } else {
+                index >= &start_index
+            }
+        });
+        if zero_to_one {
+            tick_arrays
+                .rev()
+                .take(take_count.into())
+                .filter_map(|(index, tick_array_key)| {
+                    self.tick_array_map
+                        .get(tick_array_key)
+                        .map_or(None, |t| Some(t.clone().into()))
+                })
+                .collect::<VecDeque<_>>()
+        } else {
+            tick_arrays
+                .take(take_count.into())
+                .filter_map(|(index, tick_array_key)| {
+                    self.tick_array_map
+                        .get(tick_array_key)
+                        .map_or(None, |t| Some(t.clone().into()))
+                })
+                .collect::<VecDeque<_>>()
+        }
+    }
+
+    pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
+        match grpc_message {
+            GrpcMessage::RaydiumCLMMData(change_data) => {
+                let mut changed =
+                    change_data_if_not_same(&mut self.liquidity, change_data.liquidity);
+                changed |=
+                    change_data_if_not_same(&mut self.tick_current, change_data.tick_current);
+                changed |=
+                    change_data_if_not_same(&mut self.sqrt_price_x64, change_data.sqrt_price_x64);
+                changed |= change_data_if_not_same(
+                    &mut self.tick_array_bitmap,
+                    change_data.tick_array_bitmap,
+                );
+                if changed {
+                    Ok(())
+                } else {
+                    Err(anyhow!(""))
+                }
+            }
+            GrpcMessage::RaydiumCLMMTickArrayData(tick_array) => {
+                let index = tick_array.start_tick_index;
+                if index.ge(&self.tick_array_index_range.first().unwrap().0)
+                    && index.le(&self.tick_array_index_range.last().unwrap().0)
+                {
+                    self.tick_array_map.insert(tick_array.key(), tick_array);
+                    Ok(())
+                } else {
+                    Err(anyhow!(
+                        "TickArray index[{}]不在监控范围内",
+                        tick_array.start_tick_index
+                    ))
+                }
+            }
+            _ => Err(anyhow!("")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -48,4 +211,171 @@ impl Display for RaydiumCLMMInstructionItem {
             self.zero_to_one
         )
     }
+}
+
+#[derive(Debug, Clone, BorshDeserialize)]
+pub struct TickArray {
+    pub pool_id: Pubkey,
+    pub start_tick_index: i32,
+    pub ticks: [Tick; TICK_ARRAY_SIZE_USIZE],
+    pub initialized_tick_count: u8,
+}
+
+impl TickArray {
+    pub fn key(&self) -> Pubkey {
+        Pubkey::find_program_address(
+            &[
+                TICK_ARRAY_SEED.as_bytes(),
+                self.pool_id.as_ref(),
+                &self.start_tick_index.to_be_bytes(),
+            ],
+            &crate::dex::raydium_clmm::ID,
+        )
+        .0
+    }
+
+    /// Get next initialized tick in tick array, `current_tick_index` can be any tick index, in other words, `current_tick_index` not exactly a point in the tickarray,
+    /// and current_tick_index % tick_spacing maybe not equal zero.
+    /// If price move to left tick <= current_tick_index, or to right tick > current_tick_index
+    pub fn next_initialized_tick(
+        &mut self,
+        current_tick_index: i32,
+        tick_spacing: u16,
+        zero_for_one: bool,
+    ) -> anchor_lang::Result<Option<&Tick>> {
+        // 确定当前刻度范围开始位置
+        let current_tick_array_start_index =
+            TickArrayState::get_array_start_index(current_tick_index, tick_spacing);
+        if current_tick_array_start_index != self.start_tick_index {
+            return Ok(None);
+        }
+        // 当前最后一个刻度范围在单位刻度内的位置
+        let mut offset_in_array =
+            (current_tick_index - self.start_tick_index) / i32::from(tick_spacing);
+
+        if zero_for_one {
+            // src -> dst , src的价格是降低的，所以向左寻找初始化刻度
+            while offset_in_array >= 0 {
+                if self.ticks[offset_in_array as usize].is_initialized() {
+                    return Ok(self.ticks.get(offset_in_array as usize));
+                }
+                offset_in_array = offset_in_array - 1;
+            }
+        } else {
+            offset_in_array = offset_in_array + 1;
+            while offset_in_array < TICK_ARRAY_SIZE {
+                if self.ticks[offset_in_array as usize].is_initialized() {
+                    return Ok(self.ticks.get(offset_in_array as usize));
+                }
+                offset_in_array = offset_in_array + 1;
+            }
+        }
+        Ok(None)
+    }
+
+    /// Base on swap directioin, return the first initialized tick in the tick array.
+    pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> anyhow::Result<&Tick> {
+        if zero_for_one {
+            let mut i = TICK_ARRAY_SIZE - 1;
+            while i >= 0 {
+                if self.ticks[i as usize].is_initialized() {
+                    return Ok(self.ticks.get_mut(i as usize).unwrap());
+                }
+                i = i - 1;
+            }
+        } else {
+            let mut i = 0;
+            while i < TICK_ARRAY_SIZE_USIZE {
+                if self.ticks[i].is_initialized() {
+                    return Ok(self.ticks.get_mut(i).unwrap());
+                }
+                i = i + 1;
+            }
+        }
+        Err(anyhow!("InvalidTickArray"))
+    }
+}
+
+impl From<TickArrayState> for TickArray {
+    fn from(value: TickArrayState) -> Self {
+        Self {
+            pool_id: value.pool_id,
+            start_tick_index: value.start_tick_index,
+            ticks: value
+                .ticks
+                .into_iter()
+                .map(Tick::from)
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+            initialized_tick_count: value.initialized_tick_count,
+        }
+    }
+}
+
+impl Into<TickArrayState> for TickArray {
+    fn into(self) -> TickArrayState {
+        TickArrayState {
+            pool_id: self.pool_id,
+            start_tick_index: self.start_tick_index,
+            ticks: self
+                .ticks
+                .into_iter()
+                .map(|t| t.into())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+            initialized_tick_count: self.initialized_tick_count,
+            recent_epoch: 0,
+            padding: [0; 107],
+        }
+    }
+}
+
+#[derive(Debug, Clone, BorshDeserialize, Default)]
+pub struct Tick {
+    pub tick: i32,
+    /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
+    pub liquidity_net: i128,
+    /// The total position liquidity that references this tick
+    pub liquidity_gross: u128,
+}
+
+impl Tick {
+    pub fn is_initialized(&self) -> bool {
+        self.liquidity_gross != 0
+    }
+}
+
+impl From<TickState> for Tick {
+    fn from(value: TickState) -> Self {
+        Self {
+            tick: value.tick,
+            liquidity_net: value.liquidity_net,
+            liquidity_gross: value.liquidity_gross,
+        }
+    }
+}
+
+impl Into<TickState> for Tick {
+    fn into(self) -> TickState {
+        TickState {
+            tick: self.tick,
+            liquidity_net: self.liquidity_net,
+            liquidity_gross: self.liquidity_gross,
+            fee_growth_outside_0_x64: 0,
+            fee_growth_outside_1_x64: 0,
+            reward_growths_outside_x64: [0; 3],
+            padding: [0; 13],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PoolChangeData {
+    pub pool_id: Pubkey,
+    pub tick_current: i32,
+    pub liquidity: u128,
+    pub sqrt_price_x64: u128,
+    pub tick_array_bitmap: [u64; 16],
 }

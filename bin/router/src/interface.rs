@@ -2,24 +2,25 @@ use crate::arbitrage::types::swap::Swap;
 use crate::arbitrage::types::swap::Swap::{Raydium, RaydiumClmm};
 use crate::cache::Pool;
 use crate::dex::meteora_dlmm::meteora_dlmm::{
-    MeteoraDLMMCacheUpdater, MeteoraDLMMDex, MeteoraDLMMGrpcMessageOperator,
-    MeteoraDLMMGrpcSubscribeRequestGenerator, MeteoraDLMMSnapshotFetcher,
+    MeteoraDLMMDex, MeteoraDLMMGrpcMessageOperator, MeteoraDLMMGrpcSubscribeRequestGenerator,
+    MeteoraDLMMSnapshotFetcher,
 };
 use crate::dex::meteora_dlmm::pool_state::MeteoraDLMMInstructionItem;
+use crate::dex::meteora_dlmm::sdk::interface::accounts::BinArray;
 use crate::dex::pump_fun::pool_state::PumpFunInstructionItem;
 use crate::dex::pump_fun::pump_fun::{
-    PumpFunAccountSnapshotFetcher, PumpFunCacheUpdater, PumpFunDex,
-    PumpFunGrpcSubscribeRequestGenerator, PumpFunReadyGrpcMessageOperator,
+    PumpFunAccountSnapshotFetcher, PumpFunDex, PumpFunGrpcSubscribeRequestGenerator,
+    PumpFunReadyGrpcMessageOperator,
 };
 use crate::dex::raydium_amm::pool_state::RaydiumAMMInstructionItem;
 use crate::dex::raydium_amm::raydium_amm::{
-    RaydiumAmmCacheUpdater, RaydiumAmmDex, RaydiumAmmGrpcMessageOperator,
-    RaydiumAmmSnapshotFetcher, RaydiumAmmSubscribeRequestCreator,
+    RaydiumAmmDex, RaydiumAmmGrpcMessageOperator, RaydiumAmmSnapshotFetcher,
+    RaydiumAmmSubscribeRequestCreator,
 };
-use crate::dex::raydium_clmm::pool_state::RaydiumCLMMInstructionItem;
+use crate::dex::raydium_clmm::pool_state::{PoolChangeData, RaydiumCLMMInstructionItem, TickArray};
 use crate::dex::raydium_clmm::raydium_clmm::{
-    RaydiumCLMMCacheUpdater, RaydiumCLMMDex, RaydiumCLMMGrpcMessageOperator,
-    RaydiumCLMMSnapshotFetcher, RaydiumCLMMSubscribeRequestCreator,
+    RaydiumCLMMDex, RaydiumCLMMGrpcMessageOperator, RaydiumCLMMSnapshotFetcher,
+    RaydiumCLMMSubscribeRequestCreator,
 };
 use crate::file_db::DexJson;
 use crate::interface::SourceMessage::Account;
@@ -132,15 +133,6 @@ impl DexType {
         }
     }
 
-    pub fn get_cache_updater(&self, grpc_message: GrpcMessage) -> Result<Box<dyn CacheUpdater>> {
-        match self {
-            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmCacheUpdater::new(grpc_message)?)),
-            DexType::RaydiumCLmm => Ok(Box::new(RaydiumCLMMCacheUpdater::new(grpc_message)?)),
-            DexType::PumpFunAMM => Ok(Box::new(PumpFunCacheUpdater::new(grpc_message)?)),
-            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMCacheUpdater::new(grpc_message)?)),
-        }
-    }
-
     pub fn use_cache(&self) -> bool {
         match self {
             DexType::RaydiumAMM => true,
@@ -229,19 +221,14 @@ pub enum GrpcMessage {
         mint_0_need_take_pnl: Option<u64>,
         mint_1_need_take_pnl: Option<u64>,
     },
-    RaydiumCLMMData {
-        pool_id: Pubkey,
-        tick_current: i32,
-        liquidity: u128,
-        sqrt_price_x64: u128,
-        tick_array_bitmap: [u64; 16],
-    },
+    RaydiumCLMMData(PoolChangeData),
+    RaydiumCLMMTickArrayData(TickArray),
     PumpFunAMMData {
         pool_id: Pubkey,
         mint_0_vault_amount: Option<u64>,
         mint_1_vault_amount: Option<u64>,
     },
-    MeteoraDLMMData {
+    MeteoraDLMMPoolData {
         pool_id: Pubkey,
         active_id: i32,
         bin_array_bitmap: [u64; 16],
@@ -250,6 +237,7 @@ pub enum GrpcMessage {
         index_reference: i32,
         last_update_timestamp: i64,
     },
+    MeteoraDLMMBinArrayData(BinArray),
     Clock(Clock),
 }
 
@@ -257,10 +245,12 @@ impl GrpcMessage {
     pub fn pool_id(&self) -> Option<Pubkey> {
         match self {
             GrpcMessage::RaydiumAMMData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::RaydiumCLMMData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::RaydiumCLMMData(change_data) => Some(change_data.pool_id),
             GrpcMessage::PumpFunAMMData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::MeteoraDLMMData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::MeteoraDLMMPoolData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::MeteoraDLMMBinArrayData(bin_array) => Some(bin_array.lb_pair),
             GrpcMessage::Clock(_) => unimplemented!(),
+            GrpcMessage::RaydiumCLMMTickArrayData(change_data) => Some(change_data.pool_id),
         }
     }
 }
@@ -312,6 +302,8 @@ impl
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub enum GrpcAccountUpdateType {
     Pool,
+    BinArray,
+    TickArray,
     MintVault,
     Clock,
 }
@@ -446,10 +438,6 @@ pub trait AccountSnapshotFetcher: Send + Sync {
             Ok(alt_map)
         }
     }
-}
-
-pub trait CacheUpdater: Send + Sync {
-    fn update_cache(&self, pool: &mut Pool) -> Result<()>;
 }
 
 #[async_trait::async_trait]

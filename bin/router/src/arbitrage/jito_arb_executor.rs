@@ -33,7 +33,7 @@ use std::ops::{Div, Mul, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, instrument, warn};
 const DEFAULT_TIP_ACCOUNTS: [&str; 8] = [
     "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
@@ -63,7 +63,7 @@ struct JitoResponse {
 
 #[derive(Debug)]
 pub struct JitoArbExecutor {
-    cached_blockhash: Arc<Mutex<Hash>>,
+    cached_blockhash: Arc<RwLock<Hash>>,
     keypair: Keypair,
     bot_name: Option<String>,
     // mint --> mint ata
@@ -84,7 +84,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
         let route_calculate_cost = quote_result.route_calculate_cost;
         let amount_in = quote_result.amount_in;
         let latest_blockhash = {
-            let guard = self.cached_blockhash.lock().await;
+            let guard = self.cached_blockhash.read().await;
             *guard
         };
         match self.create_jito_bundle(latest_blockhash, quote_result) {
@@ -160,7 +160,7 @@ impl JitoArbExecutor {
         keypair: Keypair,
         mint_ata: Arc<DashMap<Pubkey, u64>>,
         native_ata: Pubkey,
-        cached_blockhash: Arc<Mutex<Hash>>,
+        cached_blockhash: Arc<RwLock<Hash>>,
         jito_config: JitoConfig,
     ) -> Self {
         let jito_host = if jito_config.jito_region == "mainnet".to_string() {

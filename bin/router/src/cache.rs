@@ -2,14 +2,13 @@ use crate::dex::meteora_dlmm::pool_state::MeteoraDLMMPoolState;
 use crate::dex::pump_fun::pool_state::PumpFunPoolState;
 use crate::dex::raydium_amm::pool_state::RaydiumAMMPoolState;
 use crate::dex::raydium_clmm::pool_state::RaydiumCLMMPoolState;
-use crate::interface::{DexType, InstructionItem};
+use crate::interface::{DexType, GrpcMessage, InstructionItem};
 use dashmap::DashMap;
 use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::clock::Clock;
 use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default)]
 pub struct PoolCache {
@@ -88,6 +87,15 @@ impl Pool {
                 Some((pool_state.mint_0_vault, pool_state.mint_1_vault))
             }
             PoolState::MeteoraDLMM(..) => None,
+        }
+    }
+
+    pub fn update_cache(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
+        match &mut self.state {
+            PoolState::RaydiumAMM(cache_data) => cache_data.try_update(grpc_message),
+            PoolState::RaydiumCLMM(cache_data) => cache_data.try_update(grpc_message),
+            PoolState::PumpFunAMM(cache_data) => cache_data.try_update(grpc_message),
+            PoolState::MeteoraDLMM(cache_data) => cache_data.try_update(grpc_message),
         }
     }
 

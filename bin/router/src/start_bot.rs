@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
 
 #[derive(Parser, Debug)]
@@ -112,10 +112,10 @@ pub async fn run() -> anyhow::Result<()> {
     let (wallet_all_ata_amount, native_mint_amount) =
         init_wallet_ata_account(rpc_client.clone(), wallet.clone(), native_mint_ata).await;
     let wallet_all_ata_amount = Arc::new(wallet_all_ata_amount);
-    let native_mint_amount = Arc::new(Mutex::new(native_mint_amount));
+    let native_mint_amount = Arc::new(RwLock::new(native_mint_amount));
 
     let initial_blockhash = rpc_client.get_latest_blockhash().await?;
-    let cached_blockhash = Arc::new(Mutex::new(initial_blockhash));
+    let cached_blockhash = Arc::new(RwLock::new(initial_blockhash));
 
     // 更新blockHash
     let refresh_interval = Duration::from_millis(500);
@@ -137,7 +137,7 @@ pub async fn run() -> anyhow::Result<()> {
             native_mint_ata,
             Duration::from_secs(60),
         )
-            .await;
+        .await;
     });
     let executor_type = ExecutorType::JITO(JitoConfig {
         jito_region,
@@ -174,13 +174,13 @@ pub async fn run() -> anyhow::Result<()> {
 
 async fn blockhash_refresher(
     rpc_client: Arc<RpcClient>,
-    cached_blockhash: Arc<Mutex<Hash>>,
+    cached_blockhash: Arc<RwLock<Hash>>,
     refresh_interval: Duration,
 ) {
     loop {
         match rpc_client.get_latest_blockhash().await {
             Ok(blockhash) => {
-                let mut guard = cached_blockhash.lock().await;
+                let mut guard = cached_blockhash.write().await;
                 *guard = blockhash;
             }
             Err(e) => {
@@ -214,7 +214,7 @@ async fn wallet_ata_refresher(
     rpc_client: Arc<RpcClient>,
     wallet: Pubkey,
     wallet_ata_amount: Arc<DashMap<Pubkey, u64>>,
-    wallet_native_ata_amount: Arc<Mutex<u64>>,
+    wallet_native_ata_amount: Arc<RwLock<u64>>,
     native_mint_ata: Pubkey,
     refresh_interval: Duration,
 ) {
@@ -231,13 +231,14 @@ async fn wallet_ata_refresher(
                     .into_iter()
                     .map(|a| (Pubkey::from_str(&a.pubkey).unwrap(), a.account.lamports))
                     .collect::<HashMap<_, _>>();
-                let mut guard = wallet_native_ata_amount.lock().await;
                 let native_mint_ata_amount = current_wallet_ata_amount
                     .get(&native_mint_ata)
                     .unwrap()
                     .clone();
-                *guard = native_mint_ata_amount;
-                drop(guard);
+                {
+                    let mut guard = wallet_native_ata_amount.write().await;
+                    *guard = native_mint_ata_amount;
+                }
                 current_wallet_ata_amount.into_iter().for_each(|(a, b)| {
                     wallet_ata_amount.entry(a).or_insert(b);
                     wallet_ata_amount.entry(a).and_modify(|exist| *exist = b);

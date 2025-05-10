@@ -36,6 +36,18 @@ impl TickArrayState {
         .0
     }
 
+    pub fn key_(pool_id: &Pubkey, start_tick_index: &i32) -> Pubkey {
+        Pubkey::find_program_address(
+            &[
+                TICK_ARRAY_SEED.as_bytes(),
+                pool_id.as_ref(),
+                &start_tick_index.to_be_bytes(),
+            ],
+            &crate::dex::raydium_clmm::ID,
+        )
+        .0
+    }
+
     /// Base on swap directioin, return the first initialized tick in the tick array.
     pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> Result<&mut TickState> {
         if zero_for_one {

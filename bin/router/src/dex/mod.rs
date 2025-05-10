@@ -427,29 +427,18 @@ impl PoolCacheHolder {
     }
 
     pub fn update_cache(&self, grpc_message: GrpcMessage) -> Option<Pubkey> {
-        let update_cache_start = Instant::now();
         if let GrpcMessage::Clock(clock) = grpc_message {
             self.pool_cache.clone().clock = clock;
             return None;
         }
         let pool_id = grpc_message.pool_id()?;
-        let arc = self.pool_cache.clone().pool_map;
-        let mut update_pool_id = None;
-        arc.entry(pool_id).and_modify(|pool| {
-            if let Ok(()) = pool
-                .protocol
-                .get_cache_updater(grpc_message)
-                .unwrap()
-                .update_cache(pool)
-            {
-                update_pool_id = Some(pool.pool_id);
-            }
-        });
-        info!(
-            "update_cache_cost: {:?}",
-            update_cache_start.elapsed().as_nanos()
-        );
-        update_pool_id
+        self.pool_cache
+            .pool_map
+            .get_mut(&pool_id)
+            .and_then(|mut pool| {
+                pool.update_cache(grpc_message)
+                    .map_or(None, |()| Some(pool_id))
+            })
     }
 }
 

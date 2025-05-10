@@ -1,6 +1,6 @@
 use crate::cache::{Mint, Pool, PoolState};
 use crate::dex::common::utils::change_data_if_not_same;
-use crate::dex::raydium_clmm::pool_state::{RaydiumCLMMInstructionItem, RaydiumCLMMPoolState};
+use crate::dex::raydium_clmm::pool_state::{PoolChangeData, RaydiumCLMMInstructionItem, RaydiumCLMMPoolState};
 use crate::dex::raydium_clmm::sdk::config::AmmConfig;
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::raydium_clmm::sdk::utils::{
@@ -11,13 +11,12 @@ use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::RaydiumCLMMData;
 use crate::interface::{
-    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, CacheUpdater, Dex, DexType,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
     InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
-use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::address_lookup_table::AddressLookupTableAccount;
@@ -28,11 +27,12 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use borsh::BorshDeserialize;
 use tokio::task::JoinSet;
-use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
-    SubscribeRequestFilterAccounts,
-};
+use yellowstone_grpc_proto::geyser::{CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter};
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
+use crate::dex::raydium_clmm::sdk::tick_array::TICK_ARRAY_SIZE_USIZE;
+use crate::interface::GrpcAccountUpdateType::TickArray;
 
 pub struct RaydiumCLMMDex;
 
@@ -58,17 +58,7 @@ impl Quoter for RaydiumCLMMDex {
             clmm_pool_state.tick_array_bitmap = pool_state.tick_array_bitmap;
             clmm_pool_state.liquidity = pool_state.liquidity;
             clmm_pool_state.sqrt_price_x64 = pool_state.sqrt_price_x64;
-            let (zero_for_one, mut tick_arrays) = if in_mint == pool.mint_0() {
-                (
-                    true,
-                    pool_state.one_to_zero_tick_array_states.clone().unwrap(),
-                )
-            } else {
-                (
-                    false,
-                    pool_state.zero_to_one_tick_array_states.clone().unwrap(),
-                )
-            };
+            let zero_for_one = in_mint == pool.mint_0();
             let result = utils::get_out_put_amount_and_remaining_accounts(
                 amount_in,
                 None,
@@ -77,7 +67,7 @@ impl Quoter for RaydiumCLMMDex {
                 &amm_config,
                 &clmm_pool_state,
                 &Some(pool_state.tick_array_bitmap_extension),
-                &mut tick_arrays,
+                &mut pool_state.get_tick_arrays(zero_for_one, 5),
             );
             match result {
                 Ok((amount_out, _, _)) => Some(amount_out),
@@ -104,16 +94,7 @@ impl InstructionItemCreator for RaydiumCLMMDex {
                 mint_0_vault: pool_state.mint_0_vault,
                 mint_1_vault: pool_state.mint_1_vault,
                 observation_key: pool_state.observation_key,
-                tick_arrays: if zero_to_one {
-                    pool_state.zero_to_one_tick_array_states.clone()
-                } else {
-                    pool_state.one_to_zero_tick_array_states.clone()
-                }
-                .unwrap()
-                .iter()
-                .take(3)
-                .map(|a| a.key())
-                .collect::<Vec<_>>(),
+                tick_arrays: pool_state.get_tick_array_keys(zero_to_one, 5),
                 alt: pool.alt.clone(),
                 zero_to_one,
             }))
@@ -218,30 +199,22 @@ impl ReadyGrpcMessageOperator for RaydiumCLMMGrpcMessageOperator {
             let txn = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::Pool => {
-                    let src = array_ref![data, 0, 180];
-                    let (
-                        liquidity,
-                        price,
-                        tick_current,
-                        bitmap,
-                        _total_fees_token_0,
-                        _total_fees_token_1,
-                    ) = array_refs![src, 16, 16, 4, 128, 8, 8];
                     self.pool_id = Some(pool_id);
                     self.txn = Some(txn);
-                    self.grpc_message = Some(RaydiumCLMMData {
-                        pool_id,
-                        liquidity: u128::from_le_bytes(*liquidity),
-                        sqrt_price_x64: u128::from_le_bytes(*price),
-                        tick_current: i32::from_le_bytes(*tick_current),
-                        tick_array_bitmap: bitmap
-                            .chunks_exact(8)
-                            .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
-                            .collect::<Vec<_>>()
-                            .try_into()
-                            .unwrap(),
-                    });
+                    self.grpc_message = Some(RaydiumCLMMData(serde_json::from_slice::<
+                        PoolChangeData,
+                    >(data)?));
                     Ok(())
+                }
+                TickArray => {
+                    let tick_array =
+                        crate::dex::raydium_clmm::pool_state::TickArray::try_from_slice(&data)?;
+                    if tick_array.initialized_tick_count > 0 {
+                        self.grpc_message = Some(GrpcMessage::RaydiumCLMMTickArrayData(tick_array));
+                        Ok(())
+                    } else {
+                        Err(anyhow!("TickArray没有初始化"))
+                    }
                 }
                 _ => Err(anyhow!("")),
             }
@@ -318,10 +291,82 @@ impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
             ],
             ..Default::default()
         };
-        Some(vec![(
-            (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
-            pool_request,
-        )])
+        let mut tick_arrays_subscribe_accounts = HashMap::new();
+        tick_arrays_subscribe_accounts.insert(
+            format!("{:?}:{:?}", DexType::RaydiumCLmm, TickArray),
+            SubscribeRequestFilterAccounts {
+                account: vec![],
+                owner: vec![DexType::RaydiumCLmm.get_program_id().to_string()],
+                filters: vec![SubscribeRequestFilterAccountsFilter {
+                    filter: Some(Filter::Datasize(10240)),
+                }],
+            },
+        );
+        let mut tick_arrays_data_slice = vec![
+            // pool_id
+            SubscribeRequestAccountsDataSlice {
+                offset: 8,
+                length: 32,
+            },
+            // start_tick_index
+            SubscribeRequestAccountsDataSlice {
+                offset: 40,
+                length: 4,
+            },
+        ];
+        let mut start_index = 40 + 4;
+        // ticks 60个
+        for _ in 0..TICK_ARRAY_SIZE_USIZE {
+            // tick
+            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
+                offset: start_index,
+                length: 4,
+            });
+            start_index += 4;
+            // liquidity_net
+            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
+                offset: start_index,
+                length: 16,
+            });
+            start_index += 16;
+            // liquidity_gross
+            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
+                offset: start_index,
+                length: 16,
+            });
+            start_index += 16;
+            // fee_growth_outside_0_x64
+            start_index += 16;
+            // fee_growth_outside_1_x64
+            start_index += 16;
+            // reward_growths_outside_x64
+            start_index += 16 * 3;
+            // padding
+            start_index += 13 * 4;
+        }
+        tick_arrays_data_slice.push(
+            // initialized_tick_count
+            SubscribeRequestAccountsDataSlice {
+                offset: 10124,
+                length: 1,
+            },
+        );
+        let tick_arrays_subscribe_request = SubscribeRequest {
+            accounts: tick_arrays_subscribe_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: tick_arrays_data_slice,
+            ..Default::default()
+        };
+        Some(vec![
+            (
+                (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
+                pool_request,
+            ),
+            (
+                (DexType::RaydiumCLmm, TickArray),
+                tick_arrays_subscribe_request,
+            ),
+        ])
     }
 }
 
@@ -415,10 +460,6 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                 crate::dex::raydium_clmm::sdk::pool::PoolState,
                             >(pool_account)
                             .unwrap();
-                            // if pool_state.token_mint_0!=Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap()
-                            //     &&pool_state.token_mint_1!=Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap(){
-                            //     continue;
-                            // }
                             let tick_array_bitmap_extension =
                                 deserialize_anchor_account::<TickArrayBitmapExtension>(
                                     bitmap_extension_account,
@@ -473,21 +514,14 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                         mint: pool_state.token_mint_1.clone(),
                                     },
                                 ],
-                                state: PoolState::RaydiumCLMM(RaydiumCLMMPoolState {
-                                    amm_config: pool_state.amm_config,
-                                    mint_0_vault: pool_state.token_vault_0,
-                                    mint_1_vault: pool_state.token_vault_1,
-                                    observation_key: pool_state.observation_key,
-                                    tick_spacing: pool_state.tick_spacing,
+                                state: PoolState::RaydiumCLMM(RaydiumCLMMPoolState::new(
+                                    &pool_id,
+                                    pool_state,
                                     trade_fee_rate,
-                                    liquidity: pool_state.liquidity,
-                                    sqrt_price_x64: pool_state.sqrt_price_x64,
-                                    tick_current: pool_state.tick_current,
-                                    tick_array_bitmap: pool_state.tick_array_bitmap,
                                     tick_array_bitmap_extension,
                                     zero_to_one_tick_array_states,
                                     one_to_zero_tick_array_states,
-                                }),
+                                )),
                                 alt: alt.unwrap(),
                             })
                         }
@@ -504,56 +538,6 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
             None
         } else {
             Some(all_pools)
-        }
-    }
-}
-
-pub struct RaydiumCLMMCacheUpdater {
-    tick_current: i32,
-    liquidity: u128,
-    sqrt_price_x64: u128,
-    tick_array_bitmap: [u64; 16],
-}
-
-impl RaydiumCLMMCacheUpdater {
-    pub fn new(grpc_message: GrpcMessage) -> Result<Self> {
-        if let RaydiumCLMMData {
-            tick_current,
-            liquidity,
-            sqrt_price_x64,
-            tick_array_bitmap,
-            ..
-        } = grpc_message
-        {
-            Ok(Self {
-                tick_current,
-                liquidity,
-                sqrt_price_x64,
-                tick_array_bitmap,
-            })
-        } else {
-            Err(anyhow!("生成CachePoolUpdater失败：传入的参数类型不支持"))
-        }
-    }
-}
-
-impl CacheUpdater for RaydiumCLMMCacheUpdater {
-    fn update_cache(&self, pool: &mut Pool) -> anyhow::Result<()> {
-        if let PoolState::RaydiumCLMM(ref mut pool_state) = pool.state {
-            if change_data_if_not_same(&mut pool_state.liquidity, self.liquidity)
-                || change_data_if_not_same(&mut pool_state.tick_current, self.tick_current)
-                || change_data_if_not_same(&mut pool_state.sqrt_price_x64, self.sqrt_price_x64)
-                || change_data_if_not_same(
-                    &mut pool_state.tick_array_bitmap,
-                    self.tick_array_bitmap,
-                )
-            {
-                Ok(())
-            } else {
-                Err(anyhow!(""))
-            }
-        } else {
-            Err(anyhow!(""))
         }
     }
 }
