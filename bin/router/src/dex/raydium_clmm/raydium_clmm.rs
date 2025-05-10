@@ -29,7 +29,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use borsh::BorshDeserialize;
 use tokio::task::JoinSet;
-use yellowstone_grpc_proto::geyser::{CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter};
+use yellowstone_grpc_proto::geyser::{subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp};
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use crate::dex::raydium_clmm::sdk::tick_array::TICK_ARRAY_SIZE_USIZE;
 use crate::interface::GrpcAccountUpdateType::TickArray;
@@ -243,6 +243,7 @@ impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
         &self,
         pools: &[Pool],
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
+        let mut all_subscribe_request = Vec::with_capacity(100);
         let mut subscribe_pool_accounts = HashMap::new();
         subscribe_pool_accounts.insert(
             format!("{:?}", DexType::RaydiumCLmm),
@@ -291,17 +292,37 @@ impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
             ],
             ..Default::default()
         };
+        all_subscribe_request.push((
+            (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
+            pool_request,
+        ));
         let mut tick_arrays_subscribe_accounts = HashMap::new();
-        tick_arrays_subscribe_accounts.insert(
-            format!("{:?}:{:?}", DexType::RaydiumCLmm, TickArray),
-            SubscribeRequestFilterAccounts {
-                account: vec![],
-                owner: vec![DexType::RaydiumCLmm.get_program_id().to_string()],
-                filters: vec![SubscribeRequestFilterAccountsFilter {
-                    filter: Some(Filter::Datasize(10240)),
-                }],
-            },
-        );
+        for (index, pool) in pools.iter().enumerate() {
+            tick_arrays_subscribe_accounts.insert(
+                format!("{:?}:{:?}:{:?}", DexType::RaydiumCLmm, TickArray, index),
+                SubscribeRequestFilterAccounts {
+                    account: vec![],
+                    owner: vec![DexType::RaydiumCLmm.get_program_id().to_string()],
+                    filters: vec![
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(Filter::Datasize(10240)),
+                        },
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(
+                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp{
+                                    offset: 8,
+                                    data: Some(
+                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                            pool.pool_id.to_bytes().to_vec(),
+                                        ),
+                                    ),
+                                }),
+                            ),
+                        },
+                    ],
+                },
+            );
+        }
         let mut tick_arrays_data_slice = vec![
             // pool_id
             SubscribeRequestAccountsDataSlice {
@@ -357,16 +378,11 @@ impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
             accounts_data_slice: tick_arrays_data_slice,
             ..Default::default()
         };
-        Some(vec![
-            (
-                (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
-                pool_request,
-            ),
-            (
-                (DexType::RaydiumCLmm, TickArray),
-                tick_arrays_subscribe_request,
-            ),
-        ])
+        all_subscribe_request.push((
+            (DexType::RaydiumCLmm, GrpcAccountUpdateType::TickArray),
+            tick_arrays_subscribe_request,
+        ));
+        Some(all_subscribe_request)
     }
 }
 

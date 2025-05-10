@@ -306,7 +306,7 @@ impl JitoArbExecutor {
             latest_blockhash,
         )?;
         // info!("alt {:#?}", alts.as_slice());
-        info!("first_message {:#?}", first_message);
+        // info!("first_message {:#?}", first_message);
         let first_transaction = VersionedTransaction::try_new(
             solana_sdk::message::VersionedMessage::V0(first_message),
             &[&self.keypair],

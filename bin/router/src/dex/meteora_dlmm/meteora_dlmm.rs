@@ -37,8 +37,9 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
-    SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter,
+    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
+    SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts,
+    SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
 };
 
 pub struct MeteoraDLMMDex;
@@ -286,20 +287,32 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
             ..Default::default()
         };
         let mut bin_arrays_subscribe_accounts = HashMap::new();
-        bin_arrays_subscribe_accounts.insert(
-            format!(
-                "{:?}:{:?}",
-                DexType::MeteoraDLMM,
-                GrpcAccountUpdateType::BinArray
-            ),
-            SubscribeRequestFilterAccounts {
-                account: vec![],
-                owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
-                filters: vec![SubscribeRequestFilterAccountsFilter {
-                    filter: Some(Filter::Datasize(10136)),
-                }],
-            },
-        );
+        for (index, pool) in pools.iter().enumerate() {
+            bin_arrays_subscribe_accounts.insert(
+                format!("{:?}:{:?}:{:?}", DexType::MeteoraDLMM,GrpcAccountUpdateType::BinArray , index),
+                SubscribeRequestFilterAccounts {
+                    account: vec![],
+                    owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
+                    filters: vec![
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(Filter::Datasize(10136)),
+                        },
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(
+                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp{
+                                    offset: 24,
+                                    data: Some(
+                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                            pool.pool_id.to_bytes().to_vec(),
+                                        ),
+                                    ),
+                                }),
+                            ),
+                        },
+                    ],
+                },
+            );
+        }
         let bin_arrays_subscribe_request = SubscribeRequest {
             accounts: bin_arrays_subscribe_accounts,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
