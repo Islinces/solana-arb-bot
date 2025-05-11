@@ -206,7 +206,7 @@ impl JitoArbExecutor {
             if let Some((accounts, item_alts)) = item.parse_account_meta(wallet) {
                 remaining_accounts.push(AccountMeta::new_readonly(program_id, false));
                 remaining_accounts.extend(accounts);
-                if index == 0 && (swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm) {
+                if swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm {
                     remaining_accounts.push(AccountMeta::new_readonly(JUPITER_ID, false));
                 }
                 alts.extend(item_alts);
