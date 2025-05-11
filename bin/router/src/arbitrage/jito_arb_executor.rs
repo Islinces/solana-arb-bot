@@ -95,6 +95,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     .map(|item| bincode::serialize(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
+                info!("bundles : {:#?}",bundles);
                 let transactions = json!(bundles);
                 let params = json!([
                     transactions,
