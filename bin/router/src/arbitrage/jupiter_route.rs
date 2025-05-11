@@ -68,7 +68,7 @@ impl Route {
                 false,
             ));
         } else {
-            accounts.push(solana_program::instruction::AccountMeta::new_readonly(
+            accounts.push(solana_program::instruction::AccountMeta::new(
                 crate::arbitrage::JUPITER_ID,
                 false,
             ));
@@ -83,7 +83,7 @@ impl Route {
                 false,
             ));
         } else {
-            accounts.push(solana_program::instruction::AccountMeta::new_readonly(
+            accounts.push(solana_program::instruction::AccountMeta::new(
                 crate::arbitrage::JUPITER_ID,
                 false,
             ));
