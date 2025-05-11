@@ -119,7 +119,6 @@ impl AccountMetaConverter for RaydiumCLMMDex {
                 accounts.push(AccountMeta::new_readonly(item.amm_config, false));
                 // 3.pool state
                 accounts.push(AccountMeta::new(item.pool_id, false));
-                // 4.coin mint ata
                 let (coin_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -128,8 +127,6 @@ impl AccountMetaConverter for RaydiumCLMMDex {
                     ],
                     &get_ata_program(),
                 );
-                accounts.push(AccountMeta::new(coin_ata, false));
-                // 5.pc mint ata
                 let (pc_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -138,11 +135,25 @@ impl AccountMetaConverter for RaydiumCLMMDex {
                     ],
                     &get_ata_program(),
                 );
-                accounts.push(AccountMeta::new(pc_ata, false));
-                // 6.base mint vault
-                accounts.push(AccountMeta::new(item.mint_0_vault, false));
-                // 7.quote mint vault
-                accounts.push(AccountMeta::new(item.mint_1_vault, false));
+                if item.zero_to_one {
+                    // 4.coin mint ata
+                    accounts.push(AccountMeta::new(coin_ata, false));
+                    // 5.pc mint ata
+                    accounts.push(AccountMeta::new(pc_ata, false));
+                    // 6.base mint vault
+                    accounts.push(AccountMeta::new(item.mint_0_vault, false));
+                    // 7.quote mint vault
+                    accounts.push(AccountMeta::new(item.mint_1_vault, false));
+                }else {
+                    // 4.pc mint ata
+                    accounts.push(AccountMeta::new(pc_ata, false));
+                    // 5.coin mint ata
+                    accounts.push(AccountMeta::new(coin_ata, false));
+                    // 6.quote mint vault
+                    accounts.push(AccountMeta::new(item.mint_1_vault, false));
+                    // 7.base mint vault
+                    accounts.push(AccountMeta::new(item.mint_0_vault, false));
+                }
                 // 8.Observation State
                 accounts.push(AccountMeta::new(item.observation_key, false));
                 // 9.token program

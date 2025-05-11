@@ -100,6 +100,7 @@ impl InstructionItemCreator for MeteoraDLMMDex {
                 bitmap_extension: derive_bin_array_bitmap_extension(pool.pool_id).0,
                 bin_arrays: pool_state.get_bin_array_keys(pool.pool_id, zero_to_one, 3),
                 alt: pool.alt.clone(),
+                oracle: pool_state.oracle,
                 zero_to_one,
             }))
         } else {
@@ -154,10 +155,7 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                 // 8.mint_1
                 accounts.push(AccountMeta::new_readonly(item.mint_1, false));
                 // 9.oracle
-                accounts.push(AccountMeta::new(
-                    Pubkey::from_str("39vUBP8XmUqKTb5oJWRoiEJQ7ZsKMQYdDMPohhpTEAwJ").unwrap(),
-                    false,
-                ));
+                accounts.push(AccountMeta::new(item.oracle, false));
                 // 10.fee account
                 accounts.push(AccountMeta::new_readonly(
                     DexType::MeteoraDLMM.get_program_id(),

@@ -37,6 +37,7 @@ pub struct MeteoraDLMMPoolState {
     pub max_volatility_accumulator: u32,
     pub base_fee_power_factor: u8,
     pub variable_fee_control: u32,
+    pub oracle: Pubkey,
     // ======================每个MINT不一定有这个配置==============================
     pub mint_x_transfer_fee_config: Option<TransferFeeConfig>,
     pub mint_y_transfer_fee_config: Option<TransferFeeConfig>,
@@ -122,6 +123,7 @@ impl MeteoraDLMMPoolState {
             bin_array_bitmap_extension,
             bin_array_map,
             bin_array_index_range,
+            oracle: lb_pair.oracle,
         }
     }
 
@@ -298,6 +300,7 @@ pub struct MeteoraDLMMInstructionItem {
     pub mint_1: Pubkey,
     pub mint_0_vault: Pubkey,
     pub mint_1_vault: Pubkey,
+    pub oracle: Pubkey,
     pub bitmap_extension: Pubkey,
     pub bin_arrays: Vec<Pubkey>,
     pub alt: AddressLookupTableAccount,
