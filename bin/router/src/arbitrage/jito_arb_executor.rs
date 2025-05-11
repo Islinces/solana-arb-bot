@@ -1,5 +1,7 @@
 use crate::arbitrage::jupiter_route::RouteBuilder;
 use crate::arbitrage::types::route_plan_step::RoutePlanStep;
+use crate::arbitrage::types::swap::Swap;
+use crate::arbitrage::JUPITER_ID;
 use crate::dex::{get_mint_program, DexQuoteResult};
 use crate::interface::InstructionItem;
 use anyhow::anyhow;
@@ -35,6 +37,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, instrument, warn};
+
 const DEFAULT_TIP_ACCOUNTS: [&str; 8] = [
     "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
     "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
@@ -95,7 +98,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     .map(|item| bincode::serialize(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
-                info!("bundles : {:#?}",bundles);
+                info!("bundles : {:#?}", bundles);
                 let transactions = json!(bundles);
                 let params = json!([
                     transactions,
@@ -203,6 +206,9 @@ impl JitoArbExecutor {
             if let Some((accounts, item_alts)) = item.parse_account_meta(wallet) {
                 remaining_accounts.push(AccountMeta::new_readonly(program_id, false));
                 remaining_accounts.extend(accounts);
+                if index == 0 && (swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm) {
+                    remaining_accounts.push(AccountMeta::new_readonly(JUPITER_ID, false));
+                }
                 alts.extend(item_alts);
                 route_plan.push(RoutePlanStep {
                     swap,
