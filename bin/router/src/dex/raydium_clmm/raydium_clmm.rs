@@ -67,7 +67,7 @@ impl Quoter for RaydiumCLMMDex {
                 &amm_config,
                 &clmm_pool_state,
                 &Some(pool_state.tick_array_bitmap_extension),
-                &mut pool_state.get_tick_arrays(zero_for_one, 5),
+                &mut pool_state.get_tick_arrays(zero_for_one, 3),
             );
             match result {
                 Ok((amount_out, _, _)) => Some(amount_out),
@@ -94,7 +94,7 @@ impl InstructionItemCreator for RaydiumCLMMDex {
                 mint_0_vault: pool_state.mint_0_vault,
                 mint_1_vault: pool_state.mint_1_vault,
                 observation_key: pool_state.observation_key,
-                tick_arrays: pool_state.get_tick_array_keys(zero_to_one, 5),
+                tick_arrays: pool_state.get_tick_array_keys(zero_to_one, 3),
                 alt: pool.alt.clone(),
                 zero_to_one,
             }))
