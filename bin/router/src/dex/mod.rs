@@ -99,6 +99,7 @@ impl DexData {
         start_amount_in: u64,
         sol_ata_amount: u64,
     ) -> Option<DexQuoteResult> {
+        let grpc_cost = grpc_message.instant();
         let start_time = Instant::now();
         let indexer = self.pool_cache_holder.clone();
         //TODO：不一定是以修改的池子作为开始
@@ -123,6 +124,7 @@ impl DexData {
                 if let Some(result) = &mut dex_quote_result {
                     result.start_time = Some(start_time);
                     result.route_calculate_cost = Some(quote_start.elapsed().as_nanos());
+                    result.grop_cost = Some(grpc_cost);
                     info!(
                         "find_best_route cost: {:?}, path size : {:?}",
                         result.route_calculate_cost, all_path_size
@@ -321,6 +323,7 @@ pub struct DexQuoteResult {
     pub profit: u64,
     pub start_time: Option<Instant>,
     pub route_calculate_cost: Option<u128>,
+    pub grop_cost: Option<u128>,
 }
 
 pub fn supported_protocols() -> Vec<DexType> {

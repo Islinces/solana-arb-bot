@@ -210,7 +210,7 @@ impl MeteoraDLMMPoolState {
                     Err(anyhow!(""))
                 }
             }
-            GrpcMessage::MeteoraDLMMBinArrayData(bin_array) => {
+            GrpcMessage::MeteoraDLMMBinArrayData(bin_array,_) => {
                 if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
                     && bin_array.index <= self.bin_array_index_range.last().unwrap().0 as i64
                 {
@@ -234,7 +234,7 @@ impl MeteoraDLMMPoolState {
                         derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
                         bin_array,
                     );
-                    Ok(())
+                    Err(anyhow!(""))
                 } else {
                     Err(anyhow!("BinArray index[{}]不在监控范围内", bin_array.index))
                 }

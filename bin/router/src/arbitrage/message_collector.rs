@@ -5,7 +5,7 @@ use log::warn;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use std::borrow::Cow;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{error, info};
 use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
@@ -115,6 +115,7 @@ impl Collector<AccountUpdate> for GrpcMessageCollector {
                                 account_type,
                                 filters:data.filters,
                                 account,
+                                instant:Instant::now()
                             };
                         }
                     }else => warn!("subscrbeitions closed"),

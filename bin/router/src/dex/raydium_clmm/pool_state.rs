@@ -12,6 +12,7 @@ use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
+use std::time::Instant;
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -160,7 +161,7 @@ impl RaydiumCLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::RaydiumCLMMData(change_data) => {
+            GrpcMessage::RaydiumCLMMData(change_data, _) => {
                 let mut changed =
                     change_data_if_not_same(&mut self.liquidity, change_data.liquidity);
                 changed |=
@@ -177,7 +178,7 @@ impl RaydiumCLMMPoolState {
                     Err(anyhow!(""))
                 }
             }
-            GrpcMessage::RaydiumCLMMTickArrayData(tick_array) => {
+            GrpcMessage::RaydiumCLMMTickArrayData(tick_array,_) => {
                 let index = tick_array.start_tick_index;
                 if index.ge(&self.tick_array_index_range.first().unwrap().0)
                     && index.le(&self.tick_array_index_range.last().unwrap().0)
@@ -193,7 +194,7 @@ impl RaydiumCLMMPoolState {
                         }
                     }
                     self.tick_array_map.insert(tick_array.key(), tick_array);
-                    Ok(())
+                    Err(anyhow!(""))
                 } else {
                     Err(anyhow!(
                         "TickArray index[{}]不在监控范围内",

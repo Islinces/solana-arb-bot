@@ -86,6 +86,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
         let start_time = quote_result.start_time;
         let route_calculate_cost = quote_result.route_calculate_cost;
         let amount_in = quote_result.amount_in;
+        let grpc_cost = quote_result.grop_cost.unwrap_or(0);
         let latest_blockhash = {
             let guard = self.cached_blockhash.read().await;
             *guard
@@ -142,9 +143,9 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     }
                 }
                 let send_jito_request_cost = jito_request_start.elapsed();
-                let x = (amount_in as f64).div(10_i32.pow(9) as f64);
-                info!("耗时: {}ms, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}",
+                info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}",
                     start_time.unwrap().elapsed().as_millis(),
+                    grpc_cost,
                     route_calculate_cost.unwrap(),
                     instruction_cost.as_nanos(),
                     send_jito_request_cost.as_millis(),

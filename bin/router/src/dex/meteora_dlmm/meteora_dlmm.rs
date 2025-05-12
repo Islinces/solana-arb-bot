@@ -604,12 +604,14 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                         volatility_reference: u32::from_le_bytes(*volatility_reference),
                         index_reference: i32::from_le_bytes(*index_reference),
                         last_update_timestamp: i64::from_le_bytes(*last_update_timestamp),
+                        instant: self.update_account.instant,
                     });
                     Ok(())
                 }
                 GrpcAccountUpdateType::BinArray => {
                     self.grpc_message = Some(GrpcMessage::MeteoraDLMMBinArrayData(
                         BinArrayAccount::deserialize(data)?.0,
+                        self.update_account.instant,
                     ));
                     Ok(())
                 }

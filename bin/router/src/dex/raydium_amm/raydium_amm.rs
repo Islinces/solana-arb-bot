@@ -228,6 +228,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                         mint_1_vault_amount: None,
                         mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
                         mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
+                        instant: self.update_account.instant,
                     });
                     Ok(())
                 }
@@ -252,6 +253,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                         mint_1_vault_amount,
                         mint_0_need_take_pnl: None,
                         mint_1_need_take_pnl: None,
+                        instant: self.update_account.instant,
                     });
                     Ok(())
                 }

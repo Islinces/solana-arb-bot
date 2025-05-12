@@ -36,6 +36,7 @@ use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::io::join;
 use tokio::task::JoinSet;
 use tracing::{error, instrument};
@@ -220,13 +221,15 @@ pub enum GrpcMessage {
         mint_1_vault_amount: Option<u64>,
         mint_0_need_take_pnl: Option<u64>,
         mint_1_need_take_pnl: Option<u64>,
+        instant: Instant,
     },
-    RaydiumCLMMData(PoolChangeData),
-    RaydiumCLMMTickArrayData(TickArray),
+    RaydiumCLMMData(PoolChangeData, Instant),
+    RaydiumCLMMTickArrayData(TickArray, Instant),
     PumpFunAMMData {
         pool_id: Pubkey,
         mint_0_vault_amount: Option<u64>,
         mint_1_vault_amount: Option<u64>,
+        instant: Instant,
     },
     MeteoraDLMMPoolData {
         pool_id: Pubkey,
@@ -236,8 +239,9 @@ pub enum GrpcMessage {
         volatility_reference: u32,
         index_reference: i32,
         last_update_timestamp: i64,
+        instant: Instant,
     },
-    MeteoraDLMMBinArrayData(BinArray),
+    MeteoraDLMMBinArrayData(BinArray, Instant),
     Clock(Clock),
 }
 
@@ -245,12 +249,24 @@ impl GrpcMessage {
     pub fn pool_id(&self) -> Option<Pubkey> {
         match self {
             GrpcMessage::RaydiumAMMData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::RaydiumCLMMData(change_data) => Some(change_data.pool_id),
+            GrpcMessage::RaydiumCLMMData(change_data, _) => Some(change_data.pool_id),
             GrpcMessage::PumpFunAMMData { pool_id, .. } => Some(*pool_id),
             GrpcMessage::MeteoraDLMMPoolData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::MeteoraDLMMBinArrayData(bin_array) => Some(bin_array.lb_pair),
+            GrpcMessage::MeteoraDLMMBinArrayData(bin_array, _) => Some(bin_array.lb_pair),
             GrpcMessage::Clock(_) => unimplemented!(),
-            GrpcMessage::RaydiumCLMMTickArrayData(change_data) => Some(change_data.pool_id),
+            GrpcMessage::RaydiumCLMMTickArrayData(change_data, _) => Some(change_data.pool_id),
+        }
+    }
+
+    pub fn instant(&self) -> u128 {
+        match self {
+            GrpcMessage::RaydiumAMMData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::RaydiumCLMMData(_, instant) => instant.elapsed().as_nanos(),
+            GrpcMessage::RaydiumCLMMTickArrayData(_, instant) => instant.elapsed().as_nanos(),
+            GrpcMessage::PumpFunAMMData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::MeteoraDLMMPoolData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::MeteoraDLMMBinArrayData(_, instant) => instant.elapsed().as_nanos(),
+            GrpcMessage::Clock(_) => 0,
         }
     }
 }
@@ -272,31 +288,7 @@ pub struct AccountUpdate {
     pub account_type: GrpcAccountUpdateType,
     pub filters: Vec<String>,
     pub account: SubscribeUpdateAccount,
-}
-
-impl
-    From<(
-        DexType,
-        GrpcAccountUpdateType,
-        Vec<String>,
-        SubscribeUpdateAccount,
-    )> for SourceMessage
-{
-    fn from(
-        value: (
-            DexType,
-            GrpcAccountUpdateType,
-            Vec<String>,
-            SubscribeUpdateAccount,
-        ),
-    ) -> Self {
-        Account(AccountUpdate {
-            protocol: value.0,
-            account_type: value.1,
-            filters: value.2,
-            account: value.3,
-        })
-    }
+    pub instant: Instant,
 }
 
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]

@@ -13,7 +13,7 @@ use crate::dex::{get_ata_program, get_mint_program, get_system_program};
 use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::{PumpFunAMMData, RaydiumAMMData};
 use crate::interface::{
-    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate,  Dex, DexType,
+    AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
     InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
@@ -262,6 +262,7 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                         mint_1_vault_amount,
                         mint_0_need_take_pnl: None,
                         mint_1_need_take_pnl: None,
+                        instant: self.update_account.instant,
                     });
                     Ok(())
                 }
