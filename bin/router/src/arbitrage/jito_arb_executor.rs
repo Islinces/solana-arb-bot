@@ -86,7 +86,12 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
         let start_time = quote_result.start_time;
         let route_calculate_cost = quote_result.route_calculate_cost;
         let amount_in = quote_result.amount_in;
+        let amount_in = amount_in;
         let grpc_cost = quote_result.grop_cost.unwrap_or(0);
+        let calac_format = format!(
+            "{} -> {} -> {}, profit : {}",
+            amount_in, quote_result.first_amount_out, quote_result.amount_out, quote_result.profit
+        );
         let latest_blockhash = {
             let guard = self.cached_blockhash.read().await;
             *guard
@@ -143,7 +148,8 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     }
                 }
                 let send_jito_request_cost = jito_request_start.elapsed();
-                info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}",
+
+                info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}, 计算过程: {}",
                     start_time.unwrap().elapsed().as_millis(),
                     grpc_cost,
                     route_calculate_cost.unwrap(),
@@ -151,7 +157,8 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     send_jito_request_cost.as_millis(),
                     (amount_in as f64).div(10_i32.pow(9) as f64),
                     latest_blockhash.to_string().get(40..).unwrap(),
-                    bundle_id
+                    bundle_id,
+                    calac_format
                 );
                 Ok(())
             }
@@ -172,12 +179,19 @@ impl JitoArbExecutor {
         let jito_host = if jito_config.jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
         } else {
-            format!("https://{}.mainnet.block-engine.jito.wtf", jito_config.jito_region)
+            format!(
+                "https://{}.mainnet.block-engine.jito.wtf",
+                jito_config.jito_region
+            )
         };
         let jito_url = if jito_config.jito_uuid.is_none() {
             format!("{}/api/v1/bundles", jito_host)
         } else {
-            format!("{}/api/v1/bundles?uuid={}", jito_host, jito_config.jito_uuid.unwrap())
+            format!(
+                "{}/api/v1/bundles?uuid={}",
+                jito_host,
+                jito_config.jito_uuid.unwrap()
+            )
         };
         Self {
             bot_name,
