@@ -12,6 +12,7 @@ use solana_program::address_lookup_table::AddressLookupTableAccount;
 use solana_program::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct RaydiumCLMMPoolState {
@@ -32,7 +33,6 @@ pub struct RaydiumCLMMPoolState {
 
 impl RaydiumCLMMPoolState {
     pub fn new(
-        pool_id: &Pubkey,
         pool_state: PoolState,
         trade_fee_rate: u32,
         bitmap_extension: TickArrayBitmapExtension,
@@ -41,33 +41,42 @@ impl RaydiumCLMMPoolState {
     ) -> Self {
         let mut tick_array_map = HashMap::with_capacity(20);
         let mut tick_array_index = HashSet::with_capacity(20);
-        for tick_array_state in left_tick_arrays.unwrap_or(VecDeque::new()) {
-            let index = unsafe { tick_array_state.start_tick_index };
-            tick_array_index.insert((index, TickArrayState::key_(&pool_id, &index)));
-            tick_array_map.insert(tick_array_state.key(), TickArray::from(tick_array_state));
-        }
-        for tick_array_state in right_tick_arrays.unwrap_or(VecDeque::new()) {
-            let index = unsafe { tick_array_state.start_tick_index };
-            tick_array_index.insert((index, TickArrayState::key_(&pool_id, &index)));
-            tick_array_map.insert(tick_array_state.key(), TickArray::from(tick_array_state));
+        let mut tick_arrays = left_tick_arrays.unwrap_or(VecDeque::new());
+        tick_arrays.extend(right_tick_arrays.unwrap_or(VecDeque::new()));
+        let mut pool_id = None;
+        for tick_array_state in tick_arrays {
+            pool_id = Some(tick_array_state.pool_id);
+            let index = tick_array_state.start_tick_index;
+            tick_array_index.insert(index);
+            tick_array_map.insert(
+                TickArrayState::key_(pool_id.as_ref().unwrap(), &index),
+                TickArray::from(tick_array_state),
+            );
         }
         let mut tick_array_index = tick_array_index.into_iter().collect::<Vec<_>>();
         tick_array_index.sort_unstable();
-        let threshold = 10 * (pool_state.tick_spacing * 60) as i32;
+        let allowed_index_range = 10 * (pool_state.tick_spacing * 60) as i32;
         let min_index = tick_array_index
             .first()
             .unwrap()
-            .0
-            .checked_sub(threshold)
+            .checked_sub(allowed_index_range)
             .unwrap();
         let max_index = tick_array_index
-            .first()
+            .last()
             .unwrap()
-            .0
-            .checked_add(threshold)
-            .unwrap_or(i32::MAX);
-        tick_array_index.insert(0, (min_index, TickArrayState::key_(pool_id, &min_index)));
-        tick_array_index.push((max_index, TickArrayState::key_(pool_id, &max_index)));
+            .checked_add(allowed_index_range)
+            .unwrap();
+        tick_array_index.insert(0, min_index);
+        tick_array_index.push(max_index);
+        let tick_array_index_range = tick_array_index
+            .into_iter()
+            .map(|index| {
+                (
+                    index,
+                    TickArrayState::key_(pool_id.as_ref().unwrap(), &index),
+                )
+            })
+            .collect::<Vec<_>>();
         Self {
             amm_config: pool_state.amm_config,
             mint_0_vault: pool_state.token_vault_0,
@@ -81,7 +90,7 @@ impl RaydiumCLMMPoolState {
             tick_array_bitmap: pool_state.tick_array_bitmap,
             tick_array_bitmap_extension: bitmap_extension,
             tick_array_map,
-            tick_array_index_range: tick_array_index,
+            tick_array_index_range: tick_array_index_range,
         }
     }
 
@@ -131,7 +140,7 @@ impl RaydiumCLMMPoolState {
             tick_arrays
                 .rev()
                 .take(take_count.into())
-                .filter_map(|(index, tick_array_key)| {
+                .filter_map(|(_, tick_array_key)| {
                     self.tick_array_map
                         .get(tick_array_key)
                         .map_or(None, |t| Some(t.clone().into()))
@@ -140,7 +149,7 @@ impl RaydiumCLMMPoolState {
         } else {
             tick_arrays
                 .take(take_count.into())
-                .filter_map(|(index, tick_array_key)| {
+                .filter_map(|(_, tick_array_key)| {
                     self.tick_array_map
                         .get(tick_array_key)
                         .map_or(None, |t| Some(t.clone().into()))
@@ -173,6 +182,16 @@ impl RaydiumCLMMPoolState {
                 if index.ge(&self.tick_array_index_range.first().unwrap().0)
                     && index.le(&self.tick_array_index_range.last().unwrap().0)
                 {
+                    match self
+                        .tick_array_index_range
+                        .binary_search_by_key(&index, |&(k, _)| k)
+                    {
+                        Ok(_) => {}
+                        Err(pos) => {
+                            self.tick_array_index_range
+                                .insert(pos, (index, tick_array.key()));
+                        }
+                    }
                     self.tick_array_map.insert(tick_array.key(), tick_array);
                     Ok(())
                 } else {
@@ -232,67 +251,6 @@ impl TickArray {
             &crate::dex::raydium_clmm::ID,
         )
         .0
-    }
-
-    /// Get next initialized tick in tick array, `current_tick_index` can be any tick index, in other words, `current_tick_index` not exactly a point in the tickarray,
-    /// and current_tick_index % tick_spacing maybe not equal zero.
-    /// If price move to left tick <= current_tick_index, or to right tick > current_tick_index
-    pub fn next_initialized_tick(
-        &mut self,
-        current_tick_index: i32,
-        tick_spacing: u16,
-        zero_for_one: bool,
-    ) -> anchor_lang::Result<Option<&Tick>> {
-        // 确定当前刻度范围开始位置
-        let current_tick_array_start_index =
-            TickArrayState::get_array_start_index(current_tick_index, tick_spacing);
-        if current_tick_array_start_index != self.start_tick_index {
-            return Ok(None);
-        }
-        // 当前最后一个刻度范围在单位刻度内的位置
-        let mut offset_in_array =
-            (current_tick_index - self.start_tick_index) / i32::from(tick_spacing);
-
-        if zero_for_one {
-            // src -> dst , src的价格是降低的，所以向左寻找初始化刻度
-            while offset_in_array >= 0 {
-                if self.ticks[offset_in_array as usize].is_initialized() {
-                    return Ok(self.ticks.get(offset_in_array as usize));
-                }
-                offset_in_array = offset_in_array - 1;
-            }
-        } else {
-            offset_in_array = offset_in_array + 1;
-            while offset_in_array < TICK_ARRAY_SIZE {
-                if self.ticks[offset_in_array as usize].is_initialized() {
-                    return Ok(self.ticks.get(offset_in_array as usize));
-                }
-                offset_in_array = offset_in_array + 1;
-            }
-        }
-        Ok(None)
-    }
-
-    /// Base on swap directioin, return the first initialized tick in the tick array.
-    pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> anyhow::Result<&Tick> {
-        if zero_for_one {
-            let mut i = TICK_ARRAY_SIZE - 1;
-            while i >= 0 {
-                if self.ticks[i as usize].is_initialized() {
-                    return Ok(self.ticks.get_mut(i as usize).unwrap());
-                }
-                i = i - 1;
-            }
-        } else {
-            let mut i = 0;
-            while i < TICK_ARRAY_SIZE_USIZE {
-                if self.ticks[i].is_initialized() {
-                    return Ok(self.ticks.get_mut(i).unwrap());
-                }
-                i = i + 1;
-            }
-        }
-        Err(anyhow!("InvalidTickArray"))
     }
 }
 

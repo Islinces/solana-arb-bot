@@ -61,7 +61,7 @@ impl Quoter for MeteoraDLMMDex {
         if let MeteoraDLMM(pool_state) = &pool.state {
             let swap_for_y = in_mint == mint_0;
             let lp_pair_state: LbPair = pool_state.clone().into();
-            match pool_state.get_bin_array_map(pool.pool_id, swap_for_y, 3) {
+            match pool_state.get_bin_array_map(swap_for_y, 3) {
                 Ok(bin_array_map) => {
                     let result = quote_exact_in(
                         pool.pool_id,
@@ -98,7 +98,7 @@ impl InstructionItemCreator for MeteoraDLMMDex {
                 mint_0_vault: pool_state.mint_0_vault,
                 mint_1_vault: pool_state.mint_1_vault,
                 bitmap_extension: derive_bin_array_bitmap_extension(pool.pool_id).0,
-                bin_arrays: pool_state.get_bin_array_keys(pool.pool_id, zero_to_one, 3),
+                bin_arrays: pool_state.get_bin_array_keys(zero_to_one, 3),
                 alt: pool.alt.clone(),
                 oracle: pool_state.oracle,
                 zero_to_one,
@@ -122,7 +122,7 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                 accounts.push(AccountMeta::new(item.pool_id, false));
                 // 2.bitmap extension
                 // accounts.push(AccountMeta::new(item.bitmap_extension, false));
-                accounts.push(AccountMeta::new(
+                accounts.push(AccountMeta::new_readonly(
                     DexType::MeteoraDLMM.get_program_id(),
                     false,
                 ));
@@ -168,7 +168,7 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                 // 13.mint_1 program
                 accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
                 // 14.Event Authority
-                accounts.push(AccountMeta::new(
+                accounts.push(AccountMeta::new_readonly(
                     Pubkey::from_str("D1ZN9Wj1fRSUQfCjhvnu1hqDMT7hzjzBBpi12nVniYD6").unwrap(),
                     false,
                 ));

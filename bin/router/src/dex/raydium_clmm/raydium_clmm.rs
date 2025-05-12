@@ -542,7 +542,6 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                     },
                                 ],
                                 state: PoolState::RaydiumCLMM(RaydiumCLMMPoolState::new(
-                                    &pool_id,
                                     pool_state,
                                     trade_fee_rate,
                                     tick_array_bitmap_extension,
