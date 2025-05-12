@@ -207,6 +207,7 @@ impl DexData {
                 instruction_items,
                 amount_in_mint: best_quote_result.in_mint,
                 amount_in: best_quote_result.amount_in,
+                first_amount_out: best_quote_result.first_amount_out,
                 amount_out: best_quote_result.amount_out,
                 profit: best_quote_result.profit,
                 ..Default::default()
@@ -245,18 +246,20 @@ impl DexData {
                 if second_pool_amount_out.unwrap_or(0).gt(&start_amount_in) {
                     Some((
                         path,
+                        second_pool_amount_out.unwrap_or(0),
                         second_pool_amount_out.unwrap_or(0).sub(&start_amount_in),
                     ))
                 } else {
                     None
                 }
             })
-            .max_by(|(_, profit_a), (_, profit_b)| profit_a.partial_cmp(profit_b).unwrap())
-            .map(|(path, profit)| PathQuoteResult {
+            .max_by(|(_, _, profit_a), (_, _, profit_b)| profit_a.partial_cmp(profit_b).unwrap())
+            .map(|(path, second_amount_out, profit)| PathQuoteResult {
                 path: path.clone(),
                 in_mint: amount_in_mint,
                 amount_in: start_amount_in,
-                amount_out: 0,
+                first_amount_out: first_pool_amount_out.unwrap(),
+                amount_out: second_amount_out,
                 profit,
             })
     }
@@ -290,19 +293,29 @@ impl DexData {
                     if second_pool_amount_out <= start_amount_in {
                         return None;
                     }
-                    Some((path, second_pool_amount_out.sub(start_amount_in)))
+                    Some((
+                        path,
+                        f_amount_out,
+                        second_pool_amount_out,
+                        second_pool_amount_out.sub(start_amount_in),
+                    ))
                 } else {
                     None
                 }
             })
-            .max_by(|(_, profit_a), (_, profit_b)| profit_a.partial_cmp(profit_b).unwrap())
-            .map(|(path, profit)| PathQuoteResult {
-                path: path.clone(),
-                in_mint: amount_in_mint,
-                amount_in: start_amount_in,
-                amount_out: 0,
-                profit,
+            .max_by(|(_, _, _, profit_a), (_, _, _, profit_b)| {
+                profit_a.partial_cmp(profit_b).unwrap()
             })
+            .map(
+                |(path, first_amount_out, seconde_amount_out, profit)| PathQuoteResult {
+                    path: path.clone(),
+                    in_mint: amount_in_mint,
+                    amount_in: start_amount_in,
+                    first_amount_out,
+                    amount_out: seconde_amount_out,
+                    profit,
+                },
+            )
     }
 }
 
@@ -310,6 +323,7 @@ struct PathQuoteResult {
     pub path: Path,
     pub in_mint: Pubkey,
     pub amount_in: u64,
+    pub first_amount_out: u64,
     pub amount_out: u64,
     pub profit: u64,
 }
@@ -319,6 +333,7 @@ pub struct DexQuoteResult {
     pub instruction_items: Vec<InstructionItem>,
     pub amount_in_mint: Pubkey,
     pub amount_in: u64,
+    pub first_amount_out: u64,
     pub amount_out: u64,
     pub profit: u64,
     pub start_time: Option<Instant>,
