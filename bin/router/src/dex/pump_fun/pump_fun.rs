@@ -242,14 +242,12 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                     let pool_id = Pubkey::try_from(*items.first().unwrap())?;
                     Ok((
                         (txn.clone(), pool_id),
-                        RaydiumAMMData {
+                        PumpFunAMMData {
                             pool_id,
                             mint_0_vault_amount,
                             mint_1_vault_amount,
-                            mint_0_need_take_pnl: None,
-                            mint_1_need_take_pnl: None,
                             instant: update_account.instant,
-                            slot: account.slot,
+                            slot: update_account.account.slot,
                         },
                     ))
                 }

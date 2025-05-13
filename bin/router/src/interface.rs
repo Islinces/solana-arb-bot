@@ -221,6 +221,7 @@ pub enum GrpcMessage {
         mint_0_vault_amount: Option<u64>,
         mint_1_vault_amount: Option<u64>,
         instant: Instant,
+        slot: u64,
     },
     MeteoraDLMMPoolData {
         pool_id: Pubkey,
@@ -264,6 +265,7 @@ impl GrpcMessage {
     pub fn slot(&self) -> Option<u64> {
         match self {
             GrpcMessage::RaydiumAMMData { slot, .. } => Some(slot.clone()),
+            GrpcMessage::PumpFunAMMData { slot, .. } => Some(*slot),
             _ => None,
         }
     }
