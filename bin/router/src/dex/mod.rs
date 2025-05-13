@@ -104,41 +104,56 @@ impl DexData {
         start_amount_in: u64,
         sol_ata_amount: u64,
     ) -> Option<DexQuoteResult> {
-        let grpc_cost = grpc_message.instant();
-        let start_time = Instant::now();
+        let slot = grpc_message.slot();
+        // let grpc_cost = grpc_message.instant();
+        // let start_time = Instant::now();
         let indexer = self.pool_cache_holder.clone();
         //TODO：不一定是以修改的池子作为开始
         if let Some(update_pool) = indexer.update_cache(grpc_message) {
             //TODO:支持配置
             let amount_in_mint = spl_token::native_mint::id();
-            if let Some((positive_paths, reverse_paths)) =
-                indexer.build_graph(&amount_in_mint, &update_pool)
-            {
-                let all_path_size = positive_paths.len() + reverse_paths.len();
-                let quote_start = Instant::now();
-                let mut dex_quote_result = self
-                    .find_best_route(
-                        amount_in_mint,
-                        Arc::new(positive_paths),
-                        Arc::new(reverse_paths),
-                        profit_threshold,
-                        start_amount_in,
-                        sol_ata_amount,
-                    )
-                    .await;
-                if let Some(result) = &mut dex_quote_result {
-                    result.start_time = Some(start_time);
-                    result.route_calculate_cost = Some(quote_start.elapsed().as_nanos());
-                    result.grop_cost = Some(grpc_cost);
-                    info!(
-                        "find_best_route cost: {:?}, path size : {:?}",
-                        result.route_calculate_cost, all_path_size
-                    );
-                }
-                dex_quote_result
-            } else {
-                None
-            }
+            let pool = indexer.pool_cache.pool_map.get(&update_pool).unwrap();
+            let clock = indexer.pool_cache.clone().clock;
+            let amount_out = pool.quote(
+                1_000_000_000,
+                amount_in_mint,
+                Pubkey::default(),
+                Arc::new(clock),
+            );
+            info!(
+                "slot : {:?}, amount_out: {:?}",
+                slot.unwrap_or(0),
+                amount_out.unwrap_or(0)
+            );
+            None
+            // if let Some((positive_paths, reverse_paths)) =
+            //     indexer.build_graph(&amount_in_mint, &update_pool)
+            // {
+            //     let all_path_size = positive_paths.len() + reverse_paths.len();
+            //     let quote_start = Instant::now();
+            //     let mut dex_quote_result = self
+            //         .find_best_route(
+            //             amount_in_mint,
+            //             Arc::new(positive_paths),
+            //             Arc::new(reverse_paths),
+            //             profit_threshold,
+            //             start_amount_in,
+            //             sol_ata_amount,
+            //         )
+            //         .await;
+            //     if let Some(result) = &mut dex_quote_result {
+            //         result.start_time = Some(start_time);
+            //         result.route_calculate_cost = Some(quote_start.elapsed().as_nanos());
+            //         result.grop_cost = Some(grpc_cost);
+            //         info!(
+            //             "find_best_route cost: {:?}, path size : {:?}",
+            //             result.route_calculate_cost, all_path_size
+            //         );
+            //     }
+            //     dex_quote_result
+            // } else {
+            //     None
+            // }
         } else {
             None
         }

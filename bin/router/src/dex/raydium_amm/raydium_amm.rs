@@ -14,21 +14,21 @@ use crate::interface::{
 use anyhow::anyhow;
 use anyhow::Result;
 use arrayref::{array_ref, array_refs};
+use base58::ToBase58;
+use borsh::BorshDeserialize;
 use chrono::Utc;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::instruction::AccountMeta;
+use solana_sdk::program_pack::Pack;
+use solana_sdk::pubkey::Pubkey;
 use spl_token::state::Account;
 use std::collections::HashMap;
 use std::ops::Add;
 use std::str::FromStr;
 use std::sync::Arc;
-use base58::ToBase58;
-use borsh::BorshDeserialize;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::address_lookup_table::AddressLookupTableAccount;
-use solana_sdk::clock::Clock;
-use solana_sdk::instruction::AccountMeta;
-use solana_sdk::program_pack::Pack;
-use solana_sdk::pubkey::Pubkey;
 use tokio::task::JoinSet;
 use tracing::{instrument, warn};
 use yellowstone_grpc_proto::geyser::{
@@ -230,6 +230,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                         mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
                         mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
                         instant: self.update_account.instant,
+                        slot: account.slot,
                     });
                     Ok(())
                 }
@@ -255,6 +256,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                         mint_0_need_take_pnl: None,
                         mint_1_need_take_pnl: None,
                         instant: self.update_account.instant,
+                        slot: account.slot,
                     });
                     Ok(())
                 }

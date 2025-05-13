@@ -263,6 +263,7 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                         mint_0_need_take_pnl: None,
                         mint_1_need_take_pnl: None,
                         instant: self.update_account.instant,
+                        slot: account.slot,
                     });
                     Ok(())
                 }

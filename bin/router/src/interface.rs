@@ -26,16 +26,16 @@ use crate::file_db::DexJson;
 use crate::interface::SourceMessage::Account;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::address_lookup_table::state::AddressLookupTable;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
+use solana_sdk::instruction::AccountMeta;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 use std::time::Instant;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::address_lookup_table::AddressLookupTableAccount;
-use solana_sdk::address_lookup_table::state::AddressLookupTable;
-use solana_sdk::clock::Clock;
-use solana_sdk::instruction::AccountMeta;
-use solana_sdk::pubkey::Pubkey;
 use tokio::io::join;
 use tokio::task::JoinSet;
 use tracing::{error, instrument};
@@ -221,6 +221,7 @@ pub enum GrpcMessage {
         mint_0_need_take_pnl: Option<u64>,
         mint_1_need_take_pnl: Option<u64>,
         instant: Instant,
+        slot: u64,
     },
     RaydiumCLMMData(PoolChangeData, Instant),
     RaydiumCLMMTickArrayData(TickArray, Instant),
@@ -266,6 +267,13 @@ impl GrpcMessage {
             GrpcMessage::MeteoraDLMMPoolData { instant, .. } => instant.elapsed().as_nanos(),
             GrpcMessage::MeteoraDLMMBinArrayData(_, instant) => instant.elapsed().as_nanos(),
             GrpcMessage::Clock(_) => 0,
+        }
+    }
+
+    pub fn slot(&self) -> Option<u64> {
+        match self {
+            GrpcMessage::RaydiumAMMData { slot, .. } => Some(slot.clone()),
+            _=> None,
         }
     }
 }
