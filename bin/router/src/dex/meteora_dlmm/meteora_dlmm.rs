@@ -19,6 +19,8 @@ use crate::interface::{
 use anyhow::Result;
 use anyhow::{anyhow, Context};
 use arrayref::{array_ref, array_refs};
+use base58::ToBase58;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -30,8 +32,6 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use base58::ToBase58;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio::task::JoinSet;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
@@ -285,9 +285,9 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
         let mut bin_arrays_subscribe_accounts = HashMap::new();
         for (index, pool) in pools.iter().enumerate() {
             bin_arrays_subscribe_accounts.insert(
-                format!("{:?}:{:?}:{:?}", DexType::MeteoraDLMM,GrpcAccountUpdateType::BinArray , index),
+                format!("{:?}:{:?}:{:?}", DexType::MeteoraDLMM, GrpcAccountUpdateType::BinArray, index),
                 SubscribeRequestFilterAccounts {
-                    nonempty_txn_signature:None,
+                    nonempty_txn_signature: None,
                     account: vec![],
                     owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
                     filters: vec![
@@ -296,7 +296,7 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
                         },
                         SubscribeRequestFilterAccountsFilter {
                             filter: Some(
-                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp{
+                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
                                     offset: 24,
                                     data: Some(
                                         subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
@@ -542,38 +542,26 @@ impl AccountSnapshotFetcher for MeteoraDLMMSnapshotFetcher {
     }
 }
 
-pub struct MeteoraDLMMGrpcMessageOperator {
-    update_account: AccountUpdate,
-    txn: Option<String>,
-    pool_id: Option<Pubkey>,
-    grpc_message: Option<GrpcMessage>,
-}
+pub struct MeteoraDLMMGrpcMessageOperator;
 
-impl MeteoraDLMMGrpcMessageOperator {
-    pub fn new(update_account: AccountUpdate) -> Self {
-        Self {
-            update_account,
-            txn: None,
-            pool_id: None,
-            grpc_message: None,
-        }
-    }
-}
 impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
-    fn parse_message(&mut self) -> Result<()> {
-        let account_type = &self.update_account.account_type;
-        let account = &self.update_account.account;
+    fn parse_message(
+        &self,
+        update_account: AccountUpdate,
+    ) -> Result<((String, Pubkey), GrpcMessage)> {
+        let account_type = &update_account.account_type;
+        let account = &update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
+
             match account_type {
                 GrpcAccountUpdateType::Pool => {
-                    let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
                     let txn = &update_account_info
                         .txn_signature
                         .as_ref()
                         .unwrap()
                         .to_base58();
-                    let txn = txn.clone();
+                    let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
                     let src = array_ref![data, 0, 165];
                     let (
                         volatility_accumulator,
@@ -588,36 +576,38 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                         bin_array_bitmap,
                         _activation_point,
                     ) = array_refs![src, 4, 4, 4, 8, 1, 4, 2, 1, 1, 128, 8];
-                    self.txn = Some(txn);
-                    self.pool_id = Some(pool_id);
-                    self.grpc_message = Some(GrpcMessage::MeteoraDLMMPoolData {
-                        pool_id,
-                        active_id: i32::from_le_bytes(*active_id),
-                        bin_array_bitmap: bin_array_bitmap
-                            .chunks_exact(8)
-                            .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
-                            .collect::<Vec<_>>()
-                            .try_into()
-                            .unwrap(),
-                        volatility_accumulator: u32::from_le_bytes(*volatility_accumulator),
-                        volatility_reference: u32::from_le_bytes(*volatility_reference),
-                        index_reference: i32::from_le_bytes(*index_reference),
-                        last_update_timestamp: i64::from_le_bytes(*last_update_timestamp),
-                        instant: self.update_account.instant,
-                    });
-                    Ok(())
+                    Ok((
+                        (txn.clone(), pool_id),
+                        GrpcMessage::MeteoraDLMMPoolData {
+                            pool_id,
+                            active_id: i32::from_le_bytes(*active_id),
+                            bin_array_bitmap: bin_array_bitmap
+                                .chunks_exact(8)
+                                .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+                                .collect::<Vec<_>>()
+                                .try_into()
+                                .unwrap(),
+                            volatility_accumulator: u32::from_le_bytes(*volatility_accumulator),
+                            volatility_reference: u32::from_le_bytes(*volatility_reference),
+                            index_reference: i32::from_le_bytes(*index_reference),
+                            last_update_timestamp: i64::from_le_bytes(*last_update_timestamp),
+                            instant: update_account.instant,
+                        },
+                    ))
                 }
-                GrpcAccountUpdateType::BinArray => {
-                    self.grpc_message = Some(GrpcMessage::MeteoraDLMMBinArrayData(
+                GrpcAccountUpdateType::BinArray => Ok((
+                    ("".to_string(), Pubkey::default()),
+                    GrpcMessage::MeteoraDLMMBinArrayData(
                         BinArrayAccount::deserialize(data)?.0,
-                        self.update_account.instant,
-                    ));
-                    Ok(())
-                }
+                        update_account.instant,
+                    ),
+                )),
                 GrpcAccountUpdateType::Clock => {
                     let clock: Clock = serde_json::from_slice(data)?;
-                    self.grpc_message = Some(GrpcMessage::Clock(clock));
-                    Ok(())
+                    Ok((
+                        ("".to_string(), Pubkey::default()),
+                        GrpcMessage::Clock(clock),
+                    ))
                 }
                 _ => Err(anyhow!("")),
             }
@@ -626,17 +616,7 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
         }
     }
 
-    fn change_and_return_ready_data(&self, _old: &mut GrpcMessage) -> anyhow::Result<()> {
+    fn change_data(&self, _old: &mut GrpcMessage, _new: GrpcMessage) {
         unimplemented!()
-    }
-
-    fn get_cache_key(&self) -> (String, Pubkey) {
-        // let txn = self.txn.as_ref().unwrap();
-        // (txn.clone(), self.pool_id.unwrap())
-        unimplemented!()
-    }
-
-    fn get_insert_data(&self) -> GrpcMessage {
-        self.grpc_message.as_ref().unwrap().clone()
     }
 }

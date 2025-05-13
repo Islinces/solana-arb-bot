@@ -180,27 +180,15 @@ impl AccountMetaConverter for RaydiumCLMMDex {
     }
 }
 
-pub struct RaydiumCLMMGrpcMessageOperator {
-    update_account: AccountUpdate,
-    txn: Option<String>,
-    pool_id: Option<Pubkey>,
-    grpc_message: Option<GrpcMessage>,
-}
+pub struct RaydiumCLMMGrpcMessageOperator;
 
-impl RaydiumCLMMGrpcMessageOperator {
-    pub fn new(update_account: AccountUpdate) -> Self {
-        Self {
-            update_account,
-            txn: None,
-            pool_id: None,
-            grpc_message: None,
-        }
-    }
-}
 impl ReadyGrpcMessageOperator for RaydiumCLMMGrpcMessageOperator {
-    fn parse_message(&mut self) -> Result<()> {
-        let account_type = &self.update_account.account_type;
-        let account = &self.update_account.account;
+    fn parse_message(
+        &self,
+        update_account: AccountUpdate,
+    ) -> Result<((String, Pubkey), GrpcMessage)> {
+        let account_type = &update_account.account_type;
+        let account = &update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
             let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
@@ -211,24 +199,24 @@ impl ReadyGrpcMessageOperator for RaydiumCLMMGrpcMessageOperator {
                 .to_base58();
             let txn = txn.clone();
             match account_type {
-                GrpcAccountUpdateType::Pool => {
-                    self.pool_id = Some(pool_id);
-                    self.txn = Some(txn);
-                    self.grpc_message = Some(RaydiumCLMMData(
-                        serde_json::from_slice::<PoolChangeData>(data)?,
-                        self.update_account.instant,
-                    ));
-                    Ok(())
-                }
+                GrpcAccountUpdateType::Pool => Ok((
+                    (txn, pool_id),
+                    RaydiumCLMMData(
+                        PoolChangeData::try_from_slice(data)?,
+                        update_account.instant,
+                    ),
+                )),
                 TickArray => {
                     let tick_array =
                         crate::dex::raydium_clmm::pool_state::TickArray::try_from_slice(&data)?;
                     if tick_array.initialized_tick_count > 0 {
-                        self.grpc_message = Some(GrpcMessage::RaydiumCLMMTickArrayData(
-                            tick_array,
-                            self.update_account.instant,
-                        ));
-                        Ok(())
+                        Ok((
+                            ("".to_string(), Pubkey::default()),
+                            GrpcMessage::RaydiumCLMMTickArrayData(
+                                tick_array,
+                                update_account.instant,
+                            ),
+                        ))
                     } else {
                         Err(anyhow!("TickArray没有初始化"))
                     }
@@ -240,16 +228,8 @@ impl ReadyGrpcMessageOperator for RaydiumCLMMGrpcMessageOperator {
         }
     }
 
-    fn change_and_return_ready_data(&self, _old: &mut GrpcMessage) -> anyhow::Result<()> {
+    fn change_data(&self, _old: &mut GrpcMessage, _new: GrpcMessage) {
         unimplemented!()
-    }
-
-    fn get_cache_key(&self) -> (String, Pubkey) {
-        unimplemented!()
-    }
-
-    fn get_insert_data(&self) -> GrpcMessage {
-        self.grpc_message.as_ref().unwrap().clone()
     }
 }
 

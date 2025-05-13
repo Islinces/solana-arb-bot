@@ -209,29 +209,16 @@ impl GrpcSubscribeRequestGenerator for PumpFunGrpcSubscribeRequestGenerator {
     }
 }
 
-pub struct PumpFunReadyGrpcMessageOperator {
-    update_account: AccountUpdate,
-    txn: Option<String>,
-    pool_id: Option<Pubkey>,
-    grpc_message: Option<GrpcMessage>,
-}
-
-impl PumpFunReadyGrpcMessageOperator {
-    pub fn new(update_account: AccountUpdate) -> Self {
-        Self {
-            update_account,
-            txn: None,
-            pool_id: None,
-            grpc_message: None,
-        }
-    }
-}
+pub struct PumpFunReadyGrpcMessageOperator;
 
 impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
-    fn parse_message(&mut self) -> Result<()> {
-        let account_type = &self.update_account.account_type;
-        let filters = &self.update_account.filters;
-        let account = &self.update_account.account;
+    fn parse_message(
+        &self,
+        update_account: AccountUpdate,
+    ) -> Result<((String, Pubkey), GrpcMessage)> {
+        let account_type = &update_account.account_type;
+        let filters = &update_account.filters;
+        let account = &update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
             let txn = &update_account_info
@@ -239,7 +226,6 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                 .as_ref()
                 .unwrap()
                 .to_base58();
-            let txn = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::MintVault => {
                     let src = array_ref![data, 0, 41];
@@ -254,18 +240,18 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                         mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
                     }
                     let pool_id = Pubkey::try_from(*items.first().unwrap())?;
-                    self.pool_id = Some(pool_id);
-                    self.txn = Some(txn);
-                    self.grpc_message = Some(RaydiumAMMData {
-                        pool_id,
-                        mint_0_vault_amount,
-                        mint_1_vault_amount,
-                        mint_0_need_take_pnl: None,
-                        mint_1_need_take_pnl: None,
-                        instant: self.update_account.instant,
-                        slot: account.slot,
-                    });
-                    Ok(())
+                    Ok((
+                        (txn.clone(), pool_id),
+                        RaydiumAMMData {
+                            pool_id,
+                            mint_0_vault_amount,
+                            mint_1_vault_amount,
+                            mint_0_need_take_pnl: None,
+                            mint_1_need_take_pnl: None,
+                            instant: update_account.instant,
+                            slot: account.slot,
+                        },
+                    ))
                 }
                 _ => Err(anyhow!("")),
             }
@@ -274,7 +260,7 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
         }
     }
 
-    fn change_and_return_ready_data(&self, old: &mut GrpcMessage) -> Result<()> {
+    fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage) {
         match old {
             PumpFunAMMData {
                 mint_0_vault_amount,
@@ -285,29 +271,14 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                     mint_0_vault_amount: update_mint_0_vault_amount,
                     mint_1_vault_amount: update_mint_1_vault_amount,
                     ..
-                } = self.grpc_message.as_ref().unwrap().clone()
+                } = new
                 {
                     change_option_ignore_none_old(mint_0_vault_amount, update_mint_0_vault_amount);
                     change_option_ignore_none_old(mint_1_vault_amount, update_mint_1_vault_amount);
-                    if mint_0_vault_amount.is_some() && mint_1_vault_amount.is_some() {
-                        Ok(())
-                    } else {
-                        Err(anyhow!(""))
-                    }
-                } else {
-                    Err(anyhow!(""))
                 }
             }
-            _ => Err(anyhow!("")),
+            _ => {}
         }
-    }
-
-    fn get_cache_key(&self) -> (String, Pubkey) {
-        (self.txn.clone().unwrap(), self.pool_id.unwrap())
-    }
-
-    fn get_insert_data(&self) -> GrpcMessage {
-        self.grpc_message.as_ref().unwrap().clone()
     }
 }
 

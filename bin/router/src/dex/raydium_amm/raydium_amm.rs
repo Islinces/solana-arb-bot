@@ -30,7 +30,7 @@ use std::ops::Add;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use tracing::{instrument, warn};
+use tracing::{info, instrument, warn};
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
     SubscribeRequestFilterAccounts,
@@ -58,7 +58,7 @@ impl Quoter for RaydiumAmmDex {
                 .checked_ceil_div(u128::from(pool_state.swap_fee_denominator))
                 .unwrap()
                 .0;
-
+            info!("fee : {:?}", swap_fee);
             let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
 
             let mint_0_amount_without_pnl = u128::from(
@@ -186,28 +186,15 @@ impl AccountMetaConverter for RaydiumAmmDex {
     }
 }
 
-pub struct RaydiumAmmGrpcMessageOperator {
-    update_account: AccountUpdate,
-    txn: Option<String>,
-    pool_id: Option<Pubkey>,
-    grpc_message: Option<GrpcMessage>,
-}
-
-impl RaydiumAmmGrpcMessageOperator {
-    pub fn new(update_account: AccountUpdate) -> Self {
-        Self {
-            update_account,
-            txn: None,
-            pool_id: None,
-            grpc_message: None,
-        }
-    }
-}
+pub struct RaydiumAmmGrpcMessageOperator;
 impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
-    fn parse_message(&mut self) -> Result<()> {
-        let account_type = &self.update_account.account_type;
-        let filters = &self.update_account.filters;
-        let account = &self.update_account.account;
+    fn parse_message(
+        &self,
+        update_account: AccountUpdate,
+    ) -> Result<((String, Pubkey), GrpcMessage)> {
+        let account_type = &update_account.account_type;
+        let filters = &update_account.filters;
+        let account = &update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
             let txn = &update_account_info
@@ -215,28 +202,28 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                 .as_ref()
                 .unwrap()
                 .to_base58();
-            let txn = txn.clone();
+            let tx = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::Pool => {
                     let src = array_ref![data, 0, 16];
                     let (need_take_pnl_coin, need_take_pnl_pc) = array_refs![src, 8, 8];
                     let pool_id = Pubkey::try_from(update_account_info.pubkey.as_slice())?;
-                    self.pool_id = Some(pool_id);
-                    self.txn = Some(txn);
-                    self.grpc_message = Some(RaydiumAMMData {
-                        pool_id,
-                        mint_0_vault_amount: None,
-                        mint_1_vault_amount: None,
-                        mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
-                        mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
-                        instant: self.update_account.instant,
-                        slot: account.slot,
-                    });
-                    Ok(())
+                    Ok((
+                        (txn.clone(), pool_id),
+                        RaydiumAMMData {
+                            pool_id,
+                            mint_0_vault_amount: None,
+                            mint_1_vault_amount: None,
+                            mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
+                            mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
+                            instant: update_account.instant,
+                            slot: account.slot,
+                        },
+                    ))
                 }
                 GrpcAccountUpdateType::MintVault => {
                     let src = array_ref![data, 0, 41];
-                    let (_mint, amount, _state) = array_refs![src, 32, 8, 1];
+                    let (mint, amount, _state) = array_refs![src, 32, 8, 1];
                     let mut mint_0_vault_amount = None;
                     let mut mint_1_vault_amount = None;
                     let items = filters.first().unwrap().split(":").collect::<Vec<&str>>();
@@ -247,18 +234,18 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                         mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
                     }
                     let pool_id = Pubkey::try_from(*items.first().unwrap())?;
-                    self.pool_id = Some(pool_id);
-                    self.txn = Some(txn);
-                    self.grpc_message = Some(RaydiumAMMData {
-                        pool_id,
-                        mint_0_vault_amount,
-                        mint_1_vault_amount,
-                        mint_0_need_take_pnl: None,
-                        mint_1_need_take_pnl: None,
-                        instant: self.update_account.instant,
-                        slot: account.slot,
-                    });
-                    Ok(())
+                    Ok((
+                        (txn.clone(), pool_id),
+                        RaydiumAMMData {
+                            pool_id,
+                            mint_0_vault_amount,
+                            mint_1_vault_amount,
+                            mint_0_need_take_pnl: None,
+                            mint_1_need_take_pnl: None,
+                            instant: update_account.instant,
+                            slot: account.slot,
+                        },
+                    ))
                 }
                 _ => Err(anyhow!("")),
             }
@@ -267,7 +254,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
         }
     }
 
-    fn change_and_return_ready_data(&self, old: &mut GrpcMessage) -> Result<()> {
+    fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage) {
         match old {
             RaydiumAMMData {
                 mint_0_vault_amount,
@@ -282,7 +269,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                     mint_0_need_take_pnl: update_mint_0_need_take_pnl,
                     mint_1_need_take_pnl: update_mint_1_need_take_pnl,
                     ..
-                } = self.grpc_message.as_ref().unwrap().clone()
+                } = new
                 {
                     change_option_ignore_none_old(mint_0_vault_amount, update_mint_0_vault_amount);
                     change_option_ignore_none_old(mint_1_vault_amount, update_mint_1_vault_amount);
@@ -294,30 +281,10 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                         mint_1_need_take_pnl,
                         update_mint_1_need_take_pnl,
                     );
-                    if mint_0_vault_amount.is_some()
-                        && mint_1_vault_amount.is_some()
-                        && mint_0_need_take_pnl.is_some()
-                        && mint_1_need_take_pnl.is_some()
-                    {
-                        Ok(())
-                    } else {
-                        Err(anyhow!(""))
-                    }
-                } else {
-                    Err(anyhow!(""))
                 }
             }
-            _ => Err(anyhow!("")),
+            _ => {}
         }
-    }
-
-    fn get_cache_key(&self) -> (String, Pubkey) {
-        let txn = self.txn.as_ref().unwrap();
-        (txn.clone(), self.pool_id.unwrap())
-    }
-
-    fn get_insert_data(&self) -> GrpcMessage {
-        self.grpc_message.as_ref().unwrap().clone()
     }
 }
 

@@ -328,7 +328,7 @@ impl Into<TickState> for Tick {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, BorshDeserialize)]
 pub struct PoolChangeData {
     pub pool_id: Pubkey,
     pub tick_current: i32,

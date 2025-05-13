@@ -106,21 +106,12 @@ impl DexType {
         }
     }
 
-    pub fn get_grpc_message_operator(
-        &self,
-        account_update: AccountUpdate,
-    ) -> Result<Box<dyn ReadyGrpcMessageOperator>> {
+    pub fn get_grpc_message_operator(&self) -> Result<Box<dyn ReadyGrpcMessageOperator>> {
         match self {
-            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmGrpcMessageOperator::new(account_update))),
-            DexType::RaydiumCLmm => Ok(Box::new(RaydiumCLMMGrpcMessageOperator::new(
-                account_update,
-            ))),
-            DexType::PumpFunAMM => Ok(Box::new(PumpFunReadyGrpcMessageOperator::new(
-                account_update,
-            ))),
-            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMGrpcMessageOperator::new(
-                account_update,
-            ))),
+            DexType::RaydiumAMM => Ok(Box::new(RaydiumAmmGrpcMessageOperator)),
+            DexType::RaydiumCLmm => Ok(Box::new(RaydiumCLMMGrpcMessageOperator)),
+            DexType::PumpFunAMM => Ok(Box::new(PumpFunReadyGrpcMessageOperator)),
+            DexType::MeteoraDLMM => Ok(Box::new(MeteoraDLMMGrpcMessageOperator)),
         }
     }
 
@@ -273,7 +264,34 @@ impl GrpcMessage {
     pub fn slot(&self) -> Option<u64> {
         match self {
             GrpcMessage::RaydiumAMMData { slot, .. } => Some(slot.clone()),
-            _=> None,
+            _ => None,
+        }
+    }
+
+    pub fn is_ready(&self) -> bool {
+        match self {
+            GrpcMessage::RaydiumAMMData {
+                mint_0_vault_amount,
+                mint_1_vault_amount,
+                mint_0_need_take_pnl,
+                mint_1_need_take_pnl,
+                ..
+            } => {
+                mint_0_vault_amount.is_some()
+                    && mint_1_vault_amount.is_some()
+                    && mint_0_need_take_pnl.is_some()
+                    && mint_1_need_take_pnl.is_some()
+            }
+            GrpcMessage::RaydiumCLMMData(_, _) => true,
+            GrpcMessage::RaydiumCLMMTickArrayData(_, _) => true,
+            GrpcMessage::PumpFunAMMData {
+                mint_0_vault_amount,
+                mint_1_vault_amount,
+                ..
+            } => mint_0_vault_amount.is_some() && mint_1_vault_amount.is_some(),
+            GrpcMessage::MeteoraDLMMPoolData { .. } => true,
+            GrpcMessage::MeteoraDLMMBinArrayData(_, _) => true,
+            GrpcMessage::Clock(_) => true,
         }
     }
 }
@@ -308,13 +326,12 @@ pub enum GrpcAccountUpdateType {
 }
 
 pub trait ReadyGrpcMessageOperator {
-    fn parse_message(&mut self) -> Result<()>;
+    fn parse_message(
+        &self,
+        update_account: AccountUpdate,
+    ) -> Result<((String, Pubkey), GrpcMessage)>;
 
-    fn change_and_return_ready_data(&self, old: &mut GrpcMessage) -> Result<()>;
-
-    fn get_cache_key(&self) -> (String, Pubkey);
-
-    fn get_insert_data(&self) -> GrpcMessage;
+    fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage);
 }
 
 pub trait GrpcSubscribeRequestGenerator {
