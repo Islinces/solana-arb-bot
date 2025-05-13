@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use base64::engine::general_purpose;
 use base64::Engine;
+use bincode::config;
 use burberry::Executor;
 use dashmap::{DashMap, DashSet};
 use eyre::eyre;
@@ -99,7 +100,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
                     .into_iter()
-                    .map(|item| serde_json::to_vec(&item).unwrap())
+                    .map(|item| bincode::serialize(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
                 info!("bundles : {:#?}", bundles);
