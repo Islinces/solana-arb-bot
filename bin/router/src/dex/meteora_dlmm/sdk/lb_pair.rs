@@ -5,8 +5,6 @@ use crate::dex::meteora_dlmm::sdk::conversions::status::PairStatusWrapper;
 use crate::dex::meteora_dlmm::sdk::conversions::token_program_flag::TokenProgramFlagWrapper;
 use crate::dex::meteora_dlmm::sdk::interface::accounts::LbPair;
 use crate::dex::meteora_dlmm::sdk::interface::typedefs::TokenProgramFlags;
-use anchor_spl::token::spl_token;
-use anchor_spl::token_2022::spl_token_2022;
 use anyhow::{ensure, Context, Result};
 use ruint::aliases::U1024;
 use solana_sdk::pubkey::Pubkey;

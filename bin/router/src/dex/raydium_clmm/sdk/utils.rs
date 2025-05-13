@@ -6,11 +6,12 @@ use crate::dex::raydium_clmm::sdk::tick_array::{TickArrayState, TickState};
 use crate::dex::raydium_clmm::sdk::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::raydium_clmm::sdk::{liquidity_math, swap_math, tick_math};
-use anchor_lang::AccountDeserialize;
 use anyhow::Result;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::pubkey::Pubkey;
+use bincode::config;
+use borsh::BorshDeserialize;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Neg};
 use std::sync::Arc;
@@ -282,13 +283,15 @@ fn swap_compute(
                 }
                 let result = liquidity_math::add_delta(state.liquidity, liquidity_net);
                 match result {
-                    Ok(result) => {state.liquidity =
-                        result}
+                    Ok(result) => state.liquidity = result,
                     Err(e) => {
-                        error!("clmm quote error: {}, pool_id:{}", e,tickarray_bitmap_extension.unwrap().pool_id);
+                        error!(
+                            "clmm quote error: {}, pool_id:{}",
+                            e,
+                            tickarray_bitmap_extension.as_ref().unwrap().pool_id
+                        );
                     }
-                }
-                ;
+                };
             }
 
             state.tick = if zero_for_one {
@@ -310,23 +313,13 @@ fn swap_compute(
     ))
 }
 
-pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> Result<T> {
-    let mut data: &[u8] = &account.data;
-    T::try_deserialize(&mut data).map_err(Into::into)
-}
-
-pub fn deserialize_anchor_bytes<T: AccountDeserialize>(data: &[u8]) -> Result<T> {
-    let mut data: &[u8] = data;
-    T::try_deserialize(&mut data).map_err(Into::into)
-}
-
 pub async fn load_cur_and_next_specify_count_tick_array(
     rpc_client: Arc<RpcClient>,
     load_count: u8,
     pool_id: &Pubkey,
     _program_id: &Pubkey,
     pool_state: &PoolState,
-    tickarray_bitmap_extension: &TickArrayBitmapExtension,
+    tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     zero_for_one: bool,
 ) -> Option<VecDeque<TickArrayState>> {
     let tick_array_keys = load_cur_and_next_specify_count_tick_array_key(
@@ -340,8 +333,7 @@ pub async fn load_cur_and_next_specify_count_tick_array(
     if let Ok(tick_array_states) = tick_array_rsps {
         let mut tick_arrays = VecDeque::new();
         for tick_array in tick_array_states {
-            let tick_array_state =
-                deserialize_anchor_account::<TickArrayState>(&tick_array.unwrap()).unwrap();
+            let tick_array_state = TickArrayState::try_from_slice(&tick_array.unwrap().data[8..]).unwrap();
             tick_arrays.push_back(tick_array_state);
         }
         Some(tick_arrays)
@@ -354,12 +346,12 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
     load_count: u8,
     pool_id: &Pubkey,
     pool_state: &PoolState,
-    tickarray_bitmap_extension: &TickArrayBitmapExtension,
+    tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     zero_for_one: bool,
 ) -> Vec<Pubkey> {
     // 获取当前可用 tick array 的 start index
     let (_, mut current_vaild_tick_array_start_index) = pool_state
-        .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
+        .get_first_initialized_tick_array(tickarray_bitmap_extension, zero_for_one)
         .unwrap();
     let mut tick_array_keys = Vec::new();
 
@@ -380,7 +372,7 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
     while max_array_size != 0 {
         let next_tick_array_index = pool_state
             .next_initialized_tick_array_start_index(
-                &Some(*tickarray_bitmap_extension),
+                tickarray_bitmap_extension,
                 current_vaild_tick_array_start_index,
                 zero_for_one,
             )

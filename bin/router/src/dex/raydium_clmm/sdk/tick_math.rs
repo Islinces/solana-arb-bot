@@ -1,6 +1,6 @@
-use anchor_lang::require;
 use crate::dex::raydium_clmm::sdk::big_num::U128;
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
+use anyhow::Result;
+use crate::require;
 
 /// The minimum tick
 pub const MIN_TICK: i32 = -443636;
@@ -30,9 +30,9 @@ const BIT_PRECISION: u32 = 16;
 ///
 ///  (y/x)开根
 /// 高64位表示整数位，低64位表示小数位
-pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Error> {
+pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128> {
     let abs_tick = tick.abs() as u32;
-    require!(abs_tick <= MAX_TICK as u32, ErrorCode::TickUpperOverflow);
+    require!(abs_tick <= MAX_TICK as u32, "The tick must be lesser than, or equal to the maximum tick(443636)");
 
     // i = 0
     // 判断tick奇偶，用处理半指数
@@ -134,11 +134,11 @@ pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Err
 /// Throws if sqrt_price_x64 < MIN_SQRT_RATIO or sqrt_price_x64 > MAX_SQRT_RATIO
 ///
 /// Formula: `i = log base(√1.0001) (√P)`
-pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::error::Error> {
+pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32> {
     // second inequality must be < because the price can never reach the price at the max tick
     require!(
         sqrt_price_x64 >= MIN_SQRT_PRICE_X64 && sqrt_price_x64 < MAX_SQRT_PRICE_X64,
-        ErrorCode::SqrtPriceX64
+        "sqrt_price_x64 out of range"
     );
 
     // Determine log_b(sqrt_ratio). First by calculating integer portion (msb)

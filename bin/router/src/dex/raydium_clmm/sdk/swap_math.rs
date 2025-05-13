@@ -1,9 +1,8 @@
-use crate::dex::raydium_clmm::sdk::full_math::MulDiv;
-use crate::dex::raydium_clmm::sdk::sqrt_price_math;
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
 use crate::dex::raydium_clmm::sdk::config::FEE_RATE_DENOMINATOR_VALUE;
-use anchor_lang::prelude::*;
+use crate::dex::raydium_clmm::sdk::full_math::MulDiv;
 use crate::dex::raydium_clmm::sdk::liquidity_math;
+use crate::dex::raydium_clmm::sdk::sqrt_price_math;
+use anyhow::{anyhow, Result};
 
 /// Result of a swap step
 #[derive(Default, Debug)]
@@ -197,11 +196,12 @@ fn calculate_amount_in_range(
         if result.is_ok() {
             return Ok(Some(result.unwrap()));
         } else {
-            if result.err().unwrap() == ErrorCode::MaxTokenOverflow.into() {
-                return Ok(None);
-            } else {
-                return Err(ErrorCode::SqrtPriceLimitOverflow.into());
+            if let Some(err) = result.as_ref().err() {
+                if err.to_string().eq("Max token overflow") {
+                    return Ok(None);
+                }
             }
+            return Err(anyhow!("Square root price limit overflow"));
         }
     } else {
         let result = if zero_for_one {
@@ -220,83 +220,14 @@ fn calculate_amount_in_range(
             )
         };
         if result.is_ok() {
-            return Ok(Some(result.unwrap()));
+            Ok(Some(result?))
         } else {
-            if result.err().unwrap() == ErrorCode::MaxTokenOverflow.into() {
-                return Ok(None);
-            } else {
-                return Err(ErrorCode::SqrtPriceLimitOverflow.into());
+            if let Some(err) = result.as_ref().err() {
+                if err.to_string().eq("Max token overflow") {
+                    return Ok(None);
+                }
             }
-        }
-    }
-}
-
-#[cfg(test)]
-fn calculate_amount_in_range(
-    sqrt_price_current_x64: u128,
-    sqrt_price_target_x64: u128,
-    liquidity: u128,
-    zero_for_one: bool,
-    is_base_input: bool,
-    block_timestamp: u32,
-) -> Result<Option<u64>> {
-    if is_base_input {
-        let result = if zero_for_one {
-            liquidity_math::get_delta_amount_0_unsigned(
-                sqrt_price_target_x64,
-                sqrt_price_current_x64,
-                liquidity,
-                true,
-            )
-        } else {
-            liquidity_math::get_delta_amount_1_unsigned(
-                sqrt_price_current_x64,
-                sqrt_price_target_x64,
-                liquidity,
-                true,
-            )
-        };
-
-        if block_timestamp == 0 {
-            if result.is_err() {
-                return Err(ErrorCode::MaxTokenOverflow.into());
-            } else {
-                return Ok(Some(result.unwrap()));
-            }
-        }
-        if result.is_ok() {
-            return Ok(Some(result.unwrap()));
-        } else {
-            if result.err().unwrap() == ErrorCode::MaxTokenOverflow.into() {
-                return Ok(None);
-            } else {
-                return Err(ErrorCode::SqrtPriceLimitOverflow.into());
-            }
-        }
-    } else {
-        let result = if zero_for_one {
-            liquidity_math::get_delta_amount_1_unsigned(
-                sqrt_price_target_x64,
-                sqrt_price_current_x64,
-                liquidity,
-                false,
-            )
-        } else {
-            liquidity_math::get_delta_amount_0_unsigned(
-                sqrt_price_current_x64,
-                sqrt_price_target_x64,
-                liquidity,
-                false,
-            )
-        };
-        if result.is_ok() || block_timestamp == 0 {
-            return Ok(Some(result.unwrap()));
-        } else {
-            if result.err().unwrap() == ErrorCode::MaxTokenOverflow.into() {
-                return Ok(None);
-            } else {
-                return Err(ErrorCode::SqrtPriceLimitOverflow.into());
-            }
+            return Err(anyhow!("Square root price limit overflow"));
         }
     }
 }

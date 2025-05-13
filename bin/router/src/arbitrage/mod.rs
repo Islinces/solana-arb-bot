@@ -1,5 +1,5 @@
-use solana_program::pubkey;
-use solana_program::pubkey::Pubkey;
+use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
 use crate::dex::DexQuoteResult;
 
 pub mod jito_arb_executor;

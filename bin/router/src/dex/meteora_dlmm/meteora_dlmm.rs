@@ -1,7 +1,5 @@
-use crate::arbitrage::types::swap::Swap;
 use crate::cache::PoolState::MeteoraDLMM;
 use crate::cache::{Mint, Pool};
-use crate::dex::common::utils::change_data_if_not_same;
 use crate::dex::meteora_dlmm::pool_state::{MeteoraDLMMInstructionItem, MeteoraDLMMPoolState};
 use crate::dex::meteora_dlmm::sdk::commons::pda::derive_bin_array_bitmap_extension;
 use crate::dex::meteora_dlmm::sdk::commons::quote::{
@@ -21,19 +19,19 @@ use crate::interface::{
 use anyhow::Result;
 use anyhow::{anyhow, Context};
 use arrayref::{array_ref, array_refs};
-use base58::ToBase58;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::clock::Clock;
-use solana_program::instruction::AccountMeta;
-use solana_program::pubkey::Pubkey;
-use solana_program::sysvar::SysvarId;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::instruction::AccountMeta;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sysvar::SysvarId;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use base58::ToBase58;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio::task::JoinSet;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
@@ -289,6 +287,7 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
             bin_arrays_subscribe_accounts.insert(
                 format!("{:?}:{:?}:{:?}", DexType::MeteoraDLMM,GrpcAccountUpdateType::BinArray , index),
                 SubscribeRequestFilterAccounts {
+                    nonempty_txn_signature:None,
                     account: vec![],
                     owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
                     filters: vec![
@@ -616,7 +615,7 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                     Ok(())
                 }
                 GrpcAccountUpdateType::Clock => {
-                    let clock: Clock = bincode::deserialize(data)?;
+                    let clock: Clock = serde_json::from_slice(data)?;
                     self.grpc_message = Some(GrpcMessage::Clock(clock));
                     Ok(())
                 }

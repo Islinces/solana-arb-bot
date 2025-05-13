@@ -1,9 +1,7 @@
 ///! Helper functions to get most and least significant non-zero bits
 use crate::dex::raydium_clmm::sdk::big_num::U1024;
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
 use crate::dex::raydium_clmm::sdk::tick_array::{TickArrayState, TickState, TICK_ARRAY_SIZE};
-use anchor_lang::prelude::*;
-
+use anyhow::{anyhow, Result};
 pub const TICK_ARRAY_BITMAP_SIZE: i32 = 512;
 
 pub type TickArryBitmap = [u64; 8];
@@ -50,7 +48,7 @@ pub fn check_current_tick_array_is_initialized(
 ) -> Result<(bool, i32)> {
     // 再次判断刻度是否在池子的刻度范围内
     if TickState::check_is_out_of_boundary(tick_current) {
-        return err!(ErrorCode::InvaildTickIndex);
+        return Err(anyhow!("Tick out of range"));
     }
     // 单位刻度范围
     let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;

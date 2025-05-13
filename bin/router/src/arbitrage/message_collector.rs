@@ -1,15 +1,15 @@
 use crate::dex::DexData;
 use crate::interface::{AccountUpdate, SubscribeKey};
 use burberry::{async_trait, Collector, CollectorStream};
-use log::warn;
-use solana_client::nonblocking::rpc_client::RpcClient;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{error, info};
-use yellowstone_grpc_client::GeyserGrpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use tracing::{error, info, warn};
+use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcClient};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::SubscribeUpdate;
+use yellowstone_grpc_proto::tonic;
 use yellowstone_grpc_proto::tonic::codegen::tokio_stream::{Stream, StreamExt, StreamMap};
 use yellowstone_grpc_proto::tonic::Status;
 
@@ -42,6 +42,7 @@ impl GrpcMessageCollector {
             .initial_connection_window_size(5242880)
             .initial_stream_window_size(4194304)
             .connect_timeout(Duration::from_millis(30 * 1000))
+            .tls_config(ClientTlsConfig::new().with_native_roots())?
             .connect()
             .await
             .map_err(|e| {

@@ -12,23 +12,21 @@ use burberry::Executor;
 use dashmap::{DashMap, DashSet};
 use eyre::eyre;
 use futures_util::future::{err, ok};
-use num_integer::Integer;
 use rand::Rng;
 use reqwest::{Client, Error, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::hash::Hash;
-use solana_program::instruction::{AccountMeta, Instruction};
-use solana_program::message::v0::Message;
-use solana_program::pubkey::Pubkey;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
+use solana_sdk::hash::Hash;
+use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::message::v0::Message;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use solana_sdk::transaction::VersionedTransaction;
-use spl_associated_token_account::get_associated_token_address_with_program_id;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
+use spl_associated_token_account::{get_associated_token_address_with_program_id, solana_program};
 use spl_token::instruction::transfer;
 use std::collections::HashMap;
 use std::ops::{Div, Mul, Sub};
@@ -101,7 +99,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
                     .into_iter()
-                    .map(|item| bincode::serialize(&item).unwrap())
+                    .map(|item| serde_json::to_vec(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
                 info!("bundles : {:#?}", bundles);

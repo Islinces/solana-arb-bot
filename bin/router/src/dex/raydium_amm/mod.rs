@@ -1,6 +1,5 @@
-use solana_program::pubkey;
-use solana_program::pubkey::Pubkey;
-use solana_sdk::declare_id;
+use solana_sdk::{declare_id, pubkey};
+use solana_sdk::pubkey::Pubkey;
 
 mod error;
 mod math;

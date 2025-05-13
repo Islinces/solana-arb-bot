@@ -1,7 +1,6 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_sdk::pubkey::Pubkey;
 use bytemuck::{Pod, Zeroable};
-use solana_program::pubkey::Pubkey;
-use crate::dex::meteora_dlmm::sdk::commons::pda::derive_bin_array_bitmap_extension;
 use crate::dex::meteora_dlmm::sdk::interface::typedefs::{Bin, ProtocolFee, RewardInfo, StaticParameters, VariableParameters};
 
 pub const BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM: [u8; 8] = [80, 111, 124, 113, 55, 237, 18, 5];

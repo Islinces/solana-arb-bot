@@ -2,11 +2,11 @@ use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use anyhow::anyhow;
 use argon2::Argon2;
-use rand::RngCore;
 use rand_core::OsRng;
 use solana_sdk::signature::Keypair;
 use std::path::Path;
 use std::fs;
+use rand_core::RngCore;
 
 pub struct KeypairVault {
     encrypted_data: Vec<u8>,

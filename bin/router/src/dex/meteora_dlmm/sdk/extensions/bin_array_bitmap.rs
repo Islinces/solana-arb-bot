@@ -1,8 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use ruint::aliases::U512;
 use crate::dex::meteora_dlmm::sdk::commons::constants::{BIN_ARRAY_BITMAP_SIZE, EXTENSION_BINARRAY_BITMAP_SIZE};
 use crate::dex::meteora_dlmm::sdk::interface::accounts::BinArrayBitmapExtension;
-use crate::dex::meteora_dlmm::sdk::interface::errors::LbClmmError;
 
 pub trait BinArrayBitmapExtExtension {
     fn bitmap_range() -> (i32, i32);
@@ -44,14 +43,14 @@ impl BinArrayBitmapExtExtension for BinArrayBitmapExtension {
             } else {
                 match self.iter_bitmap(start_index, max_bit_map_id)? {
                     Some(value) => return Ok((value, true)),
-                    None => return Err(LbClmmError::CannotFindNonZeroLiquidityBinArrayId.into()),
+                    None => return Err(anyhow!("Cannot find non-zero liquidity binArrayId")),
                 }
             }
         } else {
             if swap_for_y {
                 match self.iter_bitmap(start_index, min_bitmap_id)? {
                     Some(value) => return Ok((value, true)),
-                    None => return Err(LbClmmError::CannotFindNonZeroLiquidityBinArrayId.into()),
+                    None => return Err(anyhow!("Cannot find non-zero liquidity binArrayId")),
                 }
             } else {
                 match self.iter_bitmap(start_index, -BIN_ARRAY_BITMAP_SIZE - 1)? {

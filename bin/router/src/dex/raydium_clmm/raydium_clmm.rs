@@ -1,14 +1,11 @@
 use crate::cache::{Mint, Pool, PoolState};
-use crate::dex::common::utils::change_data_if_not_same;
 use crate::dex::raydium_clmm::pool_state::{
     PoolChangeData, RaydiumCLMMInstructionItem, RaydiumCLMMPoolState,
 };
 use crate::dex::raydium_clmm::sdk::config::AmmConfig;
 use crate::dex::raydium_clmm::sdk::tick_array::TICK_ARRAY_SIZE_USIZE;
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use crate::dex::raydium_clmm::sdk::utils::{
-    deserialize_anchor_account, load_cur_and_next_specify_count_tick_array,
-};
+use crate::dex::raydium_clmm::sdk::utils::load_cur_and_next_specify_count_tick_array;
 use crate::dex::raydium_clmm::sdk::{config, utils};
 use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
@@ -23,14 +20,13 @@ use anyhow::anyhow;
 use anyhow::Result;
 use base58::ToBase58;
 use borsh::BorshDeserialize;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::clock::Clock;
-use solana_program::instruction::AccountMeta;
-use solana_program::pubkey::Pubkey;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::instruction::AccountMeta;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
@@ -72,7 +68,7 @@ impl Quoter for RaydiumCLMMDex {
                 true,
                 &amm_config,
                 &clmm_pool_state,
-                &Some(pool_state.tick_array_bitmap_extension),
+                &Some(pool_state.tick_array_bitmap_extension.clone()),
                 &mut pool_state.get_tick_arrays(zero_for_one, 3),
             );
             match result {
@@ -322,6 +318,7 @@ impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
             tick_arrays_subscribe_accounts.insert(
                 format!("{:?}:{:?}:{:?}", DexType::RaydiumCLmm, TickArray, index),
                 SubscribeRequestFilterAccounts {
+                    nonempty_txn_signature:None,
                     account: vec![],
                     owner: vec![DexType::RaydiumCLmm.get_program_id().to_string()],
                     filters: vec![
@@ -432,7 +429,7 @@ impl RaydiumCLMMSnapshotFetcher {
             .zip(all_amm_config_keys)
             .filter_map(|(account, config_key)| {
                 if let Ok(amm_config_state) =
-                    deserialize_anchor_account::<config::AmmConfig>(account.as_ref().unwrap())
+                    AmmConfig::try_from_slice(&account.as_ref().unwrap().data[8..])
                 {
                     Some((config_key, amm_config_state.trade_fee_rate))
                 } else {
@@ -493,13 +490,14 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                         if let (_bitmap_extension_id, Some(bitmap_extension_account)) =
                             bitmap_extension_pair
                         {
-                            let pool_state = deserialize_anchor_account::<
-                                crate::dex::raydium_clmm::sdk::pool::PoolState,
-                            >(pool_account)
-                            .unwrap();
+                            let pool_state =
+                                crate::dex::raydium_clmm::sdk::pool::PoolState::try_from_slice(
+                                    &pool_account.data[8..],
+                                )
+                                .unwrap();
                             let tick_array_bitmap_extension =
-                                deserialize_anchor_account::<TickArrayBitmapExtension>(
-                                    bitmap_extension_account,
+                                TickArrayBitmapExtension::try_from_slice(
+                                    &bitmap_extension_account.data[8..],
                                 )
                                 .unwrap();
                             let zero_to_one_tick_array_states =
@@ -509,7 +507,7 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                     &pool_id,
                                     &Pubkey::default(),
                                     &pool_state,
-                                    &tick_array_bitmap_extension,
+                                    &Some(tick_array_bitmap_extension.clone()),
                                     true,
                                 )
                                 .await;
@@ -520,7 +518,7 @@ impl AccountSnapshotFetcher for RaydiumCLMMSnapshotFetcher {
                                     &pool_id,
                                     &Pubkey::default(),
                                     &pool_state,
-                                    &tick_array_bitmap_extension,
+                                    &Some(tick_array_bitmap_extension.clone()),
                                     false,
                                 )
                                 .await;

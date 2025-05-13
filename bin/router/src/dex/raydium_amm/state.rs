@@ -1,32 +1,10 @@
 //! State transition types
 
-use solana_program::{
-    program_error::ProgramError,
-    program_pack::{Pack, Sealed},
-    pubkey::Pubkey,
-};
-
-use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-use bytemuck::{from_bytes, Pod, Zeroable};
-use safe_transmute::trivial::TriviallyTransmutable;
-
-pub trait Loadable: Pod {
-    fn load_from_bytes(data: &[u8]) -> Result<&Self, ProgramError> {
-        Ok(from_bytes(data))
-    }
-}
-
-macro_rules! impl_loadable {
-    ($type_name:ident) => {
-        unsafe impl Zeroable for $type_name {}
-        unsafe impl Pod for $type_name {}
-        unsafe impl TriviallyTransmutable for $type_name {}
-        impl Loadable for $type_name {}
-    };
-}
+use borsh::BorshDeserialize;
+use solana_sdk::pubkey::Pubkey;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq,BorshDeserialize)]
 pub struct Fees {
     /// numerator of the min_separate
     pub min_separate_numerator: u64,
@@ -50,59 +28,8 @@ pub struct Fees {
     pub swap_fee_denominator: u64,
 }
 
-impl Sealed for Fees {}
-impl Pack for Fees {
-    const LEN: usize = 64;
-    fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 64];
-        let (
-            min_separate_numerator,
-            min_separate_denominator,
-            trade_fee_numerator,
-            trade_fee_denominator,
-            pnl_numerator,
-            pnl_denominator,
-            swap_fee_numerator,
-            swap_fee_denominator,
-        ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8];
-        *min_separate_numerator = self.min_separate_numerator.to_le_bytes();
-        *min_separate_denominator = self.min_separate_denominator.to_le_bytes();
-        *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
-        *trade_fee_denominator = self.trade_fee_denominator.to_le_bytes();
-        *pnl_numerator = self.pnl_numerator.to_le_bytes();
-        *pnl_denominator = self.pnl_denominator.to_le_bytes();
-        *swap_fee_numerator = self.swap_fee_numerator.to_le_bytes();
-        *swap_fee_denominator = self.swap_fee_denominator.to_le_bytes();
-    }
-
-    fn unpack_from_slice(input: &[u8]) -> Result<Fees, ProgramError> {
-        let input = array_ref![input, 0, 64];
-        #[allow(clippy::ptr_offset_with_cast)]
-        let (
-            min_separate_numerator,
-            min_separate_denominator,
-            trade_fee_numerator,
-            trade_fee_denominator,
-            pnl_numerator,
-            pnl_denominator,
-            swap_fee_numerator,
-            swap_fee_denominator,
-        ) = array_refs![input, 8, 8, 8, 8, 8, 8, 8, 8];
-        Ok(Self {
-            min_separate_numerator: u64::from_le_bytes(*min_separate_numerator),
-            min_separate_denominator: u64::from_le_bytes(*min_separate_denominator),
-            trade_fee_numerator: u64::from_le_bytes(*trade_fee_numerator),
-            trade_fee_denominator: u64::from_le_bytes(*trade_fee_denominator),
-            pnl_numerator: u64::from_le_bytes(*pnl_numerator),
-            pnl_denominator: u64::from_le_bytes(*pnl_denominator),
-            swap_fee_numerator: u64::from_le_bytes(*swap_fee_numerator),
-            swap_fee_denominator: u64::from_le_bytes(*swap_fee_denominator),
-        })
-    }
-}
-
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq,BorshDeserialize)]
 pub struct StateData {
     /// delay to take pnl coin
     pub need_take_pnl_coin: u64,
@@ -136,7 +63,7 @@ pub struct StateData {
 
 #[cfg_attr(feature = "client", derive(Debug))]
 #[repr(C, packed)]
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Debug, BorshDeserialize)]
 pub struct AmmInfo {
     /// Initialized status.
     pub status: u64,
@@ -209,7 +136,6 @@ pub struct AmmInfo {
     /// padding
     pub padding2: u64,
 }
-impl_loadable!(AmmInfo);
 
 #[repr(u64)]
 pub enum AmmStatus {

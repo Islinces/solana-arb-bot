@@ -3,17 +3,15 @@ use crate::interface::{DexType, DB};
 use anyhow::anyhow;
 use anyhow::Result;
 use serde::{Deserialize, Deserializer};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::pubkey::Pubkey;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
-
-pub const FILE_DB_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "");
 
 pub struct FileDB {
     rpc_client: Arc<RpcClient>,

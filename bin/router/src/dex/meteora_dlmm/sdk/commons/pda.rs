@@ -2,8 +2,8 @@ use crate::dex::meteora_dlmm::sdk::commons::seeds::{
     BIN_ARRAY, BIN_ARRAY_BITMAP_SEED, CLAIM_PROTOCOL_FEE_OPERATOR, ILM_BASE_KEY, ORACLE, POSITION,
     PRESET_PARAMETER, PRESET_PARAMETER2, TOKEN_BADGE,
 };
-use solana_program::pubkey::Pubkey;
 use std::{cmp::max, cmp::min};
+use solana_sdk::pubkey::Pubkey;
 
 pub fn derive_lb_pair_with_preset_parameter_key(
     preset_parameter: Pubkey,

@@ -1,6 +1,6 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
-use solana_program::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 #[derive(Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct InitPresetParameters2Ix {

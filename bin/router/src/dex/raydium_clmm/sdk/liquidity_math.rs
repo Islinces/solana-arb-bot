@@ -3,9 +3,8 @@ use crate::dex::raydium_clmm::sdk::big_num::U256;
 use crate::dex::raydium_clmm::sdk::{fixed_point_64, tick_math};
 use crate::dex::raydium_clmm::sdk::full_math::MulDiv;
 use crate::dex::raydium_clmm::sdk::unsafe_math::UnsafeMathTrait;
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
-use anchor_lang::prelude::*;
-use std::ops::Sub;
+use anyhow::{anyhow, Result};
+use crate::{require_gt, require_gte};
 
 /// Add a signed liquidity delta to liquidity and revert if it overflows or underflows
 ///
@@ -17,11 +16,11 @@ use std::ops::Sub;
 pub fn add_delta(x: u128, y: i128) -> Result<u128> {
     let z: u128;
     if y < 0 {
-        z = x - u128::try_from(-y).unwrap();
-        require_gt!(x, z, ErrorCode::LiquiditySubValueErr);
+        z = x - u128::try_from(-y)?;
+        require_gt!(x, z, "Liquidity sub delta L must be smaller than before");
     } else {
-        z = x + u128::try_from(y).unwrap();
-        require_gte!(z, x, ErrorCode::LiquidityAddValueErr);
+        z = x + u128::try_from(y)?;
+        require_gte!(z, x, "Liquidity add delta L must be greater, or equal to before");
     }
 
     Ok(z)
@@ -194,7 +193,7 @@ pub fn get_delta_amount_0_unsigned(
             / U256::from(sqrt_ratio_a_x64)
     };
     if result > U256::from(u64::MAX) {
-        return Err(ErrorCode::MaxTokenOverflow.into());
+        return Err(anyhow!("Max token overflow"));
     }
     return Ok(result.as_u64());
 }
@@ -225,7 +224,7 @@ pub fn get_delta_amount_1_unsigned(
     }
     .unwrap();
     if result > U256::from(u64::MAX) {
-        return Err(ErrorCode::MaxTokenOverflow.into());
+        return Err(anyhow!("Max token overflow"));
     }
     return Ok(result.as_u64());
 }

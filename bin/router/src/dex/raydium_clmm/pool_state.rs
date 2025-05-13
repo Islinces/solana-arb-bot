@@ -1,19 +1,17 @@
 use crate::dex::common::utils::change_data_if_not_same;
 use crate::dex::raydium_clmm::sdk::pool::PoolState;
 use crate::dex::raydium_clmm::sdk::tick_array::{
-    TickArrayState, TickState, TICK_ARRAY_SEED, TICK_ARRAY_SIZE, TICK_ARRAY_SIZE_USIZE,
+    TickArrayState, TickState, TICK_ARRAY_SEED, TICK_ARRAY_SIZE_USIZE,
 };
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::interface::{DexType, GrpcMessage};
 use anyhow::anyhow;
 use borsh::BorshDeserialize;
 use serde::Deserialize;
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
-use std::time::Instant;
-use tracing::info;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Debug, Clone)]
 pub struct RaydiumCLMMPoolState {

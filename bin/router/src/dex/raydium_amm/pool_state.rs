@@ -1,11 +1,9 @@
-use crate::cache::PoolState;
 use crate::dex::common::utils::change_option_ignore_none_old;
 use crate::interface::{DexType, GrpcMessage};
 use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::pubkey::Pubkey;
 use std::fmt::{Debug, Display, Formatter};
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Debug, Clone)]
 pub struct RaydiumAMMPoolState {

@@ -1,5 +1,4 @@
 use chrono::Local;
-use clap::Parser;
 use router::start_bot;
 use std::env;
 use tracing::info;
@@ -22,14 +21,14 @@ impl FormatTime for MicrosecondFormatter {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let filter = EnvFilter::new("info");
-    let file_appender = RollingFileAppender::builder()
-        .filename_prefix("app")
-        .filename_suffix("log")
-        .rotation(Rotation::DAILY)
-        .build("./logs")
-        .expect("构建file_appender失败");
-    let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    // let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    // let file_appender = RollingFileAppender::builder()
+    //     .filename_prefix("app")
+    //     .filename_suffix("log")
+    //     .rotation(Rotation::DAILY)
+    //     .build("./logs")
+    //     .expect("构建file_appender失败");
+    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
     tracing_subscriber::registry()
         .with(
             fmt::layer()

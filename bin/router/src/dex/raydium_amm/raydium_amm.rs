@@ -2,7 +2,7 @@ use crate::cache::{Mint, Pool, PoolState};
 use crate::dex::common::utils::change_option_ignore_none_old;
 use crate::dex::raydium_amm::math::CheckedCeilDiv;
 use crate::dex::raydium_amm::pool_state::{RaydiumAMMInstructionItem, RaydiumAMMPoolState};
-use crate::dex::raydium_amm::state::{AmmInfo, AmmStatus, Loadable};
+use crate::dex::raydium_amm::state::{AmmInfo, AmmStatus};
 use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
 use crate::interface::GrpcMessage::RaydiumAMMData;
@@ -14,20 +14,21 @@ use crate::interface::{
 use anyhow::anyhow;
 use anyhow::Result;
 use arrayref::{array_ref, array_refs};
-use base58::ToBase58;
 use chrono::Utc;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::clock::Clock;
-use solana_program::instruction::AccountMeta;
-use solana_program::program_pack::Pack;
-use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
 use spl_token::state::Account;
 use std::collections::HashMap;
 use std::ops::Add;
 use std::str::FromStr;
 use std::sync::Arc;
+use base58::ToBase58;
+use borsh::BorshDeserialize;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
+use solana_sdk::instruction::AccountMeta;
+use solana_sdk::program_pack::Pack;
+use solana_sdk::pubkey::Pubkey;
 use tokio::task::JoinSet;
 use tracing::{instrument, warn};
 use yellowstone_grpc_proto::geyser::{
@@ -413,7 +414,7 @@ impl AccountSnapshotFetcher for RaydiumAmmSnapshotFetcher {
                 {
                     if let Some(pool_account) = pool_account {
                         let amm_info =
-                            AmmInfo::load_from_bytes(pool_account.data.as_slice()).unwrap();
+                            AmmInfo::try_from_slice(pool_account.data.as_slice()).unwrap();
                         if !AmmStatus::from_u64(amm_info.status).swap_permission()
                             || AmmStatus::from_u64(amm_info.status).orderbook_permission()
                             || amm_info.status == AmmStatus::WaitingTrade as u64

@@ -1,9 +1,6 @@
 use crate::arbitrage::types::swap::Swap;
 use crate::cache::{Mint, Pool, PoolState};
-use crate::dex::common::utils::{
-    change_data_if_not_same, change_option_ignore_none_old, deserialize_anchor_account,
-    deserialize_anchor_bytes,
-};
+use crate::dex::common::utils::{change_data_if_not_same, change_option_ignore_none_old};
 use crate::dex::pump_fun::math::CheckedCeilDiv;
 use crate::dex::pump_fun::pool_state::{PumpFunInstructionItem, PumpFunPoolState};
 use crate::dex::pump_fun::state::GlobalConfig;
@@ -21,13 +18,16 @@ use anyhow::anyhow;
 use anyhow::Result;
 use arrayref::{array_ref, array_refs};
 use base58::ToBase58;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::address_lookup_table::AddressLookupTableAccount;
-use solana_program::clock::Clock;
-use solana_program::instruction::AccountMeta;
-use solana_program::program_pack::Pack;
-use solana_program::pubkey::Pubkey;
+use borsh::BorshDeserialize;
+use solana_account_decoder_client_types::{UiAccountEncoding, UiDataSliceConfig};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::instruction::AccountMeta;
+use solana_sdk::program_pack::Pack;
+use solana_sdk::pubkey::Pubkey;
 use spl_token::state::Account;
 use std::ops::{Add, Div, Mul, Sub};
 use std::str::FromStr;
@@ -320,11 +320,23 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
         pool_json: Vec<DexJson>,
         rpc_client: Arc<RpcClient>,
     ) -> Option<Vec<Pool>> {
-        let global_config = deserialize_anchor_bytes::<GlobalConfig>(
+        let global_config = GlobalConfig::try_from_slice(
             rpc_client
-                .get_account_data(&GlobalConfig::key())
+                .get_account_with_config(
+                    &GlobalConfig::key(),
+                    RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64),
+                        data_slice: Some(UiDataSliceConfig {
+                            offset: 8,
+                            length: 305,
+                        }),
+                        ..Default::default()
+                    },
+                )
                 .await
                 .unwrap()
+                .value?
+                .data
                 .as_slice(),
         )
         .unwrap();
@@ -347,9 +359,16 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                     .iter()
                     .zip(
                         rpc_client
-                            .get_multiple_accounts_with_commitment(
+                            .get_multiple_accounts_with_config(
                                 &chunks_pool_id,
-                                CommitmentConfig::finalized(),
+                                RpcAccountInfoConfig {
+                                    commitment: Some(CommitmentConfig::finalized()),
+                                    data_slice: Some(UiDataSliceConfig {
+                                        offset: 8,
+                                        length: 203,
+                                    }),
+                                    ..Default::default()
+                                },
                             )
                             .await
                             .unwrap()
@@ -359,16 +378,8 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                 {
                     if let Some(account) = pool_account {
                         let pool_state =
-                            deserialize_anchor_account::<PumpFunPool>(&account).unwrap();
-                        // if pool_state.quote_mint
-                        //     != Pubkey::from_str("So11111111111111111111111111111111111111112")
-                        //         .unwrap()
-                        //     && pool_state.base_mint
-                        //         != Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-                        //             .unwrap()
-                        // {
-                        //     continue;
-                        // }
+                            crate::dex::pump_fun::state::Pool::try_from_slice(&account.data)
+                                .unwrap();
                         let vault_accounts = rpc_client
                             .get_multiple_accounts_with_commitment(
                                 &[

@@ -1,124 +1,11 @@
-use crate::dex::meteora_dlmm::sdk::interface::accounts::LbPair;
-use crate::dex::meteora_dlmm::sdk::interface::typedefs::{AccountsType, RemainingAccountsSlice};
-use anchor_client::solana_client::rpc_client::RpcClient as BlockingRpcClient;
-use anchor_spl::token_2022::spl_token_2022::extension::transfer_fee::*;
-use anchor_spl::{token::spl_token, token_2022::spl_token_2022::extension::*};
-use anyhow::{anyhow, Context, Result};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-use spl_transfer_hook_interface::offchain::add_extra_account_metas_for_execute;
+use anyhow::{Context, Result};
+use spl_token_2022::extension::transfer_fee::{TransferFee, TransferFeeConfig, MAX_FEE_BASIS_POINTS};
 
 const ONE_IN_BASIS_POINTS: u128 = MAX_FEE_BASIS_POINTS as u128;
 
 pub enum ActionType {
     Liquidity,
     Reward(usize),
-}
-
-pub async fn get_potential_token_2022_related_ix_data_and_accounts(
-    lb_pair: &LbPair,
-    rpc_client: RpcClient,
-    action_type: ActionType,
-) -> Result<Option<(Vec<RemainingAccountsSlice>, Vec<AccountMeta>)>> {
-    let potential_token_2022_mints = match action_type {
-        ActionType::Liquidity => {
-            vec![
-                (lb_pair.token_x_mint, AccountsType::TransferHookX),
-                (lb_pair.token_y_mint, AccountsType::TransferHookY),
-            ]
-        }
-        ActionType::Reward(idx) => {
-            vec![(
-                lb_pair.reward_infos[idx].mint,
-                AccountsType::TransferHookReward,
-            )]
-        }
-    };
-
-    let mut slices = vec![];
-    let mut accounts = vec![];
-
-    for (mint, accounts_type) in potential_token_2022_mints {
-        let extra_account_metas =
-            get_extra_account_metas_for_transfer_hook(mint, RpcClient::new(rpc_client.url()))
-                .await?;
-
-        if !extra_account_metas.is_empty() {
-            slices.push(RemainingAccountsSlice {
-                accounts_type,
-                length: extra_account_metas.len() as u8,
-            });
-
-            accounts.extend(extra_account_metas);
-        }
-    }
-
-    if !slices.is_empty() {
-        Ok(Some((slices, accounts)))
-    } else {
-        Ok(None)
-    }
-}
-
-pub async fn get_extra_account_metas_for_transfer_hook(
-    mint: Pubkey,
-    rpc_client: RpcClient,
-) -> Result<Vec<AccountMeta>> {
-    let mint_account = rpc_client.get_account(&mint).await?;
-    if mint_account.owner.eq(&spl_token::ID) {
-        return Ok(vec![]);
-    }
-
-    let mint_state =
-        StateWithExtensions::<anchor_spl::token_2022::spl_token_2022::state::Mint>::unpack(
-            mint_account.data.as_ref(),
-        )?;
-
-    if let Some(transfer_hook_program_id) = transfer_hook::get_program_id(&mint_state) {
-        let mut transfer_ix =
-            anchor_spl::token_2022::spl_token_2022::instruction::transfer_checked(
-                &mint_account.owner,
-                &Pubkey::default(),
-                &mint,
-                &Pubkey::default(),
-                &Pubkey::default(),
-                &[],
-                0,
-                mint_state.base.decimals,
-            )?;
-
-        let blocking_rpc_client = BlockingRpcClient::new(rpc_client.url());
-
-        let data_fetcher = |address: Pubkey| {
-            let account = blocking_rpc_client
-                .get_account(&address)
-                .map(|account| account.data);
-            async move {
-                std::result::Result::Ok::<Option<Vec<u8>>, Box<dyn std::error::Error + Send + Sync>>(
-                    account.ok(),
-                )
-            }
-        };
-
-        add_extra_account_metas_for_execute(
-            &mut transfer_ix,
-            &transfer_hook_program_id,
-            &Pubkey::default(),
-            &mint,
-            &Pubkey::default(),
-            &Pubkey::default(),
-            0,
-            data_fetcher,
-        )
-        .await
-        .map_err(|e| anyhow!(e))?;
-
-        // Skip 4, source, mint, destination, authority
-        let transfer_hook_required_accounts = transfer_ix.accounts[4..].to_vec();
-        return Ok(transfer_hook_required_accounts);
-    }
-
-    Ok(vec![])
 }
 
 #[derive(Debug)]
@@ -183,27 +70,3 @@ pub fn calculate_pre_fee_amount(transfer_fee: &TransferFee, post_fee_amount: u64
         }
     }
 }
-
-pub fn calculate_inverse_fee(transfer_fee: &TransferFee, post_fee_amount: u64) -> Option<u64> {
-    let pre_fee_amount = calculate_pre_fee_amount(transfer_fee, post_fee_amount)?;
-    transfer_fee.calculate_fee(pre_fee_amount)
-}
-
-// pub fn get_epoch_transfer_fee(mint_account: &Account, epoch: u64) -> Result<Option<TransferFee>> {
-//     if mint_account.owner == spl_token::ID {
-//         return Ok(None);
-//     }
-// 
-//     let token_mint_data = mint_account.data.as_ref();
-//     let token_mint_unpacked = StateWithExtensions::<
-//         anchor_spl::token_2022::spl_token_2022::state::Mint,
-//     >::unpack(token_mint_data)?;
-// 
-//     if let std::result::Result::Ok(transfer_fee_config) =
-//         token_mint_unpacked.get_extension::<extension::transfer_fee::TransferFeeConfig>()
-//     {
-//         return Ok(Some(*transfer_fee_config.get_epoch_fee(epoch)));
-//     }
-// 
-//     Ok(None)
-// }

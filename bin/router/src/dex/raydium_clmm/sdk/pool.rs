@@ -1,11 +1,13 @@
 use crate::dex::raydium_clmm::sdk::big_num::U1024;
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
 use crate::dex::raydium_clmm::sdk::tick_array::TickArrayState;
 use crate::dex::raydium_clmm::sdk::tick_array_bit_map::check_current_tick_array_is_initialized;
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::raydium_clmm::sdk::{tick_array_bit_map, tick_math};
-use anchor_lang::prelude::*;
-use self::borsh;
+use crate::require;
+use anyhow::{anyhow, Result};
+use borsh::BorshDeserialize;
+use serde::Deserialize;
+use solana_sdk::pubkey::Pubkey;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -39,9 +41,9 @@ pub enum PoolStatusBitFlag {
 ///
 /// PDA of `[POOL_SEED, config, token_mint_0, token_mint_1]`
 ///
-#[account(zero_copy(unsafe))]
+// #[account(zero_copy(unsafe))]
 // #[repr(C, packed)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, BorshDeserialize)]
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: [u8; 1],
@@ -183,7 +185,7 @@ impl PoolState {
     pub fn get_tick_array_offset(&self, tick_array_start_index: i32) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_array_start_index, self.tick_spacing),
-            ErrorCode::InvaildTickIndex
+            "Tick out of range"
         );
         let tick_array_offset_in_bitmap = tick_array_start_index
             / TickArrayState::tick_count(self.tick_spacing)
@@ -234,7 +236,7 @@ impl PoolState {
         )?;
         require!(
             next_start_index.is_some(),
-            ErrorCode::InsufficientLiquidityForDirection
+            "Insufficient liquidity for this direction"
         );
         return Ok((false, next_start_index.unwrap()));
     }
@@ -268,7 +270,7 @@ impl PoolState {
             last_tick_array_start_index = start_index;
 
             if tickarray_bitmap_extension.is_none() {
-                return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
+                return Err(anyhow!("Missing tickarray bitmap extension account"));
             }
             let (is_found, start_index) = tickarray_bitmap_extension
                 .as_ref()
@@ -331,7 +333,7 @@ impl PoolState {
     }
 }
 
-#[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 /// State of reward
 pub enum RewardState {
     /// Reward not initialized
@@ -344,9 +346,9 @@ pub enum RewardState {
     Ended,
 }
 
-#[zero_copy(unsafe)]
+// #[zero_copy(unsafe)]
 #[repr(C, packed)]
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, BorshDeserialize)]
 pub struct RewardInfo {
     /// Reward state
     pub reward_state: u8,

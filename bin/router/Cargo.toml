@@ -15,66 +15,68 @@ debug = true
 opt-level = 3 # 启用优化
 
 [dependencies]
-borsh = "^1.5"
-clap = {version = "4.5.37",features = ["derive"]}
-anchor-lang = { version = "0.29.0", features = ["derive"], package = "anchor-lang" }
+tokio-stream = "0.1.17"
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "sync", "net", "macros"] }
+reqwest = { version = "0.12.15", features = ["json", "gzip", "brotli", "trust-dns"] }
+serde_json = "1.0.140"
+#serde_valid = "1.0.5"
+serde = { version = "1.0.219", features = ["derive"] }
+anyhow = "1.0.96"
+thiserror = "2.0.12"
+rand = "0.9.0"
+futures-util = "0.3.30"
+borsh = "1.5.7"
+bincode = "2.0.1"
+#base64-simd = "0.8.0"
+rayon = "1.10.0"
+chrono = "0.4.40"
+#url = "2.5.4"
 
-serde.workspace = true
-serde_json.workspace = true
-bincode.workspace = true
-dashmap = { workspace = true }
-solana-program = { workspace = true }
-solana-client = { workspace = true }
-solana-sdk = { workspace = true }
-spl-token-2022 = { workspace = true }
-anyhow = { workspace = true }
-base58.workspace = true
-chrono.workspace = true
-futures-util.workspace = true
-spl-token = { workspace = true }
-
-yellowstone-grpc-client = { workspace = true }
-yellowstone-grpc-proto = { workspace = true }
-solana-account-decoder = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tracing-appender = { workspace = true }
-thiserror = "1.0.51"
-num-traits = "0.2.19"
-num-derive = "0.4.2"
-bytemuck = { workspace = true, features = ["derive", "min_const_generics"] }
-safe-transmute = "0.11.2"
-burberry = { workspace = true }
-eyre.workspace = true
-async-stream = "0.3.6"
-async-channel.workspace = true
-moka.workspace = true
-uint = { workspace = true }
-anchor-spl = { workspace = true }
-spl-associated-token-account.workspace = true
-reqwest.workspace = true
-arrayref = { workspace = true }
-async-trait = { workspace = true }
-tokio = { workspace = true }
+solana-sdk = "2.2.2"
+solana-rpc-client = "2.2.7"
+#solana-transaction-status = "2.2.7"
+#solana-rpc-client-nonce-utils = "2.2.7"
+solana-rpc-client-api = "2.2.7"
+solana-account-decoder-client-types = "2.2.7"
+spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "8.0.1", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "6.0.0", features = ["no-entrypoint"] }
+yellowstone-grpc-client = "6.0.0"
+yellowstone-grpc-proto = "6.0.0"
 
 num-integer = "0.1.45"
-anchor-client.workspace = true
-ruint.version = "1.3.0"
-spl-transfer-hook-interface.version = "0.5.0"
-log = "0.4.27"
-rand = "0.8.5"
-base64.workspace = true
-rayon = "1.10.0"
+num-traits = "0.2.19"
+num-derive = "0.4.2"
+async-channel = "2.3.1"
+async-trait = "0.1.88"
+async-stream = "0.3.6"
+base64 = "0.22.1"
+base58 = "0.2.0"
+ruint = "1.3.0"
+uint = "0.9.5"
+bytemuck = { version = "^1.16", features = ["derive", "min_const_generics"] }
+arrayref = "0.3.7"
+clap = { version = "4.5.37", features = ["derive"] }
+
+burberry = { git = "https://github.com/tonyke-bot/burberry.git", rev = "8bdb3cadf18e9be01622f9acbe562ee2d4f65ac2", default-features = false }
+eyre = "0.6.12"
+
+dashmap = "6.1.0"
+moka = { version = "0.12.10", features = ["sync"] }
+
 # keypair
 rand_core = "0.6.4"
 argon2 = "0.5.3"
 aes-gcm = "0.10"
 rpassword = "7.4.0"
+# 日志
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-appender = "0.2.3"
 
-[patch.crates-io]
-# 强制所有依赖使用同一个 borsh 版本（如果兼容）
-borsh = { version = "^1.5", features = ["derive"], package = "borsh" }
-clap = { version = "4.5.37", features = ["derive", "env"] }
+#async-channel = "2.1"
+#anchor-spl = "0.29.0"
+#anchor-client = "0.29.0"
 
 [[test]]
 name = "test_pool_quote"

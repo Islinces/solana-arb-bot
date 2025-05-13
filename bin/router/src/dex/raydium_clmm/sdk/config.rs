@@ -1,14 +1,14 @@
+use borsh::BorshDeserialize;
 use crate::dex::raydium_clmm::sdk::config;
-use anchor_lang::prelude::*;
-use solana_program::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 
 pub const AMM_CONFIG_SEED: &str = "amm_config";
 
 pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
 
 /// Holds the current owner of the factory
-#[account]
-#[derive(Default, Debug)]
+// #[account]
+#[derive(Default, Debug, BorshDeserialize)]
 pub struct AmmConfig {
     /// Bump to identify PDA
     pub bump: u8,

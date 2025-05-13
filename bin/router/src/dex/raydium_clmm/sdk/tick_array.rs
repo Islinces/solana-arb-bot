@@ -1,15 +1,17 @@
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
 use crate::dex::raydium_clmm::sdk::pool::REWARD_NUM;
 use crate::dex::raydium_clmm::sdk::tick_math;
-use anchor_lang::prelude::*;
+use crate::require;
+use anyhow::{anyhow, Result};
+use borsh::BorshDeserialize;
+use solana_sdk::pubkey::Pubkey;
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
 pub const TICK_ARRAY_SIZE: i32 = 60;
 
-#[account(zero_copy(unsafe))]
+// #[account(zero_copy(unsafe))]
 #[repr(C, packed)]
-#[derive(Debug)]
+#[derive(Debug, Clone, BorshDeserialize)]
 pub struct TickArrayState {
     pub pool_id: Pubkey,
     pub start_tick_index: i32,
@@ -67,7 +69,7 @@ impl TickArrayState {
                 i = i + 1;
             }
         }
-        err!(ErrorCode::InvalidTickArray)
+        Err(anyhow!("Invaild tick array account"))
     }
 
     /// Get next initialized tick in tick array, `current_tick_index` can be any tick index, in other words, `current_tick_index` not exactly a point in the tickarray,
@@ -164,9 +166,9 @@ impl Default for TickArrayState {
     }
 }
 
-#[zero_copy(unsafe)]
+// #[zero_copy(unsafe)]
 #[repr(C, packed)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Copy, BorshDeserialize)]
 pub struct TickState {
     pub tick: i32,
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
@@ -190,11 +192,11 @@ impl TickState {
 
     pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
         if TickState::check_is_out_of_boundary(tick) {
-            return err!(ErrorCode::InvaildTickIndex);
+            return Err(anyhow!("Tick out of range"));
         }
         require!(
             tick % i32::from(tick_spacing) == 0,
-            ErrorCode::TickAndSpacingNotMatch
+            "tick % tick_spacing must be zero"
         );
         self.tick = tick;
         Ok(())

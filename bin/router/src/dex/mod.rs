@@ -2,14 +2,19 @@ use crate::cache::{Pool, PoolCache};
 use crate::file_db::FileDB;
 use crate::interface::{DexType, GrpcMessage, InstructionItem, DB};
 use anyhow::anyhow;
+use arrayref::{array_ref, array_refs};
+use bincode::config;
 use dashmap::{DashMap, Entry};
 use moka::sync::{Cache, CacheBuilder};
 use num_traits::Pow;
 use rayon::prelude::*;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::clock::Clock;
-use solana_program::pubkey::Pubkey;
-use solana_program::sysvar::SysvarId;
+use solana_account_decoder_client_types::UiDataSliceConfig;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
+use solana_sdk::clock::Clock;
+use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sysvar::SysvarId;
 use std::collections::HashMap;
 use std::ops::{Add, Mul, Sub};
 use std::str::FromStr;
@@ -375,15 +380,33 @@ impl PoolCacheHolder {
                 .or_insert(vec![])
                 .push((mint_pair.0, pool_id));
         }
-        let clock: Clock = bincode::deserialize(
-            rpc_client
-                .get_account(&Clock::id())
-                .await
-                .unwrap()
-                .data
-                .as_ref(),
-        )
-        .unwrap();
+        let data = rpc_client
+            .get_account_with_config(
+                &Clock::id(),
+                RpcAccountInfoConfig {
+                    data_slice: Some(UiDataSliceConfig {
+                        offset: 0,
+                        length: 40,
+                    }),
+                    commitment: Some(CommitmentConfig::finalized()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap()
+            .value
+            .unwrap()
+            .data;
+        let src = array_ref![data, 0, 40];
+        let (slot, epoch_start_timestamp, epoch, leader_schedule_epoch, unix_timestamp) =
+            array_refs![src, 8, 8, 8, 8, 8];
+        let clock = Clock {
+            slot: u64::from_le_bytes(*slot),
+            epoch_start_timestamp: i64::from_le_bytes(*epoch_start_timestamp),
+            epoch: u64::from_le_bytes(*epoch),
+            leader_schedule_epoch: u64::from_le_bytes(*leader_schedule_epoch),
+            unix_timestamp: i64::from_le_bytes(*unix_timestamp),
+        };
         Self {
             pool_cache: PoolCache::new(edges, pool_map, clock),
             path_cache: Cache::builder()

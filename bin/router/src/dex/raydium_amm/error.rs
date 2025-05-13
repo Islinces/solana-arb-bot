@@ -1,9 +1,8 @@
 //! Error types
-use solana_program::{
-    decode_error::DecodeError,
-    msg,
-    program_error::{PrintProgramError, ProgramError},
-};
+
+use solana_sdk::decode_error::DecodeError;
+use solana_sdk::msg;
+use solana_sdk::program_error::{PrintProgramError, ProgramError};
 use thiserror::Error;
 
 /// Errors that may be returned by the TokenAmm program.

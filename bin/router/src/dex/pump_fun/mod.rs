@@ -1,7 +1,7 @@
 use rand::Rng;
-use solana_program::pubkey::Pubkey;
 use solana_sdk::declare_id;
 use std::str::FromStr;
+use solana_sdk::pubkey::Pubkey;
 
 mod math;
 pub mod pool_state;

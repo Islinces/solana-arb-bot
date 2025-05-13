@@ -1,22 +1,23 @@
-use crate::dex::raydium_clmm::sdk::error::ErrorCode;
+use crate::dex::raydium_clmm::sdk::big_num::U512;
 use crate::dex::raydium_clmm::sdk::pool::POOL_TICK_ARRAY_BITMAP_SEED;
 use crate::dex::raydium_clmm::sdk::tick_array::TickArrayState;
-use anchor_lang::prelude::*;
-use solana_program::pubkey::Pubkey;
-use std::ops::BitXor;
-use crate::dex::raydium_clmm::sdk::big_num::U512;
 use crate::dex::raydium_clmm::sdk::tick_array_bit_map::{
-    get_bitmap_tick_boundary, max_tick_in_tickarray_bitmap, TickArryBitmap,
-    TICK_ARRAY_BITMAP_SIZE,
+    get_bitmap_tick_boundary, max_tick_in_tickarray_bitmap, TickArryBitmap, TICK_ARRAY_BITMAP_SIZE,
 };
 use crate::dex::raydium_clmm::sdk::tick_math;
+use crate::{require, require_gt};
+use anyhow::{anyhow, Result};
+use serde::Deserialize;
+use solana_sdk::pubkey::Pubkey;
+use std::ops::BitXor;
+use borsh::BorshDeserialize;
 
 /// 为什么是14，443636/60/512
 const EXTENSION_TICKARRAY_BITMAP_SIZE: usize = 14;
 
-#[account(zero_copy(unsafe))]
+// #[account(zero_copy(unsafe))]
 #[repr(C, packed)]
-#[derive(Debug)]
+#[derive(Debug, BorshDeserialize, Clone)]
 pub struct TickArrayBitmapExtension {
     pub pool_id: Pubkey,
     /// Packed initialized tick array state for start_tick_index is positive
@@ -56,7 +57,7 @@ impl TickArrayBitmapExtension {
     fn get_bitmap_offset(tick_index: i32, tick_spacing: u16) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_index, tick_spacing),
-            ErrorCode::InvaildTickIndex
+            "Tick out of range"
         );
         // 检查当前刻度是否在位图内
         // 只有在刻度范围不在配置的刻度范围内才会使用扩展位图
@@ -90,7 +91,7 @@ impl TickArrayBitmapExtension {
         require_gt!(tick_math::MAX_TICK, positive_tick_boundary);
         require_gt!(negative_tick_boundary, tick_math::MIN_TICK);
         if tick_index >= negative_tick_boundary && tick_index < positive_tick_boundary {
-            return err!(ErrorCode::InvalidTickArrayBoundary);
+            return Err(anyhow!("Invaild tick array boundary"));
         }
         Ok(())
     }

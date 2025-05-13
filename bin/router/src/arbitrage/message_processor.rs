@@ -2,8 +2,8 @@ use crate::interface::{AccountUpdate, GrpcMessage, ReadyGrpcMessageOperator};
 use async_channel::{Receiver, Sender};
 use moka::ops::compute::{CompResult, Op};
 use moka::sync::Cache;
-use solana_program::pubkey::Pubkey;
 use std::time::Duration;
+use solana_sdk::pubkey::Pubkey;
 use tracing::{error, info, warn};
 
 pub struct GrpcDataProcessor {
