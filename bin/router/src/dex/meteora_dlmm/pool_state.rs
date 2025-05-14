@@ -1,17 +1,25 @@
+use crate::cache::Pool;
 use crate::dex::common::utils::change_data_if_not_same;
 use crate::dex::meteora_dlmm::sdk::commons::constants::MAX_BIN_PER_ARRAY;
 use crate::dex::meteora_dlmm::sdk::commons::pda::derive_bin_array_pda;
 use crate::dex::meteora_dlmm::sdk::interface::accounts::{
     BinArray, BinArrayBitmapExtension, LbPair,
 };
-use crate::interface::{DexType, GrpcMessage};
+use crate::interface::{DexType, GrpcAccountUpdateType, GrpcMessage, SubscribeKey};
 use anyhow::{anyhow, Context};
+use borsh::BorshDeserialize;
+use num_integer::Integer;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
-use solana_sdk::address_lookup_table::AddressLookupTableAccount;
-use solana_sdk::pubkey::Pubkey;
-use num_integer::Integer;
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
+use yellowstone_grpc_proto::geyser::{
+    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
+    SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts,
+    SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
+};
 
 #[derive(Debug, Clone)]
 pub struct MeteoraDLMMPoolState {
@@ -183,26 +191,19 @@ impl MeteoraDLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::MeteoraDlmmPoolMonitorData {
-                active_id,
-                bin_array_bitmap,
-                volatility_accumulator,
-                volatility_reference,
-                index_reference,
-                last_update_timestamp,
-                ..
-            } => {
-                let mut changed = change_data_if_not_same(&mut self.active_id, active_id);
-                changed |= change_data_if_not_same(&mut self.bin_array_bitmap, bin_array_bitmap);
+            GrpcMessage::MeteoraDlmmPoolMonitorData(pool_monitor_data,..)
+            => {
+                let mut changed = change_data_if_not_same(&mut self.active_id, pool_monitor_data.active_id);
+                changed |= change_data_if_not_same(&mut self.bin_array_bitmap, pool_monitor_data.bin_array_bitmap);
                 changed |= change_data_if_not_same(
                     &mut self.volatility_accumulator,
-                    volatility_accumulator,
+                    pool_monitor_data.volatility_accumulator,
                 );
                 changed |=
-                    change_data_if_not_same(&mut self.volatility_reference, volatility_reference);
-                changed |= change_data_if_not_same(&mut self.index_reference, index_reference);
+                    change_data_if_not_same(&mut self.volatility_reference, pool_monitor_data.volatility_reference);
+                changed |= change_data_if_not_same(&mut self.index_reference, pool_monitor_data.index_reference);
                 changed |=
-                    change_data_if_not_same(&mut self.last_update_timestamp, last_update_timestamp);
+                    change_data_if_not_same(&mut self.last_update_timestamp, pool_monitor_data.last_update_timestamp);
                 if changed {
                     Ok(())
                 } else {
@@ -290,6 +291,147 @@ impl Display for MeteoraDLMMInstructionItem {
             DexType::MeteoraDLMM,
             self.pool_id,
             self.zero_to_one
+        )
+    }
+}
+
+#[derive(Debug, Clone, BorshDeserialize)]
+pub struct PoolMonitorData {
+    // v_parameters
+    pub volatility_accumulator: u32,
+    pub volatility_reference: u32,
+    pub index_reference: i32,
+    pub last_update_timestamp: i64,
+    // pool
+    pub pair_type: u8,
+    pub active_id: i32,
+    pub bin_step: u16,
+    pub status: u8,
+    pub activation_type: u8,
+    pub bin_array_bitmap: [u64; 16],
+    pub activation_point: u64,
+}
+
+impl PoolMonitorData {
+    pub fn subscribe_request(pools: &[Pool]) -> (SubscribeKey, SubscribeRequest) {
+        let mut subscribe_pool_accounts = HashMap::new();
+        subscribe_pool_accounts.insert(
+            format!("{:?}", DexType::MeteoraDLMM),
+            SubscribeRequestFilterAccounts {
+                account: pools
+                    .iter()
+                    .map(|pool| pool.pool_id.to_string())
+                    .collect::<Vec<_>>(),
+                ..Default::default()
+            },
+        );
+        let pool_request = SubscribeRequest {
+            accounts: subscribe_pool_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: vec![
+                // v_parameters.volatility_accumulator
+                SubscribeRequestAccountsDataSlice {
+                    offset: 40,
+                    length: 4,
+                },
+                // v_parameters.volatility_reference
+                SubscribeRequestAccountsDataSlice {
+                    offset: 44,
+                    length: 4,
+                },
+                // v_parameters.index_reference
+                SubscribeRequestAccountsDataSlice {
+                    offset: 48,
+                    length: 4,
+                },
+                // v_parameters.last_update_timestamp
+                SubscribeRequestAccountsDataSlice {
+                    offset: 56,
+                    length: 8,
+                },
+                // pair_type
+                SubscribeRequestAccountsDataSlice {
+                    offset: 75,
+                    length: 1,
+                },
+                // active_id
+                SubscribeRequestAccountsDataSlice {
+                    offset: 76,
+                    length: 4,
+                },
+                // bin_step
+                SubscribeRequestAccountsDataSlice {
+                    offset: 80,
+                    length: 2,
+                },
+                // status
+                SubscribeRequestAccountsDataSlice {
+                    offset: 82,
+                    length: 1,
+                },
+                // activation_type
+                SubscribeRequestAccountsDataSlice {
+                    offset: 86,
+                    length: 1,
+                },
+                // bin_array_bitmap
+                SubscribeRequestAccountsDataSlice {
+                    offset: 584,
+                    length: 128,
+                },
+                // activation_point
+                SubscribeRequestAccountsDataSlice {
+                    offset: 816,
+                    length: 8,
+                },
+            ],
+            ..Default::default()
+        };
+        (
+            (DexType::MeteoraDLMM, GrpcAccountUpdateType::Pool),
+            pool_request,
+        )
+    }
+}
+
+impl BinArray {
+    pub fn subscribe_request(pools: &[Pool]) -> (SubscribeKey, SubscribeRequest) {
+        let mut bin_arrays_subscribe_accounts = HashMap::new();
+        for (index, pool) in pools.iter().enumerate() {
+            bin_arrays_subscribe_accounts.insert(
+                format!("{:?}:{:?}:{:?}", DexType::MeteoraDLMM, GrpcAccountUpdateType::BinArray, index),
+                SubscribeRequestFilterAccounts {
+                    nonempty_txn_signature: None,
+                    account: vec![],
+                    owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
+                    filters: vec![
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(Filter::Datasize(10136)),
+                        },
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(
+                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
+                                    offset: 24,
+                                    data: Some(
+                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                            pool.pool_id.to_bytes().to_vec(),
+                                        ),
+                                    ),
+                                }),
+                            ),
+                        },
+                    ],
+                },
+            );
+        }
+        let bin_arrays_subscribe_request = SubscribeRequest {
+            accounts: bin_arrays_subscribe_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            ..Default::default()
+        };
+        (
+            (DexType::MeteoraDLMM, GrpcAccountUpdateType::BinArray),
+            bin_arrays_subscribe_request,
         )
     }
 }

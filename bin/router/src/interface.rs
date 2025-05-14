@@ -226,16 +226,12 @@ pub enum GrpcMessage {
         instant: Instant,
         slot: u64,
     },
-    MeteoraDlmmPoolMonitorData {
-        pool_id: Pubkey,
-        active_id: i32,
-        bin_array_bitmap: [u64; 16],
-        volatility_accumulator: u32,
-        volatility_reference: u32,
-        index_reference: i32,
-        last_update_timestamp: i64,
-        instant: Instant,
-    },
+    MeteoraDlmmPoolMonitorData(
+        crate::dex::meteora_dlmm::pool_state::PoolMonitorData,
+        Pubkey,
+        Instant,
+        u64,
+    ),
     MeteoraDlmmBinArrayMonitorData(BinArray, Instant),
     Clock(Clock),
 }
@@ -246,7 +242,7 @@ impl GrpcMessage {
             GrpcMessage::RaydiumAmmMonitorData { pool_id, .. } => Some(*pool_id),
             GrpcMessage::RaydiumClmmMonitorData(_, pool_id, ..) => Some(*pool_id),
             GrpcMessage::PumpFunAmmPoolMonitorData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::MeteoraDlmmPoolMonitorData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::MeteoraDlmmPoolMonitorData(_, pool_id, _, _) => Some(*pool_id),
             GrpcMessage::MeteoraDlmmBinArrayMonitorData(bin_array, _) => Some(bin_array.lb_pair),
             GrpcMessage::RaydiumClmmTickArrayMonitorData(change_data, _) => {
                 Some(change_data.pool_id)
@@ -263,7 +259,9 @@ impl GrpcMessage {
                 instant.elapsed().as_nanos()
             }
             GrpcMessage::PumpFunAmmPoolMonitorData { instant, .. } => instant.elapsed().as_nanos(),
-            GrpcMessage::MeteoraDlmmPoolMonitorData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::MeteoraDlmmPoolMonitorData(_, _, instant, _) => {
+                instant.elapsed().as_nanos()
+            }
             GrpcMessage::MeteoraDlmmBinArrayMonitorData(_, instant) => instant.elapsed().as_nanos(),
             GrpcMessage::Clock(_) => 0,
             _ => unimplemented!(),
@@ -275,6 +273,7 @@ impl GrpcMessage {
             GrpcMessage::RaydiumAmmMonitorData { slot, .. } => Some(slot.clone()),
             GrpcMessage::PumpFunAmmPoolMonitorData { slot, .. } => Some(*slot),
             GrpcMessage::RaydiumClmmMonitorData(_, _, _, slot) => Some(*slot),
+            GrpcMessage::MeteoraDlmmPoolMonitorData(_, _, _, slot) => Some(*slot),
             _ => None,
         }
     }

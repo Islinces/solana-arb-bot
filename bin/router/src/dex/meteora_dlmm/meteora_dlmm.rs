@@ -1,6 +1,8 @@
 use crate::cache::PoolState::MeteoraDLMM;
 use crate::cache::{Mint, Pool};
-use crate::dex::meteora_dlmm::pool_state::{MeteoraDLMMInstructionItem, MeteoraDLMMPoolState};
+use crate::dex::meteora_dlmm::pool_state::{
+    MeteoraDLMMInstructionItem, MeteoraDLMMPoolState, PoolMonitorData,
+};
 use crate::dex::meteora_dlmm::sdk::commons::pda::derive_bin_array_bitmap_extension;
 use crate::dex::meteora_dlmm::sdk::commons::quote::{
     get_bin_array_pubkeys_for_swap, quote_exact_in,
@@ -18,8 +20,7 @@ use crate::interface::{
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
-use arrayref::{array_ref, array_refs};
-use base58::ToBase58;
+use borsh::BorshDeserialize;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::clock::Clock;
@@ -33,11 +34,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
-    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
-    SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts,
-    SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
+    CommitmentLevel, SubscribeRequest,
+    SubscribeRequestFilterAccounts
+    ,
 };
 
 pub struct MeteoraDLMMDex;
@@ -196,79 +196,6 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
         &self,
         pools: &[Pool],
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
-        let mut subscribe_pool_accounts = HashMap::new();
-        subscribe_pool_accounts.insert(
-            format!("{:?}", DexType::MeteoraDLMM),
-            SubscribeRequestFilterAccounts {
-                account: pools
-                    .iter()
-                    .map(|pool| pool.pool_id.to_string())
-                    .collect::<Vec<_>>(),
-                ..Default::default()
-            },
-        );
-        let pool_request = SubscribeRequest {
-            accounts: subscribe_pool_accounts,
-            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-            accounts_data_slice: vec![
-                // v_parameters.volatility_accumulator
-                SubscribeRequestAccountsDataSlice {
-                    offset: 40,
-                    length: 4,
-                },
-                // v_parameters.volatility_reference
-                SubscribeRequestAccountsDataSlice {
-                    offset: 44,
-                    length: 4,
-                },
-                // v_parameters.index_reference
-                SubscribeRequestAccountsDataSlice {
-                    offset: 48,
-                    length: 4,
-                },
-                // v_parameters.last_update_timestamp
-                SubscribeRequestAccountsDataSlice {
-                    offset: 56,
-                    length: 8,
-                },
-                // pair_type
-                SubscribeRequestAccountsDataSlice {
-                    offset: 75,
-                    length: 1,
-                },
-                // active_id
-                SubscribeRequestAccountsDataSlice {
-                    offset: 76,
-                    length: 4,
-                },
-                // bin_step
-                SubscribeRequestAccountsDataSlice {
-                    offset: 80,
-                    length: 2,
-                },
-                // status
-                SubscribeRequestAccountsDataSlice {
-                    offset: 82,
-                    length: 1,
-                },
-                // activation_type
-                SubscribeRequestAccountsDataSlice {
-                    offset: 86,
-                    length: 1,
-                },
-                // bin_array_bitmap
-                SubscribeRequestAccountsDataSlice {
-                    offset: 584,
-                    length: 128,
-                },
-                // activation_point
-                SubscribeRequestAccountsDataSlice {
-                    offset: 816,
-                    length: 8,
-                },
-            ],
-            ..Default::default()
-        };
         let mut clock_account = HashMap::new();
         clock_account.insert(
             "Clock".to_string(),
@@ -282,48 +209,10 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
             commitment: Some(CommitmentLevel::Finalized).map(|x| x as i32),
             ..Default::default()
         };
-        let mut bin_arrays_subscribe_accounts = HashMap::new();
-        for (index, pool) in pools.iter().enumerate() {
-            bin_arrays_subscribe_accounts.insert(
-                format!("{:?}:{:?}:{:?}", DexType::MeteoraDLMM, GrpcAccountUpdateType::BinArray, index),
-                SubscribeRequestFilterAccounts {
-                    nonempty_txn_signature: None,
-                    account: vec![],
-                    owner: vec![DexType::MeteoraDLMM.get_program_id().to_string()],
-                    filters: vec![
-                        SubscribeRequestFilterAccountsFilter {
-                            filter: Some(Filter::Datasize(10136)),
-                        },
-                        SubscribeRequestFilterAccountsFilter {
-                            filter: Some(
-                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
-                                    offset: 24,
-                                    data: Some(
-                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
-                                            pool.pool_id.to_bytes().to_vec(),
-                                        ),
-                                    ),
-                                }),
-                            ),
-                        },
-                    ],
-                },
-            );
-        }
-        let bin_arrays_subscribe_request = SubscribeRequest {
-            accounts: bin_arrays_subscribe_accounts,
-            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-            ..Default::default()
-        };
+
         Some(vec![
-            (
-                (DexType::MeteoraDLMM, GrpcAccountUpdateType::Pool),
-                pool_request,
-            ),
-            (
-                (DexType::MeteoraDLMM, GrpcAccountUpdateType::BinArray),
-                bin_arrays_subscribe_request,
-            ),
+            PoolMonitorData::subscribe_request(pools),
+            BinArray::subscribe_request(pools),
             (
                 (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
                 clock_request,
@@ -555,38 +444,16 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
             let data = &update_account_info.data;
             match account_type {
                 GrpcAccountUpdateType::Pool => {
-                    let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
-                    let src = array_ref![data, 0, 165];
-                    let (
-                        volatility_accumulator,
-                        volatility_reference,
-                        index_reference,
-                        last_update_timestamp,
-                        _pair_type,
-                        active_id,
-                        _bin_step,
-                        _status,
-                        _activation_type,
-                        bin_array_bitmap,
-                        _activation_point,
-                    ) = array_refs![src, 4, 4, 4, 8, 1, 4, 2, 1, 1, 128, 8];
+                    let pool_id = Pubkey::try_from_slice(update_account_info.pubkey.as_slice())?;
+                    let pool_monitor_data = PoolMonitorData::try_from_slice(data)?;
                     Ok((
                         None,
-                        GrpcMessage::MeteoraDlmmPoolMonitorData {
+                        GrpcMessage::MeteoraDlmmPoolMonitorData(
+                            pool_monitor_data,
                             pool_id,
-                            active_id: i32::from_le_bytes(*active_id),
-                            bin_array_bitmap: bin_array_bitmap
-                                .chunks_exact(8)
-                                .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
-                                .collect::<Vec<_>>()
-                                .try_into()
-                                .unwrap(),
-                            volatility_accumulator: u32::from_le_bytes(*volatility_accumulator),
-                            volatility_reference: u32::from_le_bytes(*volatility_reference),
-                            index_reference: i32::from_le_bytes(*index_reference),
-                            last_update_timestamp: i64::from_le_bytes(*last_update_timestamp),
-                            instant: update_account.instant,
-                        },
+                            update_account.instant,
+                            update_account.account.slot,
+                        ),
                     ))
                 }
                 GrpcAccountUpdateType::BinArray => Ok((
@@ -598,10 +465,7 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                 )),
                 GrpcAccountUpdateType::Clock => {
                     let clock: Clock = serde_json::from_slice(data)?;
-                    Ok((
-                        None,
-                        GrpcMessage::Clock(clock),
-                    ))
+                    Ok((None, GrpcMessage::Clock(clock)))
                 }
                 _ => Err(anyhow!("")),
             }
