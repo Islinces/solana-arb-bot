@@ -130,10 +130,6 @@ impl DexData {
                     result.start_time = Some(start_time);
                     result.route_calculate_cost = Some(quote_start.elapsed().as_nanos());
                     result.grop_cost = Some(grpc_cost);
-                    info!(
-                        "find_best_route cost: {:?}, path size : {:?}",
-                        result.route_calculate_cost, all_path_size
-                    );
                 }
                 dex_quote_result
             } else {
@@ -463,7 +459,6 @@ impl PoolCacheHolder {
             })
             .value()
             .clone();
-        info!("build_graph cost: {:?}", start.elapsed().as_nanos());
         path_array
     }
 

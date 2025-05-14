@@ -60,7 +60,6 @@ impl Quoter for RaydiumAmmDex {
                 .checked_ceil_div(u128::from(pool_state.swap_fee_denominator))
                 .unwrap()
                 .0;
-            info!("fee : {:?}", swap_fee);
             let swap_in_after_deduct_fee = amount_in.checked_sub(swap_fee).unwrap();
 
             let mint_0_amount_without_pnl = u128::from(
