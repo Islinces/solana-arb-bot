@@ -73,6 +73,8 @@ pub struct JitoArbExecutor {
     native_ata: Pubkey,
     client: Arc<Client>,
     jito_url: String,
+    tip_bps_numerator: u64,
+    tip_bps_denominator: u64,
 }
 
 #[async_trait]
@@ -174,6 +176,8 @@ impl JitoArbExecutor {
         native_ata: Pubkey,
         cached_blockhash: Arc<RwLock<Hash>>,
         jito_config: JitoConfig,
+        tip_bps_numerator: u64,
+        tip_bps_denominator: u64,
     ) -> Self {
         let jito_host = if jito_config.jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
@@ -201,6 +205,8 @@ impl JitoArbExecutor {
             //TODO: http配置
             client: Arc::new(Client::new()),
             jito_url,
+            tip_bps_numerator,
+            tip_bps_denominator,
         }
     }
 
@@ -265,7 +271,10 @@ impl JitoArbExecutor {
         let wallet = self.keypair.pubkey();
         // ======================第一个Transaction====================
         // TODO: 使用参数tip_bps
-        let tip = dex_quote_result.profit.mul(70).div(100);
+        let tip = dex_quote_result
+            .profit
+            .mul(self.tip_bps_numerator)
+            .div(self.tip_bps_denominator);
 
         let mut first_instructions = Vec::with_capacity(6);
         // 设置 CU

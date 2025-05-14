@@ -49,6 +49,10 @@ pub struct Command {
     jito_uuid: Option<String>,
     #[arg(long)]
     profit_threshold: Option<u64>,
+    #[arg(long)]
+    tip_bps_numerator: Option<u64>,
+    #[arg(long)]
+    tip_bps_denominator: Option<u64>,
 }
 
 pub enum ExecutorType {
@@ -87,12 +91,16 @@ pub async fn run() -> anyhow::Result<()> {
     // JITO
     let jito_region = command.jito_region.unwrap_or_else(|| "frankfurt".to_string());
     let jito_uuid = command.jito_uuid;
+    let tip_bps_numerator = command.tip_bps_numerator.unwrap_or(70);
+    let tip_bps_denominator = command.tip_bps_denominator.unwrap_or(100);
 
     info!(
         "启动参数:\n \
     bot_name : {:?}\n \
     wallet :{wallet}\n \
     start_amount_in : {start_amount_in}\n \
+    tip_bps_numerator : {tip_bps_numerator}\n \
+    tip_bps_denominator : {tip_bps_denominator}\n \
     worker_size : {arb_worker_size}\n \
     profit_threshold : {profit_threshold}\n \
     grpc_url : {grpc_url}\n \
@@ -151,6 +159,8 @@ pub async fn run() -> anyhow::Result<()> {
             native_mint_ata,
             cached_blockhash.clone(),
             jito_config,
+            tip_bps_numerator,
+            tip_bps_denominator,
         ),
     };
     let mut engine = Engine::default();
