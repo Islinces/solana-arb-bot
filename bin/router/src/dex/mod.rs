@@ -115,7 +115,7 @@ impl DexData {
             let pool = indexer.pool_cache.pool_map.get(&update_pool).unwrap();
             let clock = indexer.pool_cache.clone().clock;
             let amount_out = pool.quote(
-                1_000_000_000,
+                start_amount_in,
                 amount_in_mint,
                 Pubkey::default(),
                 Arc::new(clock),
