@@ -14,12 +14,14 @@ use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::Sub;
 use tracing::info;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
     subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
     SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts,
     SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
+    SubscribeRequestFilterTransactions,
 };
 
 #[derive(Debug, Clone)]
@@ -130,12 +132,7 @@ impl MeteoraDLMMPoolState {
     }
 
     pub fn get_bin_array_keys(&self, zero_to_one: bool, take_count: u8) -> Vec<Pubkey> {
-        let (idx, rem) = self.active_id.div_rem(&(MAX_BIN_PER_ARRAY as i32));
-        let bin_index = if self.active_id.is_negative() && rem != 0 {
-            idx.checked_sub(1).context("overflow").unwrap()
-        } else {
-            idx
-        };
+        let bin_index = MeteoraDLMMPoolState::get_bin_index(self.active_id);
         let mut bin_indexs = self.bin_array_index_range.iter().filter(|(index, _)| {
             if zero_to_one {
                 &bin_index >= index
@@ -192,7 +189,13 @@ impl MeteoraDLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::MeteoraDlmmPoolMonitorData(pool_monitor_data, _, _, slot, ..) => {
+            GrpcMessage::MeteoraDlmmMonitorData {
+                pool_data,
+                slot,
+                bin_arrays,
+                ..
+            } => {
+                let pool_monitor_data = pool_data.unwrap();
                 let mut changed =
                     change_data_if_not_same(&mut self.active_id, pool_monitor_data.active_id);
                 changed |= change_data_if_not_same(
@@ -216,43 +219,67 @@ impl MeteoraDLMMPoolState {
                     pool_monitor_data.last_update_timestamp,
                 );
                 info!("meteora dlmm slot : {}, changed: {}", slot, changed);
-                Ok(())
-                // if changed {
-                //     Ok(())
-                // } else {
-                //     Err(anyhow!(""))
-                // }
-            }
-            GrpcMessage::MeteoraDlmmBinArrayMonitorData(bin_array, _) => {
-                if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
-                    && bin_array.index <= self.bin_array_index_range.last().unwrap().0 as i64
-                {
-                    let index = bin_array.index as i32;
-                    match self
-                        .bin_array_index_range
-                        .binary_search_by_key(&index, |&(k, _)| k)
+                for bin_array in bin_arrays.unwrap() {
+                    if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
+                        && bin_array.index <= self.bin_array_index_range.last().unwrap().0 as i64
                     {
-                        Ok(_) => {}
-                        Err(pos) => {
-                            self.bin_array_index_range.insert(
-                                pos,
-                                (
-                                    index,
-                                    derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
-                                ),
-                            );
+                        let index = bin_array.index as i32;
+                        match self
+                            .bin_array_index_range
+                            .binary_search_by_key(&index, |&(k, _)| k)
+                        {
+                            Ok(_) => {}
+                            Err(pos) => {
+                                self.bin_array_index_range.insert(
+                                    pos,
+                                    (
+                                        index,
+                                        derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
+                                    ),
+                                );
+                            }
                         }
+                        self.bin_array_map.insert(
+                            derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
+                            bin_array,
+                        );
                     }
-                    self.bin_array_map.insert(
-                        derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
-                        bin_array,
-                    );
-                    Err(anyhow!(""))
-                } else {
-                    Err(anyhow!("BinArray index[{}]不在监控范围内", bin_array.index))
                 }
+                Ok(())
             }
             _ => Err(anyhow!("")),
+        }
+    }
+
+    pub fn calculate_distance_bin_array_indexs(&self, grpc_active_id: i32) -> Vec<i64> {
+        let current_bin_index = MeteoraDLMMPoolState::get_bin_index(self.active_id);
+        if self.active_id == grpc_active_id {
+            return vec![current_bin_index as i64];
+        }
+        let grpc_bin_index = MeteoraDLMMPoolState::get_bin_index(grpc_active_id);
+        if grpc_bin_index==current_bin_index {
+            return vec![current_bin_index as i64];
+        }
+        let distance_count = current_bin_index.sub(grpc_bin_index).abs();
+        let mut bin_array_indexs = Vec::with_capacity(distance_count as usize + 1);
+        // mint1 --> mint0
+        let start = if grpc_active_id > self.active_id {
+            current_bin_index
+        } else {
+            grpc_bin_index
+        };
+        for x in 0..=distance_count {
+            bin_array_indexs.push((start + x) as i64);
+        }
+        bin_array_indexs
+    }
+
+    fn get_bin_index(active_id: i32) -> i32 {
+        let (idx, rem) = active_id.div_rem(&(MAX_BIN_PER_ARRAY as i32));
+        if active_id.is_negative() && rem != 0 {
+            idx.checked_sub(1).context("overflow").unwrap()
+        } else {
+            idx
         }
     }
 }
@@ -400,6 +427,20 @@ impl PoolMonitorData {
             ],
             ..Default::default()
         };
+        // let mut tx_filter = HashMap::new();
+        // for pool in pools.iter() {
+        //     tx_filter.insert(
+        //         pool.pool_id.to_string(),
+        //         SubscribeRequestFilterTransactions {
+        //             ..Default::default()
+        //         },
+        //     );
+        // }
+        // let transaction_request = SubscribeRequest {
+        //     transactions: tx_filter,
+        //     commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+        //     ..Default::default()
+        // };
         (
             (DexType::MeteoraDLMM, GrpcAccountUpdateType::Pool),
             pool_request,

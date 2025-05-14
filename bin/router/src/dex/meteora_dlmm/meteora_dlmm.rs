@@ -11,7 +11,7 @@ use crate::dex::meteora_dlmm::sdk::interface::accounts::{
     BinArray, BinArrayAccount, BinArrayBitmapExtension, BinArrayBitmapExtensionAccount, LbPair,
     LbPairAccount,
 };
-use crate::dex::{get_ata_program, get_mint_program};
+use crate::dex::{get_ata_program, get_mint_program, POOL_CACHE_HOLDER};
 use crate::file_db::DexJson;
 use crate::interface::{
     AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
@@ -20,6 +20,7 @@ use crate::interface::{
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
+use base58::ToBase58;
 use borsh::BorshDeserialize;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
@@ -35,9 +36,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest,
-    SubscribeRequestFilterAccounts
-    ,
+    CommitmentLevel, SubscribeRequest, SubscribeRequestFilterAccounts,
 };
 
 pub struct MeteoraDLMMDex;
@@ -444,25 +443,69 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
             let data = &update_account_info.data;
             match account_type {
                 GrpcAccountUpdateType::Pool => {
+                    let txn = &update_account_info
+                        .txn_signature
+                        .as_ref()
+                        .unwrap()
+                        .to_base58();
                     let pool_id = Pubkey::try_from_slice(update_account_info.pubkey.as_slice())?;
                     let pool_monitor_data = PoolMonitorData::try_from_slice(data)?;
+                    match POOL_CACHE_HOLDER.get() {
+                        None => Err(anyhow!("")),
+                        Some(cache_holder) => {
+                            let pool_cache = cache_holder.pool_cache.clone();
+                            let x = match pool_cache.pool_map.get(&pool_id) {
+                                None => Err(anyhow!("")),
+                                Some(pool) => {
+                                    if let Some(distance_bin_array_indexs) = match pool.state {
+                                        MeteoraDLMM(ref state) => {
+                                            Some(state.calculate_distance_bin_array_indexs(
+                                                pool_monitor_data.active_id,
+                                            ))
+                                        }
+                                        _ => None,
+                                    } {
+                                        Ok((
+                                            Some((txn.clone(), pool_id)),
+                                            GrpcMessage::MeteoraDlmmMonitorData {
+                                                pool_data: Some(pool_monitor_data),
+                                                bin_arrays: None,
+                                                expect_bin_array_index: Some(
+                                                    distance_bin_array_indexs,
+                                                ),
+                                                pool_id,
+                                                instant: update_account.instant,
+                                                slot: update_account.account.slot,
+                                            },
+                                        ))
+                                    } else {
+                                        Err(anyhow!(""))
+                                    }
+                                }
+                            };
+                            x
+                        }
+                    }
+                }
+                GrpcAccountUpdateType::BinArray => {
+                    let txn = &update_account_info
+                        .txn_signature
+                        .as_ref()
+                        .unwrap()
+                        .to_base58();
+                    let bin_array = BinArrayAccount::deserialize(data)?.0;
                     Ok((
-                        None,
-                        GrpcMessage::MeteoraDlmmPoolMonitorData(
-                            pool_monitor_data,
-                            pool_id,
-                            update_account.instant,
-                            update_account.account.slot,
-                        ),
+                        Some((txn.clone(), bin_array.lb_pair)),
+                        GrpcMessage::MeteoraDlmmMonitorData {
+                            pool_data: None,
+                            bin_arrays: Some(vec![bin_array]),
+                            expect_bin_array_index: None,
+                            pool_id: bin_array.lb_pair,
+                            instant: update_account.instant,
+                            slot: update_account.account.slot,
+                        },
                     ))
                 }
-                GrpcAccountUpdateType::BinArray => Ok((
-                    None,
-                    GrpcMessage::MeteoraDlmmBinArrayMonitorData(
-                        BinArrayAccount::deserialize(data)?.0,
-                        update_account.instant,
-                    ),
-                )),
                 GrpcAccountUpdateType::Clock => {
                     let clock: Clock = serde_json::from_slice(data)?;
                     Ok((None, GrpcMessage::Clock(clock)))
@@ -474,7 +517,39 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
         }
     }
 
-    fn change_data(&self, _old: &mut GrpcMessage, _new: GrpcMessage) {
-        unimplemented!()
+    fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage) {
+        match old {
+            GrpcMessage::MeteoraDlmmMonitorData {
+                pool_data,
+                bin_arrays,
+                expect_bin_array_index,
+                ..
+            } => match new {
+                GrpcMessage::MeteoraDlmmMonitorData {
+                    pool_data: update_pool_data,
+                    bin_arrays: update_bin_arrays,
+                    expect_bin_array_index: update_expect_bin_array_index,
+                    ..
+                } => {
+                    if let Some(new) = update_expect_bin_array_index {
+                        expect_bin_array_index.replace(new);
+                    }
+                    if let Some(new) = update_pool_data {
+                        pool_data.replace(new);
+                    }
+                    if bin_arrays.as_ref().is_some() && update_bin_arrays.as_ref().is_some() {
+                        bin_arrays
+                            .as_mut()
+                            .unwrap()
+                            .extend(update_bin_arrays.unwrap());
+                    } else if bin_arrays.as_ref().is_none() && update_bin_arrays.as_ref().is_some()
+                    {
+                        bin_arrays.replace(update_bin_arrays.unwrap());
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
     }
 }

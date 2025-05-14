@@ -204,7 +204,6 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
                 .as_ref()
                 .unwrap()
                 .to_base58();
-            let tx = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::Pool => {
                     let pool_monitor_data = PoolMonitorData::try_from_slice(data)?;

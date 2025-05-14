@@ -46,7 +46,7 @@ pub fn get_system_program() -> Pubkey {
     Pubkey::from_str(SYSTEM_PROGRAM).unwrap()
 }
 
-static POOL_CACHE_HOLDER: OnceCell<Arc<PoolCacheHolder>> = OnceCell::const_new();
+pub static POOL_CACHE_HOLDER: OnceCell<Arc<PoolCacheHolder>> = OnceCell::const_new();
 
 #[derive(Clone, Debug)]
 pub struct DexData {

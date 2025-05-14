@@ -132,7 +132,7 @@ impl DexType {
             DexType::RaydiumAMM => true,
             DexType::RaydiumCLmm => false,
             DexType::PumpFunAMM => true,
-            DexType::MeteoraDLMM => false,
+            DexType::MeteoraDLMM => true,
         }
     }
 
@@ -226,12 +226,14 @@ pub enum GrpcMessage {
         instant: Instant,
         slot: u64,
     },
-    MeteoraDlmmPoolMonitorData(
-        crate::dex::meteora_dlmm::pool_state::PoolMonitorData,
-        Pubkey,
-        Instant,
-        u64,
-    ),
+    MeteoraDlmmMonitorData {
+        pool_data: Option<crate::dex::meteora_dlmm::pool_state::PoolMonitorData>,
+        bin_arrays: Option<Vec<BinArray>>,
+        expect_bin_array_index: Option<Vec<i64>>,
+        pool_id: Pubkey,
+        instant: Instant,
+        slot: u64,
+    },
     MeteoraDlmmBinArrayMonitorData(BinArray, Instant),
     Clock(Clock),
 }
@@ -242,7 +244,7 @@ impl GrpcMessage {
             GrpcMessage::RaydiumAmmMonitorData { pool_id, .. } => Some(*pool_id),
             GrpcMessage::RaydiumClmmMonitorData(_, pool_id, ..) => Some(*pool_id),
             GrpcMessage::PumpFunAmmPoolMonitorData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::MeteoraDlmmPoolMonitorData(_, pool_id, _, _) => Some(*pool_id),
+            GrpcMessage::MeteoraDlmmMonitorData { pool_id, .. } => Some(*pool_id),
             GrpcMessage::MeteoraDlmmBinArrayMonitorData(bin_array, _) => Some(bin_array.lb_pair),
             GrpcMessage::RaydiumClmmTickArrayMonitorData(change_data, _) => {
                 Some(change_data.pool_id)
@@ -259,9 +261,7 @@ impl GrpcMessage {
                 instant.elapsed().as_nanos()
             }
             GrpcMessage::PumpFunAmmPoolMonitorData { instant, .. } => instant.elapsed().as_nanos(),
-            GrpcMessage::MeteoraDlmmPoolMonitorData(_, _, instant, _) => {
-                instant.elapsed().as_nanos()
-            }
+            GrpcMessage::MeteoraDlmmMonitorData { instant, .. } => instant.elapsed().as_nanos(),
             GrpcMessage::MeteoraDlmmBinArrayMonitorData(_, instant) => instant.elapsed().as_nanos(),
             GrpcMessage::Clock(_) => 0,
             _ => unimplemented!(),
@@ -273,7 +273,7 @@ impl GrpcMessage {
             GrpcMessage::RaydiumAmmMonitorData { slot, .. } => Some(slot.clone()),
             GrpcMessage::PumpFunAmmPoolMonitorData { slot, .. } => Some(*slot),
             GrpcMessage::RaydiumClmmMonitorData(_, _, _, slot) => Some(*slot),
-            GrpcMessage::MeteoraDlmmPoolMonitorData(_, _, _, slot) => Some(*slot),
+            GrpcMessage::MeteoraDlmmMonitorData { slot, .. } => Some(*slot),
             _ => None,
         }
     }
@@ -299,7 +299,21 @@ impl GrpcMessage {
                 mint_1_vault_amount,
                 ..
             } => mint_0_vault_amount.is_some() && mint_1_vault_amount.is_some(),
-            GrpcMessage::MeteoraDlmmPoolMonitorData { .. } => true,
+            GrpcMessage::MeteoraDlmmMonitorData {
+                pool_data,
+                bin_arrays,
+                expect_bin_array_index,
+                ..
+            } => {
+                pool_data.is_some()
+                    && expect_bin_array_index.is_some()
+                    && bin_arrays.is_some()
+                    && bin_arrays
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .all(|b| expect_bin_array_index.as_ref().unwrap().contains(&b.index))
+            }
             GrpcMessage::MeteoraDlmmBinArrayMonitorData(_, _) => true,
             GrpcMessage::Clock(_) => true,
         }
@@ -333,6 +347,7 @@ pub enum GrpcAccountUpdateType {
     TickArrayState,
     MintVault,
     Clock,
+    Transaction,
 }
 
 pub trait ReadyGrpcMessageOperator {
