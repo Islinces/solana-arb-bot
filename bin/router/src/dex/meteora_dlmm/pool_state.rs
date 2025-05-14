@@ -191,7 +191,6 @@ impl MeteoraDLMMPoolState {
         match grpc_message {
             GrpcMessage::MeteoraDlmmMonitorData {
                 pool_data,
-                slot,
                 bin_arrays,
                 ..
             } => {
@@ -218,7 +217,6 @@ impl MeteoraDLMMPoolState {
                     &mut self.last_update_timestamp,
                     pool_monitor_data.last_update_timestamp,
                 );
-                info!("meteora dlmm slot : {}, changed: {}", slot, changed);
                 for bin_array in bin_arrays.unwrap() {
                     if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
                         && bin_array.index <= self.bin_array_index_range.last().unwrap().0 as i64

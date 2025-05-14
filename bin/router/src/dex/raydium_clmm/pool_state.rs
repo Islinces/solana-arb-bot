@@ -167,7 +167,7 @@ impl RaydiumCLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::RaydiumClmmMonitorData(change_data, _, _, slot, ..) => {
+            GrpcMessage::RaydiumClmmMonitorData(change_data, _, _, ..) => {
                 let mut changed =
                     change_data_if_not_same(&mut self.liquidity, change_data.liquidity);
                 changed |=
@@ -178,7 +178,6 @@ impl RaydiumCLMMPoolState {
                     &mut self.tick_array_bitmap,
                     change_data.tick_array_bitmap,
                 );
-                info!("raydium clmm slot : {}, changed: {}", slot, changed);
                 if changed {
                     Ok(())
                 } else {
