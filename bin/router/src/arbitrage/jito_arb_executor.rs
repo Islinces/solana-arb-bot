@@ -265,7 +265,7 @@ impl JitoArbExecutor {
         let wallet = self.keypair.pubkey();
         // ======================第一个Transaction====================
         // TODO: 使用参数tip_bps
-        let tip = dex_quote_result.profit.mul(70).div(100);
+        let tip = dex_quote_result.profit.mul(30).div(100);
 
         let mut first_instructions = Vec::with_capacity(6);
         // 设置 CU
