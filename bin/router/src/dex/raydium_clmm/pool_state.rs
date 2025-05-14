@@ -62,19 +62,19 @@ impl RaydiumCLMMPoolState {
         }
         let mut tick_array_index = tick_array_index.into_iter().collect::<Vec<_>>();
         tick_array_index.sort_unstable();
-        let allowed_index_range = 10 * (pool_state.tick_spacing * 60) as i32;
-        let min_index = tick_array_index
-            .first()
-            .unwrap()
-            .checked_sub(allowed_index_range)
-            .unwrap();
-        let max_index = tick_array_index
-            .last()
-            .unwrap()
-            .checked_add(allowed_index_range)
-            .unwrap();
-        tick_array_index.insert(0, min_index);
-        tick_array_index.push(max_index);
+        // let allowed_index_range = 10 * (pool_state.tick_spacing * 60) as i32;
+        // let min_index = tick_array_index
+        //     .first()
+        //     .unwrap()
+        //     .checked_sub(allowed_index_range)
+        //     .unwrap();
+        // let max_index = tick_array_index
+        //     .last()
+        //     .unwrap()
+        //     .checked_add(allowed_index_range)
+        //     .unwrap();
+        // tick_array_index.insert(0, min_index);
+        // tick_array_index.push(max_index);
         let tick_array_index_range = tick_array_index
             .into_iter()
             .map(|index| {
@@ -97,7 +97,7 @@ impl RaydiumCLMMPoolState {
             tick_array_bitmap: pool_state.tick_array_bitmap,
             tick_array_bitmap_extension: bitmap_extension,
             tick_array_map,
-            tick_array_index_range: tick_array_index_range,
+            tick_array_index_range,
         }
     }
 
@@ -186,27 +186,18 @@ impl RaydiumCLMMPoolState {
             }
             GrpcMessage::RaydiumClmmTickArrayMonitorData(tick_array, _) => {
                 let index = tick_array.start_tick_index;
-                if index.ge(&self.tick_array_index_range.first().unwrap().0)
-                    && index.le(&self.tick_array_index_range.last().unwrap().0)
+                match self
+                    .tick_array_index_range
+                    .binary_search_by_key(&index, |&(k, _)| k)
                 {
-                    match self
-                        .tick_array_index_range
-                        .binary_search_by_key(&index, |&(k, _)| k)
-                    {
-                        Ok(_) => {}
-                        Err(pos) => {
-                            self.tick_array_index_range
-                                .insert(pos, (index, tick_array.key()));
-                        }
+                    Ok(_) => {}
+                    Err(pos) => {
+                        self.tick_array_index_range
+                            .insert(pos, (index, tick_array.key()));
                     }
-                    self.tick_array_map.insert(tick_array.key(), tick_array);
-                    Err(anyhow!(""))
-                } else {
-                    Err(anyhow!(
-                        "TickArray index[{}]不在监控范围内",
-                        tick_array.start_tick_index
-                    ))
                 }
+                self.tick_array_map.insert(tick_array.key(), tick_array);
+                Err(anyhow!(""))
             }
             _ => Err(anyhow!("")),
         }

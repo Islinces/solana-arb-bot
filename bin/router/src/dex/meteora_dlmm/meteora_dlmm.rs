@@ -127,7 +127,6 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                 accounts.push(AccountMeta::new(item.mint_0_vault, false));
                 // 4.mint_1 vault
                 accounts.push(AccountMeta::new(item.mint_1_vault, false));
-                // 5.mint_0 ata
                 let (mint_0_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -136,8 +135,6 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                     ],
                     &get_ata_program(),
                 );
-                accounts.push(AccountMeta::new(mint_0_ata, false));
-                // 6.mint_1 ata
                 let (mint_1_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -146,7 +143,17 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                     ],
                     &get_ata_program(),
                 );
-                accounts.push(AccountMeta::new(mint_1_ata, false));
+                if item.zero_to_one {
+                    // 5.mint_0 ata
+                    accounts.push(AccountMeta::new(mint_0_ata, false));
+                    // 6.mint_1 ata
+                    accounts.push(AccountMeta::new(mint_1_ata, false));
+                }else {
+                    // 5.mint_1 ata
+                    accounts.push(AccountMeta::new(mint_1_ata, false));
+                    // 6.mint_0 ata
+                    accounts.push(AccountMeta::new(mint_0_ata, false));
+                }
                 // 7.mint_0
                 accounts.push(AccountMeta::new_readonly(item.mint_0, false));
                 // 8.mint_1

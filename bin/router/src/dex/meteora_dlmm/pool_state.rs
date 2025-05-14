@@ -91,8 +91,8 @@ impl MeteoraDLMMPoolState {
         });
         let mut bin_array_index_range = indexs.into_iter().collect::<Vec<_>>();
         bin_array_index_range.sort_unstable();
-        bin_array_index_range.insert(0, bin_array_index_range.first().unwrap().saturating_sub(10));
-        bin_array_index_range.push(bin_array_index_range.last().unwrap().saturating_add(10));
+        // bin_array_index_range.insert(0, bin_array_index_range.first().unwrap().saturating_sub(10));
+        // bin_array_index_range.push(bin_array_index_range.last().unwrap().saturating_add(10));
         Self {
             mint_0_vault: lb_pair.reserve_x,
             mint_1_vault: lb_pair.reserve_y,
@@ -218,30 +218,26 @@ impl MeteoraDLMMPoolState {
                     pool_monitor_data.last_update_timestamp,
                 );
                 for bin_array in bin_arrays.unwrap() {
-                    if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
-                        && bin_array.index <= self.bin_array_index_range.last().unwrap().0 as i64
+                    let index = bin_array.index as i32;
+                    match self
+                        .bin_array_index_range
+                        .binary_search_by_key(&index, |&(k, _)| k)
                     {
-                        let index = bin_array.index as i32;
-                        match self
-                            .bin_array_index_range
-                            .binary_search_by_key(&index, |&(k, _)| k)
-                        {
-                            Ok(_) => {}
-                            Err(pos) => {
-                                self.bin_array_index_range.insert(
-                                    pos,
-                                    (
-                                        index,
-                                        derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
-                                    ),
-                                );
-                            }
+                        Ok(_) => {}
+                        Err(pos) => {
+                            self.bin_array_index_range.insert(
+                                pos,
+                                (
+                                    index,
+                                    derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
+                                ),
+                            );
                         }
-                        self.bin_array_map.insert(
-                            derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
-                            bin_array,
-                        );
                     }
+                    self.bin_array_map.insert(
+                        derive_bin_array_pda(bin_array.lb_pair, bin_array.index).0,
+                        bin_array,
+                    );
                 }
                 Ok(())
             }
