@@ -216,11 +216,12 @@ impl MeteoraDLMMPoolState {
                     pool_monitor_data.last_update_timestamp,
                 );
                 info!("meteora dlmm slot : {}, changed: {}", slot, changed);
-                if changed {
-                    Ok(())
-                } else {
-                    Err(anyhow!(""))
-                }
+                Ok(())
+                // if changed {
+                //     Ok(())
+                // } else {
+                //     Err(anyhow!(""))
+                // }
             }
             GrpcMessage::MeteoraDlmmBinArrayMonitorData(bin_array, _) => {
                 if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
