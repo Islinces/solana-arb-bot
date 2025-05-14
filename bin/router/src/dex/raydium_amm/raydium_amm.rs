@@ -131,35 +131,40 @@ impl AccountMetaConverter for RaydiumAmmDex {
                 // 1.mint program
                 accounts.push(AccountMeta::new_readonly(get_mint_program(), false));
                 // 2.pool
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 3.authority id
                 accounts.push(AccountMeta::new_readonly(
                     crate::dex::raydium_amm::RAYDIUM_AUTHORITY_ID,
                     false,
                 ));
                 // 4.open order
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new_readonly(
+                    DexType::RaydiumAMM.get_program_id(),
+                    false,
+                ));
                 // 5.coin vault
                 accounts.push(AccountMeta::new(item.mint_0_vault, false));
                 // 6.pc vault
                 accounts.push(AccountMeta::new(item.mint_1_vault, false));
                 // 7.Serum Program Id
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new_readonly(
+                    Pubkey::from_str("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb").unwrap(),
+                    false,
+                ));
                 // 8.Serum Market
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 9.Serum Bids
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 10.Serum Asks
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 11.Serum Event Queue
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 12.Serum Coin Vault Account
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 13.Serum Pc Vault Account
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 14.Serum Vault Signer
                 accounts.push(AccountMeta::new_readonly(item.pool_id, false));
-                // 15.coin mint ata
                 let (coin_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -168,8 +173,6 @@ impl AccountMetaConverter for RaydiumAmmDex {
                     ],
                     &get_ata_program(),
                 );
-                accounts.push(AccountMeta::new(coin_ata, false));
-                // 16.pc mint ata
                 let (pc_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -178,7 +181,17 @@ impl AccountMetaConverter for RaydiumAmmDex {
                     ],
                     &get_ata_program(),
                 );
-                accounts.push(AccountMeta::new(pc_ata, false));
+                if item.zero_to_one {
+                    // 15.coin mint ata
+                    accounts.push(AccountMeta::new(coin_ata, false));
+                    // 16.pc mint ata
+                    accounts.push(AccountMeta::new(pc_ata, false));
+                } else {
+                    // 15.pc mint ata
+                    accounts.push(AccountMeta::new(pc_ata, false));
+                    // 16.coin mint ata
+                    accounts.push(AccountMeta::new(coin_ata, false));
+                }
                 // 17.wallet
                 accounts.push(AccountMeta::new(wallet, true));
                 Some((accounts, vec![item.alt]))
