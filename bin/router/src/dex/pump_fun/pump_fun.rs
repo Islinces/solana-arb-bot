@@ -1,18 +1,15 @@
-use crate::arbitrage::types::swap::Swap;
 use crate::cache::{Mint, Pool, PoolState};
-use crate::dex::common::utils::{change_data_if_not_same, change_option_ignore_none_old};
+use crate::dex::common::utils::change_option_ignore_none_old;
 use crate::dex::pump_fun::math::CheckedCeilDiv;
 use crate::dex::pump_fun::pool_state::{PumpFunInstructionItem, PumpFunPoolState};
 use crate::dex::pump_fun::state::GlobalConfig;
-use crate::dex::pump_fun::state::Pool as PumpFunPool;
-use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::{get_ata_program, get_mint_program, get_system_program};
 use crate::file_db::DexJson;
-use crate::interface::GrpcMessage::{PumpFunAMMData, RaydiumAMMData};
+use crate::interface::GrpcMessage::{PumpFunAmmPoolMonitorData};
 use crate::interface::{
     AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
-    InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
+    InstructionItemCreator, MintVaultMonitorData, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -196,16 +193,10 @@ impl GrpcSubscribeRequestGenerator for PumpFunGrpcSubscribeRequestGenerator {
         &self,
         pools: &[Pool],
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
-        let vault_subscribe_request = self.mint_vault_subscribe_request(pools);
-        if vault_subscribe_request.accounts.is_empty() {
-            warn!("【{}】所有池子未找到金库账户", DexType::PumpFunAMM);
-            None
-        } else {
-            Some(vec![(
-                (DexType::PumpFunAMM, GrpcAccountUpdateType::MintVault),
-                vault_subscribe_request,
-            )])
-        }
+        Some(vec![MintVaultMonitorData::subscribe_request(
+            pools,
+            DexType::PumpFunAMM,
+        )])
     }
 }
 
@@ -215,7 +206,7 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
     fn parse_message(
         &self,
         update_account: AccountUpdate,
-    ) -> Result<((String, Pubkey), GrpcMessage)> {
+    ) -> Result<(Option<(String, Pubkey)>, GrpcMessage)> {
         let account_type = &update_account.account_type;
         let filters = &update_account.filters;
         let account = &update_account.account;
@@ -241,8 +232,8 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
                     }
                     let pool_id = Pubkey::try_from(*items.first().unwrap())?;
                     Ok((
-                        (txn.clone(), pool_id),
-                        PumpFunAMMData {
+                        Some((txn.clone(), pool_id)),
+                        PumpFunAmmPoolMonitorData {
                             pool_id,
                             mint_0_vault_amount,
                             mint_1_vault_amount,
@@ -260,12 +251,12 @@ impl ReadyGrpcMessageOperator for PumpFunReadyGrpcMessageOperator {
 
     fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage) {
         match old {
-            PumpFunAMMData {
+            PumpFunAmmPoolMonitorData {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
                 ..
             } => {
-                if let PumpFunAMMData {
+                if let PumpFunAmmPoolMonitorData {
                     mint_0_vault_amount: update_mint_0_vault_amount,
                     mint_1_vault_amount: update_mint_1_vault_amount,
                     ..

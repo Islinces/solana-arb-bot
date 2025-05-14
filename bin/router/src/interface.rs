@@ -17,7 +17,9 @@ use crate::dex::raydium_amm::raydium_amm::{
     RaydiumAmmDex, RaydiumAmmGrpcMessageOperator, RaydiumAmmSnapshotFetcher,
     RaydiumAmmSubscribeRequestCreator,
 };
-use crate::dex::raydium_clmm::pool_state::{PoolChangeData, RaydiumCLMMInstructionItem, TickArray};
+use crate::dex::raydium_clmm::pool_state::{
+    PoolMonitorData, RaydiumCLMMInstructionItem, TickArrayMonitorData,
+};
 use crate::dex::raydium_clmm::raydium_clmm::{
     RaydiumCLMMDex, RaydiumCLMMGrpcMessageOperator, RaydiumCLMMSnapshotFetcher,
     RaydiumCLMMSubscribeRequestCreator,
@@ -25,6 +27,7 @@ use crate::dex::raydium_clmm::raydium_clmm::{
 use crate::file_db::DexJson;
 use crate::interface::SourceMessage::Account;
 use anyhow::{anyhow, Result};
+use borsh::BorshDeserialize;
 use serde::{Deserialize, Serialize};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
@@ -205,7 +208,7 @@ impl InstructionItem {
 
 #[derive(Debug, Clone)]
 pub enum GrpcMessage {
-    RaydiumAMMData {
+    RaydiumAmmMonitorData {
         pool_id: Pubkey,
         mint_0_vault_amount: Option<u64>,
         mint_1_vault_amount: Option<u64>,
@@ -214,16 +217,16 @@ pub enum GrpcMessage {
         instant: Instant,
         slot: u64,
     },
-    RaydiumCLMMData(PoolChangeData, Instant),
-    RaydiumCLMMTickArrayData(TickArray, Instant),
-    PumpFunAMMData {
+    RaydiumClmmMonitorData(PoolMonitorData, Pubkey, Instant, u64),
+    RaydiumClmmTickArrayMonitorData(TickArrayMonitorData, Instant),
+    PumpFunAmmPoolMonitorData {
         pool_id: Pubkey,
         mint_0_vault_amount: Option<u64>,
         mint_1_vault_amount: Option<u64>,
         instant: Instant,
         slot: u64,
     },
-    MeteoraDLMMPoolData {
+    MeteoraDlmmPoolMonitorData {
         pool_id: Pubkey,
         active_id: i32,
         bin_array_bitmap: [u64; 16],
@@ -233,46 +236,52 @@ pub enum GrpcMessage {
         last_update_timestamp: i64,
         instant: Instant,
     },
-    MeteoraDLMMBinArrayData(BinArray, Instant),
+    MeteoraDlmmBinArrayMonitorData(BinArray, Instant),
     Clock(Clock),
 }
 
 impl GrpcMessage {
     pub fn pool_id(&self) -> Option<Pubkey> {
         match self {
-            GrpcMessage::RaydiumAMMData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::RaydiumCLMMData(change_data, _) => Some(change_data.pool_id),
-            GrpcMessage::PumpFunAMMData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::MeteoraDLMMPoolData { pool_id, .. } => Some(*pool_id),
-            GrpcMessage::MeteoraDLMMBinArrayData(bin_array, _) => Some(bin_array.lb_pair),
-            GrpcMessage::Clock(_) => unimplemented!(),
-            GrpcMessage::RaydiumCLMMTickArrayData(change_data, _) => Some(change_data.pool_id),
+            GrpcMessage::RaydiumAmmMonitorData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::RaydiumClmmMonitorData(_, pool_id, ..) => Some(*pool_id),
+            GrpcMessage::PumpFunAmmPoolMonitorData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::MeteoraDlmmPoolMonitorData { pool_id, .. } => Some(*pool_id),
+            GrpcMessage::MeteoraDlmmBinArrayMonitorData(bin_array, _) => Some(bin_array.lb_pair),
+            GrpcMessage::RaydiumClmmTickArrayMonitorData(change_data, _) => {
+                Some(change_data.pool_id)
+            }
+            _ => unimplemented!(),
         }
     }
 
     pub fn instant(&self) -> u128 {
         match self {
-            GrpcMessage::RaydiumAMMData { instant, .. } => instant.elapsed().as_nanos(),
-            GrpcMessage::RaydiumCLMMData(_, instant) => instant.elapsed().as_nanos(),
-            GrpcMessage::RaydiumCLMMTickArrayData(_, instant) => instant.elapsed().as_nanos(),
-            GrpcMessage::PumpFunAMMData { instant, .. } => instant.elapsed().as_nanos(),
-            GrpcMessage::MeteoraDLMMPoolData { instant, .. } => instant.elapsed().as_nanos(),
-            GrpcMessage::MeteoraDLMMBinArrayData(_, instant) => instant.elapsed().as_nanos(),
+            GrpcMessage::RaydiumAmmMonitorData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::RaydiumClmmMonitorData(_, _, instant, ..) => instant.elapsed().as_nanos(),
+            GrpcMessage::RaydiumClmmTickArrayMonitorData(_, instant) => {
+                instant.elapsed().as_nanos()
+            }
+            GrpcMessage::PumpFunAmmPoolMonitorData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::MeteoraDlmmPoolMonitorData { instant, .. } => instant.elapsed().as_nanos(),
+            GrpcMessage::MeteoraDlmmBinArrayMonitorData(_, instant) => instant.elapsed().as_nanos(),
             GrpcMessage::Clock(_) => 0,
+            _ => unimplemented!(),
         }
     }
 
     pub fn slot(&self) -> Option<u64> {
         match self {
-            GrpcMessage::RaydiumAMMData { slot, .. } => Some(slot.clone()),
-            GrpcMessage::PumpFunAMMData { slot, .. } => Some(*slot),
+            GrpcMessage::RaydiumAmmMonitorData { slot, .. } => Some(slot.clone()),
+            GrpcMessage::PumpFunAmmPoolMonitorData { slot, .. } => Some(*slot),
+            GrpcMessage::RaydiumClmmMonitorData(_, _, _, slot) => Some(*slot),
             _ => None,
         }
     }
 
     pub fn is_ready(&self) -> bool {
         match self {
-            GrpcMessage::RaydiumAMMData {
+            GrpcMessage::RaydiumAmmMonitorData {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
                 mint_0_need_take_pnl,
@@ -284,15 +293,15 @@ impl GrpcMessage {
                     && mint_0_need_take_pnl.is_some()
                     && mint_1_need_take_pnl.is_some()
             }
-            GrpcMessage::RaydiumCLMMData(_, _) => true,
-            GrpcMessage::RaydiumCLMMTickArrayData(_, _) => true,
-            GrpcMessage::PumpFunAMMData {
+            GrpcMessage::RaydiumClmmMonitorData(_, _, _, _) => true,
+            GrpcMessage::RaydiumClmmTickArrayMonitorData(_, _) => true,
+            GrpcMessage::PumpFunAmmPoolMonitorData {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
                 ..
             } => mint_0_vault_amount.is_some() && mint_1_vault_amount.is_some(),
-            GrpcMessage::MeteoraDLMMPoolData { .. } => true,
-            GrpcMessage::MeteoraDLMMBinArrayData(_, _) => true,
+            GrpcMessage::MeteoraDlmmPoolMonitorData { .. } => true,
+            GrpcMessage::MeteoraDlmmBinArrayMonitorData(_, _) => true,
             GrpcMessage::Clock(_) => true,
         }
     }
@@ -322,7 +331,7 @@ pub struct AccountUpdate {
 pub enum GrpcAccountUpdateType {
     Pool,
     BinArray,
-    TickArray,
+    TickArrayState,
     MintVault,
     Clock,
 }
@@ -331,7 +340,7 @@ pub trait ReadyGrpcMessageOperator {
     fn parse_message(
         &self,
         update_account: AccountUpdate,
-    ) -> Result<((String, Pubkey), GrpcMessage)>;
+    ) -> Result<(Option<(String, Pubkey)>, GrpcMessage)>;
 
     fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage);
 }
@@ -341,9 +350,21 @@ pub trait GrpcSubscribeRequestGenerator {
         &self,
         pools: &[Pool],
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>>;
+}
 
-    fn mint_vault_subscribe_request(&self, pools: &[Pool]) -> SubscribeRequest {
-        SubscribeRequest {
+#[derive(Debug, Clone, BorshDeserialize)]
+pub struct MintVaultMonitorData {
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub state: u8,
+}
+
+impl MintVaultMonitorData {
+    pub fn subscribe_request(
+        pools: &[Pool],
+        dex_type: DexType,
+    ) -> (SubscribeKey, SubscribeRequest) {
+        let subscribe_request = SubscribeRequest {
             accounts: pools
                 .iter()
                 .filter_map(|pool| {
@@ -392,7 +413,11 @@ pub trait GrpcSubscribeRequestGenerator {
                 },
             ],
             ..Default::default()
-        }
+        };
+        (
+            (dex_type, GrpcAccountUpdateType::MintVault),
+            subscribe_request,
+        )
     }
 }
 

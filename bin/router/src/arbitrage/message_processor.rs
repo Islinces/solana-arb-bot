@@ -44,14 +44,14 @@ impl GrpcDataProcessor {
         match operator.parse_message(update_account) {
             Ok((cache_key, grpc_message)) => {
                 // 不需要等待其他账户数据的情况
-                if self.events.is_none() {
+                if cache_key.is_none() {
                     return Some(grpc_message);
                 }
                 let entry = self
                     .events
                     .as_ref()
                     .unwrap()
-                    .entry(cache_key)
+                    .entry(cache_key.unwrap())
                     .and_upsert_with(|maybe_entry| {
                         if let Some(entry) = maybe_entry {
                             let mut message = entry.into_value();

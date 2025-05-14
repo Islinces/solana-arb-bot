@@ -36,7 +36,7 @@ impl PumpFunPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::PumpFunAMMData {
+            GrpcMessage::PumpFunAmmPoolMonitorData {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
                 ..

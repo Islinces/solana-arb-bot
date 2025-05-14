@@ -1,9 +1,16 @@
+use crate::cache::Pool;
 use crate::dex::common::utils::change_option_ignore_none_old;
-use crate::interface::{DexType, GrpcMessage};
+use crate::interface::{DexType, GrpcAccountUpdateType, GrpcMessage, SubscribeKey};
 use anyhow::anyhow;
-use std::fmt::{Debug, Display, Formatter};
+use borsh::BorshDeserialize;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
+use std::fmt::{Debug, Display, Formatter};
+use yellowstone_grpc_proto::geyser::{
+    CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
+    SubscribeRequestFilterAccounts,
+};
 
 #[derive(Debug, Clone)]
 pub struct RaydiumAMMPoolState {
@@ -42,7 +49,7 @@ impl RaydiumAMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::RaydiumAMMData {
+            GrpcMessage::RaydiumAmmMonitorData {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
                 mint_0_need_take_pnl,
@@ -95,6 +102,49 @@ impl Display for RaydiumAMMInstructionItem {
             DexType::RaydiumAMM,
             self.pool_id,
             self.zero_to_one
+        )
+    }
+}
+
+#[derive(Debug, Clone, BorshDeserialize)]
+pub struct PoolMonitorData {
+    pub mint_0_need_take_pnl: u64,
+    pub mint_1_need_take_pnl: u64,
+}
+
+impl PoolMonitorData {
+    pub fn subscribe_request(pools: &[Pool]) -> (SubscribeKey, SubscribeRequest) {
+        let mut subscribe_pool_accounts = HashMap::new();
+        subscribe_pool_accounts.insert(
+            format!("{:?}", DexType::RaydiumAMM),
+            SubscribeRequestFilterAccounts {
+                account: pools
+                    .iter()
+                    .map(|pool| pool.pool_id.to_string())
+                    .collect::<Vec<_>>(),
+                ..Default::default()
+            },
+        );
+        let pool_request = SubscribeRequest {
+            accounts: subscribe_pool_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: vec![
+                // state_data.need_take_pnl_coin
+                SubscribeRequestAccountsDataSlice {
+                    offset: 192,
+                    length: 8,
+                },
+                // state_data.need_take_pnl_pc
+                SubscribeRequestAccountsDataSlice {
+                    offset: 200,
+                    length: 8,
+                },
+            ],
+            ..Default::default()
+        };
+        (
+            (DexType::RaydiumAMM, GrpcAccountUpdateType::Pool),
+            pool_request,
         )
     }
 }

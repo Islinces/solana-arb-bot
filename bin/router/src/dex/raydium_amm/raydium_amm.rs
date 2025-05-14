@@ -1,15 +1,17 @@
 use crate::cache::{Mint, Pool, PoolState};
 use crate::dex::common::utils::change_option_ignore_none_old;
 use crate::dex::raydium_amm::math::CheckedCeilDiv;
-use crate::dex::raydium_amm::pool_state::{RaydiumAMMInstructionItem, RaydiumAMMPoolState};
+use crate::dex::raydium_amm::pool_state::{
+    PoolMonitorData, RaydiumAMMInstructionItem, RaydiumAMMPoolState,
+};
 use crate::dex::raydium_amm::state::{AmmInfo, AmmStatus};
 use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
-use crate::interface::GrpcMessage::RaydiumAMMData;
+use crate::interface::GrpcMessage::RaydiumAmmMonitorData;
 use crate::interface::{
     AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
-    InstructionItemCreator, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
+    InstructionItemCreator, MintVaultMonitorData, Quoter, ReadyGrpcMessageOperator, SubscribeKey,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -191,7 +193,7 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
     fn parse_message(
         &self,
         update_account: AccountUpdate,
-    ) -> Result<((String, Pubkey), GrpcMessage)> {
+    ) -> Result<(Option<(String, Pubkey)>, GrpcMessage)> {
         let account_type = &update_account.account_type;
         let filters = &update_account.filters;
         let account = &update_account.account;
@@ -205,38 +207,37 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
             let tx = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::Pool => {
-                    let src = array_ref![data, 0, 16];
-                    let (need_take_pnl_coin, need_take_pnl_pc) = array_refs![src, 8, 8];
+                    let pool_monitor_data = PoolMonitorData::try_from_slice(data)?;
                     let pool_id = Pubkey::try_from(update_account_info.pubkey.as_slice())?;
                     Ok((
-                        (txn.clone(), pool_id),
-                        RaydiumAMMData {
+                        Some((txn.clone(), pool_id)),
+                        RaydiumAmmMonitorData {
                             pool_id,
                             mint_0_vault_amount: None,
                             mint_1_vault_amount: None,
-                            mint_0_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_coin)),
-                            mint_1_need_take_pnl: Some(u64::from_le_bytes(*need_take_pnl_pc)),
+                            mint_0_need_take_pnl: Some(pool_monitor_data.mint_0_need_take_pnl),
+                            mint_1_need_take_pnl: Some(pool_monitor_data.mint_1_need_take_pnl),
                             instant: update_account.instant,
                             slot: account.slot,
                         },
                     ))
                 }
                 GrpcAccountUpdateType::MintVault => {
-                    let src = array_ref![data, 0, 41];
-                    let (mint, amount, _state) = array_refs![src, 32, 8, 1];
                     let mut mint_0_vault_amount = None;
                     let mut mint_1_vault_amount = None;
                     let items = filters.first().unwrap().split(":").collect::<Vec<&str>>();
                     let mint_flag = items.last().unwrap().to_string();
                     if mint_flag.eq("0") {
-                        mint_0_vault_amount = Some(u64::from_le_bytes(*amount));
+                        mint_0_vault_amount =
+                            Some(MintVaultMonitorData::try_from_slice(data)?.amount);
                     } else {
-                        mint_1_vault_amount = Some(u64::from_le_bytes(*amount));
+                        mint_1_vault_amount =
+                            Some(MintVaultMonitorData::try_from_slice(data)?.amount);
                     }
                     let pool_id = Pubkey::try_from(*items.first().unwrap())?;
                     Ok((
-                        (txn.clone(), pool_id),
-                        RaydiumAMMData {
+                        Some((txn.clone(), pool_id)),
+                        RaydiumAmmMonitorData {
                             pool_id,
                             mint_0_vault_amount,
                             mint_1_vault_amount,
@@ -256,14 +257,14 @@ impl ReadyGrpcMessageOperator for RaydiumAmmGrpcMessageOperator {
 
     fn change_data(&self, old: &mut GrpcMessage, new: GrpcMessage) {
         match old {
-            RaydiumAMMData {
+            RaydiumAmmMonitorData {
                 mint_0_vault_amount,
                 mint_1_vault_amount,
                 mint_0_need_take_pnl,
                 mint_1_need_take_pnl,
                 ..
             } => {
-                if let RaydiumAMMData {
+                if let RaydiumAmmMonitorData {
                     mint_0_vault_amount: update_mint_0_vault_amount,
                     mint_1_vault_amount: update_mint_1_vault_amount,
                     mint_0_need_take_pnl: update_mint_0_need_take_pnl,
@@ -295,50 +296,10 @@ impl GrpcSubscribeRequestGenerator for RaydiumAmmSubscribeRequestCreator {
         &self,
         pools: &[Pool],
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
-        let mut subscribe_pool_accounts = HashMap::new();
-        subscribe_pool_accounts.insert(
-            format!("{:?}", DexType::RaydiumAMM),
-            SubscribeRequestFilterAccounts {
-                account: pools
-                    .iter()
-                    .map(|pool| pool.pool_id.to_string())
-                    .collect::<Vec<_>>(),
-                ..Default::default()
-            },
-        );
-        let pool_request = SubscribeRequest {
-            accounts: subscribe_pool_accounts,
-            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-            accounts_data_slice: vec![
-                // state_data.need_take_pnl_coin
-                SubscribeRequestAccountsDataSlice {
-                    offset: 192,
-                    length: 8,
-                },
-                // state_data.need_take_pnl_pc
-                SubscribeRequestAccountsDataSlice {
-                    offset: 200,
-                    length: 8,
-                },
-            ],
-            ..Default::default()
-        };
-        let vault_subscribe_request = self.mint_vault_subscribe_request(pools);
-        if vault_subscribe_request.accounts.is_empty() {
-            warn!("【{}】所有池子未找到金库账户", DexType::RaydiumAMM);
-            None
-        } else {
-            Some(vec![
-                (
-                    (DexType::RaydiumAMM, GrpcAccountUpdateType::Pool),
-                    pool_request,
-                ),
-                (
-                    (DexType::RaydiumAMM, GrpcAccountUpdateType::MintVault),
-                    vault_subscribe_request,
-                ),
-            ])
-        }
+        Some(vec![
+            PoolMonitorData::subscribe_request(pools),
+            MintVaultMonitorData::subscribe_request(pools, DexType::RaydiumAMM),
+        ])
     }
 }
 

@@ -1,4 +1,3 @@
-use crate::dex::raydium_clmm::pool_state::{Tick, TickArray};
 use crate::dex::raydium_clmm::sdk::big_num::U128;
 use crate::dex::raydium_clmm::sdk::config::{AmmConfig, FEE_RATE_DENOMINATOR_VALUE};
 use crate::dex::raydium_clmm::sdk::pool::PoolState;
@@ -333,7 +332,8 @@ pub async fn load_cur_and_next_specify_count_tick_array(
     if let Ok(tick_array_states) = tick_array_rsps {
         let mut tick_arrays = VecDeque::new();
         for tick_array in tick_array_states {
-            let tick_array_state = TickArrayState::try_from_slice(&tick_array.unwrap().data[8..]).unwrap();
+            let tick_array_state =
+                TickArrayState::try_from_slice(&tick_array.unwrap().data[8..]).unwrap();
             tick_arrays.push_back(tick_array_state);
         }
         Some(tick_arrays)

@@ -183,7 +183,7 @@ impl MeteoraDLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::MeteoraDLMMPoolData {
+            GrpcMessage::MeteoraDlmmPoolMonitorData {
                 active_id,
                 bin_array_bitmap,
                 volatility_accumulator,
@@ -209,7 +209,7 @@ impl MeteoraDLMMPoolState {
                     Err(anyhow!(""))
                 }
             }
-            GrpcMessage::MeteoraDLMMBinArrayData(bin_array,_) => {
+            GrpcMessage::MeteoraDlmmBinArrayMonitorData(bin_array, _) => {
                 if bin_array.index >= self.bin_array_index_range.first().unwrap().0 as i64
                     && bin_array.index <= self.bin_array_index_range.last().unwrap().0 as i64
                 {

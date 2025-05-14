@@ -1,17 +1,24 @@
+use crate::cache::Pool;
 use crate::dex::common::utils::change_data_if_not_same;
 use crate::dex::raydium_clmm::sdk::pool::PoolState;
 use crate::dex::raydium_clmm::sdk::tick_array::{
     TickArrayState, TickState, TICK_ARRAY_SEED, TICK_ARRAY_SIZE_USIZE,
 };
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
-use crate::interface::{DexType, GrpcMessage};
+use crate::interface::GrpcAccountUpdateType::TickArrayState as TickArrayStateUpdateType;
+use crate::interface::{DexType, GrpcAccountUpdateType, GrpcMessage, SubscribeKey};
 use anyhow::anyhow;
 use borsh::BorshDeserialize;
-use serde::Deserialize;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::{Debug, Display, Formatter};
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::pubkey::Pubkey;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::{Debug, Display, Formatter};
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
+use yellowstone_grpc_proto::geyser::{
+    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
+    SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts,
+    SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
+};
 
 #[derive(Debug, Clone)]
 pub struct RaydiumCLMMPoolState {
@@ -26,7 +33,7 @@ pub struct RaydiumCLMMPoolState {
     pub tick_current: i32,
     pub tick_array_bitmap: [u64; 16],
     pub tick_array_bitmap_extension: TickArrayBitmapExtension,
-    pub tick_array_map: HashMap<Pubkey, TickArray>,
+    pub tick_array_map: HashMap<Pubkey, TickArrayMonitorData>,
     pub tick_array_index_range: Vec<(i32, Pubkey)>,
 }
 
@@ -49,7 +56,7 @@ impl RaydiumCLMMPoolState {
             tick_array_index.insert(index);
             tick_array_map.insert(
                 TickArrayState::key_(pool_id.as_ref().unwrap(), &index),
-                TickArray::from(tick_array_state),
+                TickArrayMonitorData::from(tick_array_state),
             );
         }
         let mut tick_array_index = tick_array_index.into_iter().collect::<Vec<_>>();
@@ -159,7 +166,7 @@ impl RaydiumCLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::RaydiumCLMMData(change_data, _) => {
+            GrpcMessage::RaydiumClmmMonitorData(change_data, ..) => {
                 let mut changed =
                     change_data_if_not_same(&mut self.liquidity, change_data.liquidity);
                 changed |=
@@ -176,7 +183,7 @@ impl RaydiumCLMMPoolState {
                     Err(anyhow!(""))
                 }
             }
-            GrpcMessage::RaydiumCLMMTickArrayData(tick_array,_) => {
+            GrpcMessage::RaydiumClmmTickArrayMonitorData(tick_array, _) => {
                 let index = tick_array.start_tick_index;
                 if index.ge(&self.tick_array_index_range.first().unwrap().0)
                     && index.le(&self.tick_array_index_range.last().unwrap().0)
@@ -232,14 +239,14 @@ impl Display for RaydiumCLMMInstructionItem {
 }
 
 #[derive(Debug, Clone, BorshDeserialize)]
-pub struct TickArray {
+pub struct TickArrayMonitorData {
     pub pool_id: Pubkey,
     pub start_tick_index: i32,
     pub ticks: [Tick; TICK_ARRAY_SIZE_USIZE],
     pub initialized_tick_count: u8,
 }
 
-impl TickArray {
+impl TickArrayMonitorData {
     pub fn key(&self) -> Pubkey {
         Pubkey::find_program_address(
             &[
@@ -251,9 +258,99 @@ impl TickArray {
         )
         .0
     }
+
+    pub fn subscribe_request(pools: &[Pool]) -> (SubscribeKey, SubscribeRequest) {
+        let mut tick_arrays_subscribe_accounts = HashMap::new();
+        for (index, pool) in pools.iter().enumerate() {
+            tick_arrays_subscribe_accounts.insert(
+                format!("{:?}:{:?}:{:?}", DexType::RaydiumCLmm, TickArrayStateUpdateType, index),
+                SubscribeRequestFilterAccounts {
+                    nonempty_txn_signature:None,
+                    account: vec![],
+                    owner: vec![DexType::RaydiumCLmm.get_program_id().to_string()],
+                    filters: vec![
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(Filter::Datasize(10240)),
+                        },
+                        SubscribeRequestFilterAccountsFilter {
+                            filter: Some(
+                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp{
+                                    offset: 8,
+                                    data: Some(
+                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                            pool.pool_id.to_bytes().to_vec(),
+                                        ),
+                                    ),
+                                }),
+                            ),
+                        },
+                    ],
+                },
+            );
+        }
+        let mut tick_arrays_data_slice = vec![
+            // pool_id
+            SubscribeRequestAccountsDataSlice {
+                offset: 8,
+                length: 32,
+            },
+            // start_tick_index
+            SubscribeRequestAccountsDataSlice {
+                offset: 40,
+                length: 4,
+            },
+        ];
+        let mut start_index = 40 + 4;
+        // ticks 60个
+        for _ in 0..TICK_ARRAY_SIZE_USIZE {
+            // tick
+            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
+                offset: start_index,
+                length: 4,
+            });
+            start_index += 4;
+            // liquidity_net
+            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
+                offset: start_index,
+                length: 16,
+            });
+            start_index += 16;
+            // liquidity_gross
+            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
+                offset: start_index,
+                length: 16,
+            });
+            start_index += 16;
+            // fee_growth_outside_0_x64
+            start_index += 16;
+            // fee_growth_outside_1_x64
+            start_index += 16;
+            // reward_growths_outside_x64
+            start_index += 16 * 3;
+            // padding
+            start_index += 13 * 4;
+        }
+        tick_arrays_data_slice.push(
+            // initialized_tick_count
+            SubscribeRequestAccountsDataSlice {
+                offset: 10124,
+                length: 1,
+            },
+        );
+        let tick_arrays_subscribe_request = SubscribeRequest {
+            accounts: tick_arrays_subscribe_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: tick_arrays_data_slice,
+            ..Default::default()
+        };
+        (
+            (DexType::RaydiumCLmm, GrpcAccountUpdateType::TickArrayState),
+            tick_arrays_subscribe_request,
+        )
+    }
 }
 
-impl From<TickArrayState> for TickArray {
+impl From<TickArrayState> for TickArrayMonitorData {
     fn from(value: TickArrayState) -> Self {
         Self {
             pool_id: value.pool_id,
@@ -270,7 +367,7 @@ impl From<TickArrayState> for TickArray {
     }
 }
 
-impl Into<TickArrayState> for TickArray {
+impl Into<TickArrayState> for TickArrayMonitorData {
     fn into(self) -> TickArrayState {
         TickArrayState {
             pool_id: self.pool_id,
@@ -329,10 +426,56 @@ impl Into<TickState> for Tick {
 }
 
 #[derive(Debug, Clone, BorshDeserialize)]
-pub struct PoolChangeData {
-    pub pool_id: Pubkey,
-    pub tick_current: i32,
+pub struct PoolMonitorData {
     pub liquidity: u128,
     pub sqrt_price_x64: u128,
+    pub tick_current: i32,
     pub tick_array_bitmap: [u64; 16],
+}
+
+impl PoolMonitorData {
+    pub fn subscribe_request(pools: &[Pool]) -> (SubscribeKey, SubscribeRequest) {
+        let mut subscribe_pool_accounts = HashMap::new();
+        subscribe_pool_accounts.insert(
+            format!("{:?}", DexType::RaydiumCLmm),
+            SubscribeRequestFilterAccounts {
+                account: pools
+                    .iter()
+                    .map(|pool| pool.pool_id.to_string())
+                    .collect::<Vec<_>>(),
+                ..Default::default()
+            },
+        );
+        let pool_request = SubscribeRequest {
+            accounts: subscribe_pool_accounts,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: vec![
+                // liquidity
+                SubscribeRequestAccountsDataSlice {
+                    offset: 237,
+                    length: 16,
+                },
+                // sqrt_price_x64
+                SubscribeRequestAccountsDataSlice {
+                    offset: 253,
+                    length: 16,
+                },
+                // tick_current
+                SubscribeRequestAccountsDataSlice {
+                    offset: 269,
+                    length: 4,
+                },
+                // tick_array_bitmap
+                SubscribeRequestAccountsDataSlice {
+                    offset: 904,
+                    length: 128,
+                },
+            ],
+            ..Default::default()
+        };
+        (
+            (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
+            pool_request,
+        )
+    }
 }

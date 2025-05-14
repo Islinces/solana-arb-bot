@@ -1,16 +1,15 @@
 use crate::cache::{Mint, Pool, PoolState};
 use crate::dex::raydium_clmm::pool_state::{
-    PoolChangeData, RaydiumCLMMInstructionItem, RaydiumCLMMPoolState,
+    PoolMonitorData, RaydiumCLMMInstructionItem, RaydiumCLMMPoolState, TickArrayMonitorData,
 };
 use crate::dex::raydium_clmm::sdk::config::AmmConfig;
-use crate::dex::raydium_clmm::sdk::tick_array::TICK_ARRAY_SIZE_USIZE;
 use crate::dex::raydium_clmm::sdk::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::raydium_clmm::sdk::utils::load_cur_and_next_specify_count_tick_array;
 use crate::dex::raydium_clmm::sdk::{config, utils};
 use crate::dex::{get_ata_program, get_mint_program};
 use crate::file_db::DexJson;
-use crate::interface::GrpcAccountUpdateType::TickArray;
-use crate::interface::GrpcMessage::RaydiumCLMMData;
+use crate::interface::GrpcAccountUpdateType::TickArrayState;
+use crate::interface::GrpcMessage::RaydiumClmmMonitorData;
 use crate::interface::{
     AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, DexType, GrpcAccountUpdateType,
     GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem, InstructionItemCreator, Quoter,
@@ -18,7 +17,6 @@ use crate::interface::{
 };
 use anyhow::anyhow;
 use anyhow::Result;
-use base58::ToBase58;
 use borsh::BorshDeserialize;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
@@ -29,12 +27,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
-use yellowstone_grpc_proto::geyser::{
-    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
-    SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts,
-    SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
-};
+use yellowstone_grpc_proto::geyser::SubscribeRequest;
 
 pub struct RaydiumCLMMDex;
 
@@ -186,33 +179,28 @@ impl ReadyGrpcMessageOperator for RaydiumCLMMGrpcMessageOperator {
     fn parse_message(
         &self,
         update_account: AccountUpdate,
-    ) -> Result<((String, Pubkey), GrpcMessage)> {
+    ) -> Result<(Option<(String, Pubkey)>, GrpcMessage)> {
         let account_type = &update_account.account_type;
         let account = &update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
             let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
-            let txn = &update_account_info
-                .txn_signature
-                .as_ref()
-                .unwrap()
-                .to_base58();
-            let txn = txn.clone();
             match account_type {
                 GrpcAccountUpdateType::Pool => Ok((
-                    (txn, pool_id),
-                    RaydiumCLMMData(
-                        PoolChangeData::try_from_slice(data)?,
+                    None,
+                    RaydiumClmmMonitorData(
+                        PoolMonitorData::try_from_slice(data)?,
+                        pool_id,
                         update_account.instant,
+                        update_account.account.slot,
                     ),
                 )),
-                TickArray => {
-                    let tick_array =
-                        crate::dex::raydium_clmm::pool_state::TickArray::try_from_slice(&data)?;
+                TickArrayState => {
+                    let tick_array = TickArrayMonitorData::try_from_slice(&data)?;
                     if tick_array.initialized_tick_count > 0 {
                         Ok((
-                            ("".to_string(), Pubkey::default()),
-                            GrpcMessage::RaydiumCLMMTickArrayData(
+                            None,
+                            GrpcMessage::RaydiumClmmTickArrayMonitorData(
                                 tick_array,
                                 update_account.instant,
                             ),
@@ -240,147 +228,12 @@ impl GrpcSubscribeRequestGenerator for RaydiumCLMMSubscribeRequestCreator {
         &self,
         pools: &[Pool],
     ) -> Option<Vec<(SubscribeKey, SubscribeRequest)>> {
-        let mut all_subscribe_request = Vec::with_capacity(100);
-        let mut subscribe_pool_accounts = HashMap::new();
-        subscribe_pool_accounts.insert(
-            format!("{:?}", DexType::RaydiumCLmm),
-            SubscribeRequestFilterAccounts {
-                account: pools
-                    .iter()
-                    .map(|pool| pool.pool_id.to_string())
-                    .collect::<Vec<_>>(),
-                ..Default::default()
-            },
-        );
-        let pool_request = SubscribeRequest {
-            accounts: subscribe_pool_accounts,
-            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-            accounts_data_slice: vec![
-                // liquidity
-                SubscribeRequestAccountsDataSlice {
-                    offset: 237,
-                    length: 16,
-                },
-                // sqrt_price_x64
-                SubscribeRequestAccountsDataSlice {
-                    offset: 253,
-                    length: 16,
-                },
-                // tick_current
-                SubscribeRequestAccountsDataSlice {
-                    offset: 269,
-                    length: 4,
-                },
-                // tick_array_bitmap
-                SubscribeRequestAccountsDataSlice {
-                    offset: 904,
-                    length: 128,
-                },
-                // total_fees_token_0
-                SubscribeRequestAccountsDataSlice {
-                    offset: 1032,
-                    length: 8,
-                },
-                // total_fees_token_1
-                SubscribeRequestAccountsDataSlice {
-                    offset: 1048,
-                    length: 8,
-                },
-            ],
-            ..Default::default()
-        };
-        all_subscribe_request.push((
-            (DexType::RaydiumCLmm, GrpcAccountUpdateType::Pool),
-            pool_request,
-        ));
-        let mut tick_arrays_subscribe_accounts = HashMap::new();
-        for (index, pool) in pools.iter().enumerate() {
-            tick_arrays_subscribe_accounts.insert(
-                format!("{:?}:{:?}:{:?}", DexType::RaydiumCLmm, TickArray, index),
-                SubscribeRequestFilterAccounts {
-                    nonempty_txn_signature:None,
-                    account: vec![],
-                    owner: vec![DexType::RaydiumCLmm.get_program_id().to_string()],
-                    filters: vec![
-                        SubscribeRequestFilterAccountsFilter {
-                            filter: Some(Filter::Datasize(10240)),
-                        },
-                        SubscribeRequestFilterAccountsFilter {
-                            filter: Some(
-                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp{
-                                    offset: 8,
-                                    data: Some(
-                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
-                                            pool.pool_id.to_bytes().to_vec(),
-                                        ),
-                                    ),
-                                }),
-                            ),
-                        },
-                    ],
-                },
-            );
-        }
-        let mut tick_arrays_data_slice = vec![
-            // pool_id
-            SubscribeRequestAccountsDataSlice {
-                offset: 8,
-                length: 32,
-            },
-            // start_tick_index
-            SubscribeRequestAccountsDataSlice {
-                offset: 40,
-                length: 4,
-            },
-        ];
-        let mut start_index = 40 + 4;
-        // ticks 60个
-        for _ in 0..TICK_ARRAY_SIZE_USIZE {
-            // tick
-            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
-                offset: start_index,
-                length: 4,
-            });
-            start_index += 4;
-            // liquidity_net
-            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
-                offset: start_index,
-                length: 16,
-            });
-            start_index += 16;
-            // liquidity_gross
-            tick_arrays_data_slice.push(SubscribeRequestAccountsDataSlice {
-                offset: start_index,
-                length: 16,
-            });
-            start_index += 16;
-            // fee_growth_outside_0_x64
-            start_index += 16;
-            // fee_growth_outside_1_x64
-            start_index += 16;
-            // reward_growths_outside_x64
-            start_index += 16 * 3;
-            // padding
-            start_index += 13 * 4;
-        }
-        tick_arrays_data_slice.push(
-            // initialized_tick_count
-            SubscribeRequestAccountsDataSlice {
-                offset: 10124,
-                length: 1,
-            },
-        );
-        let tick_arrays_subscribe_request = SubscribeRequest {
-            accounts: tick_arrays_subscribe_accounts,
-            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-            accounts_data_slice: tick_arrays_data_slice,
-            ..Default::default()
-        };
-        all_subscribe_request.push((
-            (DexType::RaydiumCLmm, GrpcAccountUpdateType::TickArray),
-            tick_arrays_subscribe_request,
-        ));
-        Some(all_subscribe_request)
+        Some(vec![
+            // 池子订阅
+            PoolMonitorData::subscribe_request(pools),
+            // TickArrayState订阅
+            TickArrayMonitorData::subscribe_request(pools),
+        ])
     }
 }
 

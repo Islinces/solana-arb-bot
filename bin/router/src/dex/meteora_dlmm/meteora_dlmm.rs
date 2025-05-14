@@ -548,19 +548,13 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
     fn parse_message(
         &self,
         update_account: AccountUpdate,
-    ) -> Result<((String, Pubkey), GrpcMessage)> {
+    ) -> Result<(Option<(String, Pubkey)>, GrpcMessage)> {
         let account_type = &update_account.account_type;
         let account = &update_account.account;
         if let Some(update_account_info) = &account.account {
             let data = &update_account_info.data;
-
             match account_type {
                 GrpcAccountUpdateType::Pool => {
-                    let txn = &update_account_info
-                        .txn_signature
-                        .as_ref()
-                        .unwrap()
-                        .to_base58();
                     let pool_id = Pubkey::try_from(update_account_info.pubkey.clone()).unwrap();
                     let src = array_ref![data, 0, 165];
                     let (
@@ -577,8 +571,8 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                         _activation_point,
                     ) = array_refs![src, 4, 4, 4, 8, 1, 4, 2, 1, 1, 128, 8];
                     Ok((
-                        (txn.clone(), pool_id),
-                        GrpcMessage::MeteoraDLMMPoolData {
+                        None,
+                        GrpcMessage::MeteoraDlmmPoolMonitorData {
                             pool_id,
                             active_id: i32::from_le_bytes(*active_id),
                             bin_array_bitmap: bin_array_bitmap
@@ -596,8 +590,8 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                     ))
                 }
                 GrpcAccountUpdateType::BinArray => Ok((
-                    ("".to_string(), Pubkey::default()),
-                    GrpcMessage::MeteoraDLMMBinArrayData(
+                    None,
+                    GrpcMessage::MeteoraDlmmBinArrayMonitorData(
                         BinArrayAccount::deserialize(data)?.0,
                         update_account.instant,
                     ),
@@ -605,7 +599,7 @@ impl ReadyGrpcMessageOperator for MeteoraDLMMGrpcMessageOperator {
                 GrpcAccountUpdateType::Clock => {
                     let clock: Clock = serde_json::from_slice(data)?;
                     Ok((
-                        ("".to_string(), Pubkey::default()),
+                        None,
                         GrpcMessage::Clock(clock),
                     ))
                 }
