@@ -1,11 +1,11 @@
 [
   {
-    "pool": "Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v",
-    "owner": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
-    "mintA": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "mintB": "So11111111111111111111111111111111111111112",
-    "vaultA": "nML7msD1MiJHxFvhv4po1u6C4KpWr64ugKqc75DMuD2",
-    "vaultB": "EjHirXt2bQd2DDNveagHHCWYzUwtY1iwNbBrV5j84e6j",
-    "addressLookupTableAddress": "7KgsCbuJAXxELXhpzc9PwX7GenoF3UsuuW71qW1Gr3u9"
+    "pubkey": "8sLbNZoA1cfnvMJLPfp98ZLAnFSYCFApfJKMbiXNLwxj",
+    "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+    "mintA": "So11111111111111111111111111111111111111112",
+    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "vaultA": "6P4tvbzRY6Bh3MiWDHuLqyHywovsRwRpfskPvyeSoHsz",
+    "vaultB": "6mK4Pxs6GhwnessH7CvPivqDYauiHZmAdbEFDpXFk9zt",
+    "addressLookupTableAddress": "D6XNrxMsDoABJVVY5YyHxJuAB6WGzYCXpZeKyNtqu2v4"
   }
 ]
