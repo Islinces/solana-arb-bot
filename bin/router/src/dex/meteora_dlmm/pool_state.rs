@@ -14,6 +14,7 @@ use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
+use tracing::info;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
     subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
@@ -191,19 +192,30 @@ impl MeteoraDLMMPoolState {
 
     pub fn try_update(&mut self, grpc_message: GrpcMessage) -> anyhow::Result<()> {
         match grpc_message {
-            GrpcMessage::MeteoraDlmmPoolMonitorData(pool_monitor_data,..)
-            => {
-                let mut changed = change_data_if_not_same(&mut self.active_id, pool_monitor_data.active_id);
-                changed |= change_data_if_not_same(&mut self.bin_array_bitmap, pool_monitor_data.bin_array_bitmap);
+            GrpcMessage::MeteoraDlmmPoolMonitorData(pool_monitor_data, _, _, slot, ..) => {
+                let mut changed =
+                    change_data_if_not_same(&mut self.active_id, pool_monitor_data.active_id);
+                changed |= change_data_if_not_same(
+                    &mut self.bin_array_bitmap,
+                    pool_monitor_data.bin_array_bitmap,
+                );
                 changed |= change_data_if_not_same(
                     &mut self.volatility_accumulator,
                     pool_monitor_data.volatility_accumulator,
                 );
-                changed |=
-                    change_data_if_not_same(&mut self.volatility_reference, pool_monitor_data.volatility_reference);
-                changed |= change_data_if_not_same(&mut self.index_reference, pool_monitor_data.index_reference);
-                changed |=
-                    change_data_if_not_same(&mut self.last_update_timestamp, pool_monitor_data.last_update_timestamp);
+                changed |= change_data_if_not_same(
+                    &mut self.volatility_reference,
+                    pool_monitor_data.volatility_reference,
+                );
+                changed |= change_data_if_not_same(
+                    &mut self.index_reference,
+                    pool_monitor_data.index_reference,
+                );
+                changed |= change_data_if_not_same(
+                    &mut self.last_update_timestamp,
+                    pool_monitor_data.last_update_timestamp,
+                );
+                info!("meteora dlmm slot : {}, changed: {}", slot, changed);
                 if changed {
                     Ok(())
                 } else {
