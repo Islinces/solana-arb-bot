@@ -89,6 +89,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
         let amount_in = quote_result.amount_in;
         let amount_in = amount_in;
         let grpc_cost = quote_result.grop_cost.unwrap_or(0);
+        let calc_direction = quote_result.instruction_items.iter().map(|item| item.get_pool_id().to_string()).collect::<Vec<_>>().join(" -> ");
         let calac_format = format!(
             "{} -> {} -> {}, profit : {}",
             amount_in, quote_result.first_amount_out, quote_result.amount_out, quote_result.profit
@@ -150,7 +151,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                 }
                 let send_jito_request_cost = jito_request_start.elapsed();
 
-                info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}, 计算过程: {}",
+                info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}, 计算方向: {}, 计算过程: {}",
                     start_time.unwrap().elapsed().as_millis(),
                     grpc_cost,
                     route_calculate_cost.unwrap(),
@@ -159,6 +160,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     (amount_in as f64).div(10_i32.pow(9) as f64),
                     latest_blockhash.to_string().get(40..).unwrap(),
                     bundle_id,
+                    calc_direction,
                     calac_format
                 );
                 Ok(())
