@@ -174,6 +174,15 @@ pub enum InstructionItem {
 }
 
 impl InstructionItem {
+    pub fn get_pool_id(&self) -> Pubkey {
+        match self {
+            InstructionItem::RaydiumAMM(item) => item.pool_id.clone(),
+            InstructionItem::RaydiumCLMM(item) => item.pool_id.clone(),
+            InstructionItem::PumpFunAMM(item) => item.pool_id.clone(),
+            InstructionItem::MeteoraDLMM(item) => item.pool_id.clone(),
+        }
+    }
+
     pub fn get_swap_type(&self) -> (Swap, Pubkey) {
         match self {
             InstructionItem::RaydiumAMM(_) => (Raydium, DexType::RaydiumAMM.get_program_id()),
