@@ -242,7 +242,7 @@ pub struct RaydiumCLMMSnapshotFetcher;
 impl RaydiumCLMMSnapshotFetcher {
     async fn generate_all_config_keys(&self, rpc_client: Arc<RpcClient>) -> HashMap<Pubkey, u32> {
         let mut all_amm_config_keys = Vec::new();
-        for index in 0..=15 {
+        for index in 0..=50 {
             let index = index as u16;
             let (amm_config_key, __bump) = Pubkey::find_program_address(
                 &[config::AMM_CONFIG_SEED.as_bytes(), &index.to_be_bytes()],
