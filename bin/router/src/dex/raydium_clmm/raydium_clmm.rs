@@ -261,10 +261,14 @@ impl RaydiumCLMMSnapshotFetcher {
             .into_iter()
             .zip(all_amm_config_keys)
             .filter_map(|(account, config_key)| {
-                if let Ok(amm_config_state) =
-                    AmmConfig::try_from_slice(&account.as_ref().unwrap().data[8..])
-                {
-                    Some((config_key, amm_config_state.trade_fee_rate))
+                if let Some(account) = account {
+                    if let Ok(amm_config_state) =
+                        AmmConfig::try_from_slice(&account.data[8..])
+                    {
+                        Some((config_key, amm_config_state.trade_fee_rate))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
