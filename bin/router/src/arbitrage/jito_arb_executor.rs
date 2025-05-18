@@ -135,23 +135,24 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     .json(&data)
                     .send()
                     .await;
+
                 match jito_response {
                     Ok(response) => {
-                        match response.text().await {
-                            Ok(result) => {
-                                bundle_id = result;
-                            }
-                            Err(err) => {
-                                error!("Jito error: {:#?}", err);
-                                bundle_id = "".to_string();
-                            }
+                        let v: serde_json::Value = response.json().await?;
+                        bundle_id = if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
+                            Ok(id.to_owned())
+                        } else if let Some(msg) = v
+                            .get("error")
+                            .and_then(|e| e.get("message"))
+                            .and_then(|m| m.as_str())
+                        {
+                            Ok(format!("Jito returned error: {}", msg))
+                        } else {
+                            Ok(format!("Unknown response format: {}", v))
                         }
-                        // bundle_id = response.json::<String>().await?;
-                        // info!("Jito successful, bundle : {}", bundle_id);
                     }
                     Err(e) => {
-                        bundle_id = "".to_string();
-                        error!("Jito error: {}", e);
+                        bundle_id = Ok(format!("Jito returned error: {}", e));
                     }
                 }
                 let send_jito_request_cost = jito_request_start.elapsed();
@@ -164,7 +165,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     send_jito_request_cost.as_millis(),
                     (amount_in as f64).div(10_i32.pow(9) as f64),
                     latest_blockhash.to_string().get(40..).unwrap(),
-                    bundle_id,
+                    bundle_id.unwrap(),
                     calc_direction,
                     calac_format
                 );
