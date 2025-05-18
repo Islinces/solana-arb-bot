@@ -89,7 +89,12 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
         let amount_in = quote_result.amount_in;
         let amount_in = amount_in;
         let grpc_cost = quote_result.grop_cost.unwrap_or(0);
-        let calc_direction = quote_result.instruction_items.iter().map(|item| item.get_pool_id().to_string()).collect::<Vec<_>>().join(" -> ");
+        let calc_direction = quote_result
+            .instruction_items
+            .iter()
+            .map(|item| item.get_key())
+            .collect::<Vec<_>>()
+            .join(" -> ");
         let calac_format = format!(
             "{} -> {} -> {}, profit : {}",
             amount_in, quote_result.first_amount_out, quote_result.amount_out, quote_result.profit
