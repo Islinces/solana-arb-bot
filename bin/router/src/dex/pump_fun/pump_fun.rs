@@ -93,6 +93,8 @@ impl InstructionItemCreator for PumpFunDex {
                 mint_1_vault: pool_state.mint_1_vault,
                 alt: pool.alt.clone(),
                 zero_to_one: in_mint == &pool.mint_0(),
+                coin_creator_vault_ata: pool_state.coin_creator_vault_ata,
+                coin_creator_vault_authority: pool_state.coin_creator_vault_authority,
             }))
         } else {
             None
@@ -179,6 +181,13 @@ impl AccountMetaConverter for PumpFunDex {
                 // 17.pump fun program
                 accounts.push(AccountMeta::new_readonly(
                     DexType::PumpFunAMM.get_program_id(),
+                    false,
+                ));
+                // 18.Coin Creator Vault Ata
+                accounts.push(AccountMeta::new(item.coin_creator_vault_ata, false));
+                // 19.Coin Creator Vault Authority
+                accounts.push(AccountMeta::new_readonly(
+                    item.coin_creator_vault_authority,
                     false,
                 ));
                 Some((
@@ -332,7 +341,7 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                                     commitment: Some(CommitmentConfig::finalized()),
                                     data_slice: Some(UiDataSliceConfig {
                                         offset: 8,
-                                        length: 203,
+                                        length: 235,
                                     }),
                                     ..Default::default()
                                 },
@@ -373,6 +382,22 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                         if vault_accounts.len() != 2 {
                             continue;
                         }
+                        let coin_creator = pool_state.coin_creator;
+                        let quote_mint = pool_state.quote_mint;
+                        let token_program =
+                            rpc_client.get_account(&quote_mint).await.unwrap().owner;
+                        let (coin_creator_vault_authority, _) = Pubkey::find_program_address(
+                            &[b"creator_vault", coin_creator.to_bytes().as_ref()],
+                            &DexType::PumpFunAMM.get_program_id(),
+                        );
+                        let (coin_creator_vault_ata, _) = Pubkey::find_program_address(
+                            &[
+                                coin_creator_vault_authority.to_bytes().as_ref(),
+                                token_program.to_bytes().as_ref(),
+                                quote_mint.to_bytes().as_ref(),
+                            ],
+                            &get_ata_program(),
+                        );
                         let alt = match chunks_pool_json.get(index) {
                             None => None,
                             Some(accounts) => Some(
@@ -392,9 +417,7 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                                 Mint {
                                     mint: pool_state.base_mint,
                                 },
-                                Mint {
-                                    mint: pool_state.quote_mint,
-                                },
+                                Mint { mint: quote_mint },
                             ],
                             state: PoolState::PumpFunAMM(PumpFunPoolState::new(
                                 pool_state.pool_base_token_account,
@@ -403,6 +426,8 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                                 vault_accounts.last().unwrap().amount,
                                 global_config.lp_fee_basis_points,
                                 global_config.protocol_fee_basis_points,
+                                coin_creator_vault_ata,
+                                coin_creator_vault_authority,
                             )),
                             alt: alt.unwrap(),
                         })

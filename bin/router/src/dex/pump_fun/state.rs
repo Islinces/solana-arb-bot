@@ -14,6 +14,7 @@ pub struct Pool {
     pub pool_base_token_account: Pubkey,
     pub pool_quote_token_account: Pubkey,
     pub lp_supply: u64,
+    pub coin_creator: Pubkey,
 }
 
 // #[account]

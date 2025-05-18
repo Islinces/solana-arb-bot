@@ -1,9 +1,9 @@
 use crate::dex::common::utils::change_data_if_not_same;
 use crate::interface::{DexType, GrpcMessage};
 use anyhow::anyhow;
-use std::fmt::{Debug, Display, Formatter};
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::pubkey::Pubkey;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub struct PumpFunPoolState {
@@ -13,6 +13,8 @@ pub struct PumpFunPoolState {
     pub mint_1_vault_amount: u64,
     pub lp_fee_basis_points: u64,
     pub protocol_fee_basis_points: u64,
+    pub coin_creator_vault_ata: Pubkey,
+    pub coin_creator_vault_authority: Pubkey,
 }
 
 impl PumpFunPoolState {
@@ -23,6 +25,8 @@ impl PumpFunPoolState {
         mint_1_vault_amount: u64,
         lp_fee_basis_points: u64,
         protocol_fee_basis_points: u64,
+        coin_creator_vault_ata: Pubkey,
+        coin_creator_vault_authority: Pubkey,
     ) -> Self {
         Self {
             mint_0_vault,
@@ -31,6 +35,8 @@ impl PumpFunPoolState {
             mint_1_vault_amount,
             lp_fee_basis_points,
             protocol_fee_basis_points,
+            coin_creator_vault_ata,
+            coin_creator_vault_authority,
         }
     }
 
@@ -69,6 +75,8 @@ pub struct PumpFunInstructionItem {
     pub mint_1_vault: Pubkey,
     pub alt: AddressLookupTableAccount,
     pub zero_to_one: bool,
+    pub coin_creator_vault_ata: Pubkey,
+    pub coin_creator_vault_authority: Pubkey,
 }
 
 impl Display for PumpFunInstructionItem {
