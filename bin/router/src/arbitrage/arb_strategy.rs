@@ -9,10 +9,13 @@ use burberry::{ActionSubmitter, Strategy};
 use futures_util::TryFutureExt;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio::runtime::{Builder, Handle, RuntimeFlavor};
 use tokio::sync::{Mutex, RwLock};
-use tracing::error;
+use tracing::{error, info};
 
 #[macro_export]
 macro_rules! run_in_tokio {
@@ -127,6 +130,8 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
         }
         self.protocol_grpc_sender = Some(grpc_message_sender_maps);
         let (init_tx, mut init_rx) = tokio::sync::mpsc::channel(self.arb_worker_size);
+        let current_mills = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
+        let last_log_time = Arc::new(AtomicU64::new(current_mills));
         for index in 0..self.arb_worker_size {
             let swap_action_sender = submitter.clone();
             let ready_grpc_data_receiver = ready_data_receiver.clone();
@@ -136,6 +141,7 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
             let profit_threshold = self.profit_threshold;
             let dex_json_path = self.dex_json_path.clone();
             let start_amount_in = self.start_amount_in.clone();
+            let log_time = last_log_time.clone();
             let _ = std::thread::Builder::new()
                 .stack_size(128 * 1024 * 1024) // 128 MB
                 .name(format!("route-worker-{:?}", index))
@@ -151,6 +157,7 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
                         profit_threshold,
                         start_amount_in,
                         sol_ata_amount,
+                        log_time,
                     );
                     let _ = arb_worker.run().unwrap_or_else(|e| {
                         panic!("worker of [arb-worker-{index}] panicked: {e:?}")
@@ -160,6 +167,19 @@ impl Strategy<SourceMessage, Action> for ArbStrategy {
         for _ in 0..self.arb_worker_size {
             init_rx.recv().await.expect("worker initialization failed");
         }
+        let previous_log_time = Arc::new(AtomicU64::new(current_mills));
+        let log_time_clone = last_log_time.clone();
+        let previous_log_time_clone = previous_log_time.clone();
+        thread::spawn(move || loop {
+            let previous_logged = previous_log_time_clone.load(Ordering::Relaxed);
+            let last_logged = log_time_clone.load(Ordering::Relaxed);
+
+            if last_logged - previous_logged >= 30_000 {
+                info!("30s内有更新缓存和quote...");
+                previous_log_time_clone.store(last_logged, Ordering::Relaxed);
+            }
+            thread::sleep(Duration::from_millis(1000));
+        });
         Ok(())
     }
 

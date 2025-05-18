@@ -4,9 +4,13 @@ use crate::interface::GrpcMessage;
 use async_channel::Receiver;
 use burberry::ActionSubmitter;
 use eyre::Context;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
-use tracing::warn;
+use tokio::time::Instant;
+use tracing::{info, warn};
 
 pub struct Arb {
     dex: Arc<DexData>,
@@ -15,6 +19,7 @@ pub struct Arb {
     profit_threshold: u64,
     start_amount_in: u64,
     sol_ata_amount: Arc<RwLock<u64>>,
+    last_log_time:Arc<AtomicU64>,
 }
 
 impl Arb {
@@ -25,6 +30,7 @@ impl Arb {
         profit_threshold: u64,
         start_amount_in: u64,
         sol_ata_amount: Arc<RwLock<u64>>,
+        last_log_time:Arc<AtomicU64>,
     ) -> Self {
         Self {
             dex,
@@ -33,6 +39,7 @@ impl Arb {
             profit_threshold,
             start_amount_in,
             sol_ata_amount,
+            last_log_time,
         }
     }
 
@@ -40,21 +47,24 @@ impl Arb {
     pub async fn run(self) -> anyhow::Result<()> {
         loop {
             tokio::select! {
-                message = self.ready_grpc_data_receiver.recv() => {
-                    let sol_ata_amount = {
-                        let  guard = self.sol_ata_amount.read().await;
-                        *guard
-                    };
-                    if let Some(quote_result) = self.dex.update_cache_and_find_route(
-                        message.context("").unwrap(),
-                        self.profit_threshold,
-                        self.start_amount_in,
-                        sol_ata_amount
-                    ).await {
-                            self.swap_sender.submit(Action::SWAP(quote_result));
+                        message = self.ready_grpc_data_receiver.recv() => {
+                            self.last_log_time.store(SystemTime::now()
+                                .duration_since(UNIX_EPOCH)?
+                                .as_millis() as u64, Ordering::Relaxed);
+                            let sol_ata_amount = {
+                                let  guard = self.sol_ata_amount.read().await;
+                                *guard
+                            };
+                            if let Some(quote_result) = self.dex.update_cache_and_find_route(
+                                message.context("").unwrap(),
+                                self.profit_threshold,
+                                self.start_amount_in,
+                                sol_ata_amount
+                            ).await {
+                                    self.swap_sender.submit(Action::SWAP(quote_result));
+                            }
+                        } else=> warn!("ready_grpc_data_receiver closed")
                     }
-                } else=> warn!("ready_grpc_data_receiver closed")
-            }
         }
     }
 }
