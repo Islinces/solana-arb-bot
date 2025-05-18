@@ -140,19 +140,19 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     Ok(response) => {
                         let v: serde_json::Value = response.json().await?;
                         bundle_id = if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
-                            Ok(id.to_owned())
+                            id.to_owned()
                         } else if let Some(msg) = v
                             .get("error")
                             .and_then(|e| e.get("message"))
                             .and_then(|m| m.as_str())
                         {
-                            Ok(format!("Jito returned error: {}", msg))
+                            format!("Jito returned error: {}", msg)
                         } else {
-                            Ok(format!("Unknown response format: {}", v))
+                            format!("Unknown response format: {}", v)
                         }
                     }
                     Err(e) => {
-                        bundle_id = Ok(format!("Jito returned error: {}", e));
+                        bundle_id = format!("Jito returned error: {}", e);
                     }
                 }
                 let send_jito_request_cost = jito_request_start.elapsed();
@@ -165,7 +165,7 @@ impl Executor<DexQuoteResult> for JitoArbExecutor {
                     send_jito_request_cost.as_millis(),
                     (amount_in as f64).div(10_i32.pow(9) as f64),
                     latest_blockhash.to_string().get(40..).unwrap(),
-                    bundle_id.unwrap(),
+                    bundle_id,
                     calc_direction,
                     calac_format
                 );
