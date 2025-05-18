@@ -384,8 +384,11 @@ impl AccountSnapshotFetcher for PumpFunAccountSnapshotFetcher {
                         }
                         let coin_creator = pool_state.coin_creator;
                         let quote_mint = pool_state.quote_mint;
-                        let token_program =
-                            rpc_client.get_account(&quote_mint).await.unwrap().owner;
+                        let token_program = if quote_mint == spl_token::native_mint::ID {
+                            spl_token::ID
+                        } else {
+                            rpc_client.get_account(&quote_mint).await.unwrap().owner
+                        };
                         let (coin_creator_vault_authority, _) = Pubkey::find_program_address(
                             &[b"creator_vault", coin_creator.to_bytes().as_ref()],
                             &DexType::PumpFunAMM.get_program_id(),
