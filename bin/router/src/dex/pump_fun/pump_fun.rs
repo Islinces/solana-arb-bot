@@ -144,15 +144,16 @@ impl AccountMetaConverter for PumpFunDex {
                 // 9.quote mint vault
                 accounts.push(AccountMeta::new(item.mint_1_vault, false));
                 // 10.fee account
+                let fee_account = crate::dex::pump_fun::get_fee_account_with_rand();
                 accounts.push(AccountMeta::new_readonly(
-                    crate::dex::pump_fun::get_fee_account_with_rand(),
+                    fee_account.clone(),
                     false,
                 ));
                 // 11.pump fun sol ata 小费账户
                 accounts.push(AccountMeta::new(
                     Pubkey::find_program_address(
                         &[
-                            &wallet.to_bytes(),
+                            &fee_account.to_bytes(),
                             &get_mint_program().to_bytes(),
                             &spl_token::native_mint::id().to_bytes(),
                         ],
