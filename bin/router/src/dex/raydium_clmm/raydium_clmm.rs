@@ -104,7 +104,11 @@ impl AccountMetaConverter for RaydiumCLMMDex {
         &self,
         wallet: Pubkey,
         instruction_item: InstructionItem,
-    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+    ) -> Option<(
+        Vec<AccountMeta>,
+        [(Pubkey, Pubkey); 2],
+        Vec<AddressLookupTableAccount>,
+    )> {
         match instruction_item {
             InstructionItem::RaydiumCLMM(item) => {
                 let mut accounts = Vec::with_capacity(11);
@@ -166,7 +170,11 @@ impl AccountMetaConverter for RaydiumCLMMDex {
                     false,
                 ));
                 accounts.extend(tick_arrays);
-                Some((accounts, vec![item.alt]))
+                Some((
+                    accounts,
+                    [(item.mint_0, coin_ata), (item.mint_1, pc_ata)],
+                    vec![item.alt],
+                ))
             }
             _ => None,
         }
@@ -262,9 +270,7 @@ impl RaydiumCLMMSnapshotFetcher {
             .zip(all_amm_config_keys)
             .filter_map(|(account, config_key)| {
                 if let Some(account) = account {
-                    if let Ok(amm_config_state) =
-                        AmmConfig::try_from_slice(&account.data[8..])
-                    {
+                    if let Ok(amm_config_state) = AmmConfig::try_from_slice(&account.data[8..]) {
                         Some((config_key, amm_config_state.trade_fee_rate))
                     } else {
                         None

@@ -5,7 +5,7 @@ use crate::dex::pump_fun::pool_state::{PumpFunInstructionItem, PumpFunPoolState}
 use crate::dex::pump_fun::state::GlobalConfig;
 use crate::dex::{get_ata_program, get_mint_program, get_system_program};
 use crate::file_db::DexJson;
-use crate::interface::GrpcMessage::{PumpFunAmmPoolMonitorData};
+use crate::interface::GrpcMessage::PumpFunAmmPoolMonitorData;
 use crate::interface::{
     AccountMetaConverter, AccountSnapshotFetcher, AccountUpdate, Dex, DexType,
     GrpcAccountUpdateType, GrpcMessage, GrpcSubscribeRequestGenerator, InstructionItem,
@@ -105,7 +105,11 @@ impl AccountMetaConverter for PumpFunDex {
         &self,
         wallet: Pubkey,
         instruction_item: InstructionItem,
-    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+    ) -> Option<(
+        Vec<AccountMeta>,
+        [(Pubkey, Pubkey); 2],
+        Vec<AddressLookupTableAccount>,
+    )> {
         match instruction_item {
             InstructionItem::PumpFunAMM(item) => {
                 let mut accounts = Vec::with_capacity(17);
@@ -145,10 +149,7 @@ impl AccountMetaConverter for PumpFunDex {
                 accounts.push(AccountMeta::new(item.mint_1_vault, false));
                 // 10.fee account
                 let fee_account = crate::dex::pump_fun::get_fee_account_with_rand();
-                accounts.push(AccountMeta::new_readonly(
-                    fee_account.clone(),
-                    false,
-                ));
+                accounts.push(AccountMeta::new_readonly(fee_account.clone(), false));
                 // 11.pump fun sol ata 小费账户
                 accounts.push(AccountMeta::new(
                     Pubkey::find_program_address(
@@ -180,7 +181,11 @@ impl AccountMetaConverter for PumpFunDex {
                     DexType::PumpFunAMM.get_program_id(),
                     false,
                 ));
-                Some((accounts, vec![item.alt]))
+                Some((
+                    accounts,
+                    [(item.mint_0, base_ata), (item.mint_1, quote_ata)],
+                    vec![item.alt],
+                ))
             }
             _ => None,
         }

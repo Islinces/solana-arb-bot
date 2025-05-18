@@ -111,7 +111,11 @@ impl AccountMetaConverter for MeteoraDLMMDex {
         &self,
         wallet: Pubkey,
         instruction_item: InstructionItem,
-    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+    ) -> Option<(
+        Vec<AccountMeta>,
+        [(Pubkey, Pubkey); 2],
+        Vec<AddressLookupTableAccount>,
+    )> {
         match instruction_item {
             InstructionItem::MeteoraDLMM(item) => {
                 let mut accounts = Vec::with_capacity(20);
@@ -148,7 +152,7 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                     accounts.push(AccountMeta::new(mint_0_ata, false));
                     // 6.mint_1 ata
                     accounts.push(AccountMeta::new(mint_1_ata, false));
-                }else {
+                } else {
                     // 5.mint_1 ata
                     accounts.push(AccountMeta::new(mint_1_ata, false));
                     // 6.mint_0 ata
@@ -188,7 +192,11 @@ impl AccountMetaConverter for MeteoraDLMMDex {
                     .map(|k| AccountMeta::new(k, false))
                     .collect::<Vec<_>>();
                 accounts.extend(bin_arrays);
-                Some((accounts, vec![item.alt]))
+                Some((
+                    accounts,
+                    [(item.mint_0, mint_0_ata), (item.mint_1, mint_1_ata)],
+                    vec![item.alt],
+                ))
             }
             _ => None,
         }
@@ -219,10 +227,10 @@ impl GrpcSubscribeRequestGenerator for MeteoraDLMMGrpcSubscribeRequestGenerator 
         Some(vec![
             PoolMonitorData::subscribe_request(pools),
             BinArray::subscribe_request(pools),
-            (
-                (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
-                clock_request,
-            ),
+            // (
+            //     (DexType::MeteoraDLMM, GrpcAccountUpdateType::Clock),
+            //     clock_request,
+            // ),
         ])
     }
 }

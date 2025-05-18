@@ -123,7 +123,11 @@ impl AccountMetaConverter for RaydiumAmmDex {
         &self,
         wallet: Pubkey,
         instruction_item: InstructionItem,
-    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+    ) -> Option<(
+        Vec<AccountMeta>,
+        [(Pubkey, Pubkey); 2],
+        Vec<AddressLookupTableAccount>,
+    )> {
         match instruction_item {
             InstructionItem::RaydiumAMM(item) => {
                 let mut accounts = Vec::with_capacity(17);
@@ -137,16 +141,13 @@ impl AccountMetaConverter for RaydiumAmmDex {
                     false,
                 ));
                 // 4.open order
-                accounts.push(AccountMeta::new_readonly(
-                    DexType::RaydiumAMM.get_program_id(),
-                    false,
-                ));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 // 5.coin vault
                 accounts.push(AccountMeta::new(item.mint_0_vault, false));
                 // 6.pc vault
                 accounts.push(AccountMeta::new(item.mint_1_vault, false));
                 // 7.Serum Program Id
-                accounts.push(AccountMeta::new_readonly(
+                accounts.push(AccountMeta::new(
                     Pubkey::from_str("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb").unwrap(),
                     false,
                 ));
@@ -163,7 +164,7 @@ impl AccountMetaConverter for RaydiumAmmDex {
                 // 13.Serum Pc Vault Account
                 accounts.push(AccountMeta::new(item.pool_id, false));
                 // 14.Serum Vault Signer
-                accounts.push(AccountMeta::new_readonly(item.pool_id, false));
+                accounts.push(AccountMeta::new(item.pool_id, false));
                 let (coin_ata, _) = Pubkey::find_program_address(
                     &[
                         &wallet.to_bytes(),
@@ -193,7 +194,11 @@ impl AccountMetaConverter for RaydiumAmmDex {
                 }
                 // 17.wallet
                 accounts.push(AccountMeta::new(wallet, true));
-                Some((accounts, vec![item.alt]))
+                Some((
+                    accounts,
+                    [(item.mint_0, coin_ata), (item.mint_1, pc_ata)],
+                    vec![item.alt],
+                ))
             }
             _ => None,
         }

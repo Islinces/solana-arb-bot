@@ -29,7 +29,7 @@ use solana_sdk::transaction::VersionedTransaction;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_associated_token_account::{get_associated_token_address_with_program_id, solana_program};
 use spl_token::instruction::transfer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::{Div, Mul, Sub};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -216,18 +216,24 @@ impl JitoArbExecutor {
         &self,
         quote_result: DexQuoteResult,
         tip: u64,
-    ) -> Option<(Instruction, Vec<AddressLookupTableAccount>)> {
+    ) -> Option<(
+        Instruction,
+        HashSet<(Pubkey, Pubkey)>,
+        Vec<AddressLookupTableAccount>,
+    )> {
         let amount_in_mint = quote_result.amount_in_mint;
         let wallet = self.keypair.pubkey();
         let mut route_builder = RouteBuilder::new();
         let mut remaining_accounts = Vec::with_capacity(100);
         let mut alts = Vec::with_capacity(2);
+        let mut all_mint_atas = HashSet::with_capacity(quote_result.instruction_items.len() * 2);
         let mut route_plan = Vec::with_capacity(quote_result.instruction_items.len());
         for (index, item) in quote_result.instruction_items.into_iter().enumerate() {
             let (swap, program_id) = item.get_swap_type();
-            if let Some((accounts, item_alts)) = item.parse_account_meta(wallet) {
+            if let Some((accounts, mint_atas, item_alts)) = item.parse_account_meta(wallet) {
                 remaining_accounts.push(AccountMeta::new_readonly(program_id, false));
                 remaining_accounts.extend(accounts);
+                all_mint_atas.extend(mint_atas);
                 if swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm {
                     remaining_accounts.push(AccountMeta::new_readonly(JUPITER_ID, false));
                 }
@@ -261,7 +267,7 @@ impl JitoArbExecutor {
             .platform_fee_bps(0)
             .route_plan(route_plan)
             .add_remaining_accounts(remaining_accounts.as_slice());
-        Some((route_builder.instruction(), alts))
+        Some((route_builder.instruction(), all_mint_atas, alts))
     }
 
     pub fn create_jito_bundle(
@@ -278,7 +284,7 @@ impl JitoArbExecutor {
             .mul(self.tip_bps_numerator)
             .div(self.tip_bps_denominator);
 
-        let mut first_instructions = Vec::with_capacity(6);
+        let mut first_instructions = Vec::with_capacity(10);
         // 设置 CU
         first_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(
             self.calculate_compute_unit(),
@@ -288,7 +294,20 @@ impl JitoArbExecutor {
         if jupiter_swap_result.is_none() {
             return Err(anyhow!("生成 Swap ix 失败"));
         }
-        let (jupiter_swap_ix, alts) = jupiter_swap_result.unwrap();
+
+        let (jupiter_swap_ix, all_mint_atas, alts) = jupiter_swap_result.unwrap();
+        for mint_ata in all_mint_atas {
+            if self.mint_ata.clone().contains_key(&mint_ata.1) {
+                continue;
+            } else {
+                first_instructions.push(create_associated_token_account_idempotent(
+                    &wallet,
+                    &wallet,
+                    &mint_ata.0,
+                    &get_mint_program(),
+                ));
+            }
+        }
         first_instructions.push(jupiter_swap_ix);
         // MEMO
         if let Some(name) = self.bot_name.as_ref() {

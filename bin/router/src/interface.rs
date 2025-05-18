@@ -204,7 +204,11 @@ impl InstructionItem {
     pub fn parse_account_meta(
         self,
         wallet: Pubkey,
-    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)> {
+    ) -> Option<(
+        Vec<AccountMeta>,
+        [(Pubkey, Pubkey); 2],
+        Vec<AddressLookupTableAccount>,
+    )> {
         let converter = match &self {
             InstructionItem::RaydiumAMM(_) => DexType::RaydiumAMM.get_account_meta_converter(),
             InstructionItem::RaydiumCLMM(_) => DexType::RaydiumCLmm.get_account_meta_converter(),
@@ -543,5 +547,9 @@ pub trait AccountMetaConverter {
         &self,
         wallet: Pubkey,
         instruction_item: InstructionItem,
-    ) -> Option<(Vec<AccountMeta>, Vec<AddressLookupTableAccount>)>;
+    ) -> Option<(
+        Vec<AccountMeta>,
+        [(Pubkey, Pubkey); 2],
+        Vec<AddressLookupTableAccount>,
+    )>;
 }
