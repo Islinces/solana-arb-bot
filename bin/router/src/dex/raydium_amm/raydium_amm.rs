@@ -177,7 +177,7 @@ impl AccountMetaConverter for RaydiumAmmDex {
                     &[
                         &wallet.to_bytes(),
                         &get_mint_program().to_bytes(),
-                        &item.mint_0.to_bytes(),
+                        &item.mint_1.to_bytes(),
                     ],
                     &get_ata_program(),
                 );
