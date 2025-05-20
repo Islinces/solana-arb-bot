@@ -35,9 +35,9 @@ pub enum CollectorType {
     ),
     Multiple(
         (
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
+            Vec<u8>,
+            Vec<u8>,
+            Vec<u8>,
             Vec<String>,
             DateTime<Local>,
             Instant,
@@ -78,32 +78,27 @@ impl MultiSubscribeCollector {
         let raydium_pool_subscribe_request = SubscribeRequest {
             accounts: raydium_pool_account_map,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: vec![
+                // state_data.need_take_pnl_coin
+                SubscribeRequestAccountsDataSlice {
+                    offset: 192,
+                    length: 8,
+                },
+                // state_data.need_take_pnl_pc
+                SubscribeRequestAccountsDataSlice {
+                    offset: 200,
+                    length: 8,
+                },
+            ],
             ..Default::default()
         };
 
         let mut raydium_vault_account_map = HashMap::new();
         for (pool_id, vault_a, vault_b) in raydium_vault_accounts {
             raydium_vault_account_map.insert(
-                format!(
-                    "{:?}:{:?}:{:?}",
-                    pool_id,
-                    0,
-                    DexType::RaydiumAMM.get_program_id()
-                ),
+                format!("{:?}:{:?}", pool_id, DexType::RaydiumAMM.get_program_id()),
                 SubscribeRequestFilterAccounts {
-                    account: vec![vault_a.to_string()],
-                    ..Default::default()
-                },
-            );
-            raydium_vault_account_map.insert(
-                format!(
-                    "{:?}:{:?}:{:?}",
-                    pool_id,
-                    1,
-                    DexType::RaydiumAMM.get_program_id()
-                ),
-                SubscribeRequestFilterAccounts {
-                    account: vec![vault_b.to_string()],
+                    account: vec![vault_a.to_string(), vault_b.to_string()],
                     ..Default::default()
                 },
             );
@@ -111,32 +106,32 @@ impl MultiSubscribeCollector {
         let raydium_vault_subscribe_request = SubscribeRequest {
             accounts: raydium_vault_account_map,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: vec![
+                // mint
+                SubscribeRequestAccountsDataSlice {
+                    offset: 0,
+                    length: 32,
+                },
+                // amount
+                SubscribeRequestAccountsDataSlice {
+                    offset: 64,
+                    length: 8,
+                },
+                // state
+                SubscribeRequestAccountsDataSlice {
+                    offset: 108,
+                    length: 1,
+                },
+            ],
             ..Default::default()
         };
 
         let mut pump_fun_vault_account_map = HashMap::new();
         for (pool_id, vault_a, vault_b) in pump_fun_vault_accounts {
             pump_fun_vault_account_map.insert(
-                format!(
-                    "{:?}:{:?}:{:?}",
-                    pool_id,
-                    0,
-                    DexType::PumpFunAMM.get_program_id()
-                ),
+                format!("{:?}:{:?}", pool_id, DexType::PumpFunAMM.get_program_id()),
                 SubscribeRequestFilterAccounts {
-                    account: vec![vault_a.to_string()],
-                    ..Default::default()
-                },
-            );
-            pump_fun_vault_account_map.insert(
-                format!(
-                    "{:?}:{:?}:{:?}",
-                    pool_id,
-                    1,
-                    DexType::PumpFunAMM.get_program_id()
-                ),
-                SubscribeRequestFilterAccounts {
-                    account: vec![vault_b.to_string()],
+                    account: vec![vault_a.to_string(), vault_b.to_string()],
                     ..Default::default()
                 },
             );
@@ -144,6 +139,23 @@ impl MultiSubscribeCollector {
         let pump_fun_vault_subscribe_request = SubscribeRequest {
             accounts: pump_fun_vault_account_map,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            accounts_data_slice: vec![
+                // mint
+                SubscribeRequestAccountsDataSlice {
+                    offset: 0,
+                    length: 32,
+                },
+                // amount
+                SubscribeRequestAccountsDataSlice {
+                    offset: 64,
+                    length: 8,
+                },
+                // state
+                SubscribeRequestAccountsDataSlice {
+                    offset: 108,
+                    length: 1,
+                },
+            ],
             ..Default::default()
         };
 
@@ -189,9 +201,9 @@ impl MultiSubscribeCollector {
 #[async_trait]
 impl
     Collector<(
-        Option<Vec<u8>>,
-        Option<Vec<u8>>,
-        Option<Vec<u8>>,
+        Vec<u8>,
+        Vec<u8>,
+        Vec<u8>,
         Vec<String>,
         DateTime<Local>,
         Instant,
@@ -203,9 +215,9 @@ impl
         CollectorStream<
             '_,
             (
-                Option<Vec<u8>>,
-                Option<Vec<u8>>,
-                Option<Vec<u8>>,
+                Vec<u8>,
+                Vec<u8>,
+                Vec<u8>,
                 Vec<String>,
                 DateTime<Local>,
                 Instant,
@@ -224,18 +236,9 @@ impl
                         if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                             let account= account.account.unwrap();
                             yield (
-                                account.txn_signature,
-                                Some(account.pubkey),
-                                Some(account.owner),
-                                filters,
-                                time,
-                                now,
-                            );
-                        } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
-                            yield (
-                                Some(transaction.transaction.unwrap().signature),
-                                None,
-                                None,
+                                account.txn_signature.unwrap(),
+                                account.pubkey,
+                                account.owner,
                                 filters,
                                 time,
                                 now,
