@@ -136,6 +136,12 @@ impl Strategy<CollectorType, ExecutorType> for SingleStrategy {
                                             }
                                         ),
                                     );
+                                    account_push_timestamp.push(
+                                        format!(
+                                            "账户 : {:?}, GRPC推送时间 : {:?}μs",
+                                            txn, receiver_timestamp
+                                        ),
+                                    );
                                     account_push_timestamp
                                 })
                                 .collect::<Vec<_>>();
@@ -397,7 +403,7 @@ impl Strategy<CollectorType, ExecutorType> for MultiStrategy {
                                     .zip(item.3.iter())
                                     .map(|(account, timestamp)| {
                                         format!(
-                                            "账户 : {:?}, GRPC推送时间 : {:?}",
+                                            "账户 : {:?}, GRPC推送时间 : {:?}μs",
                                             account.to_string(),
                                             timestamp
                                         )
