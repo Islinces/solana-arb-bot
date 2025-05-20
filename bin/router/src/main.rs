@@ -1,9 +1,11 @@
+use burberry::{map_collector, map_executor, Engine};
 use chrono::Local;
-use router::start_bot;
-use std::env;
-use tracing::info;
+use clap::Parser;
+use router::collector::{CollectorType, MultiSubscribeCollector, SingleSubscribeCollector};
+use router::executor::{ExecutorType, SimpleExecutor};
+use router::strategy::{MultiStrategy, SingleStrategy};
+use std::collections::HashMap;
 use tracing_appender::non_blocking;
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
@@ -14,8 +16,16 @@ pub struct MicrosecondFormatter;
 
 impl FormatTime for MicrosecondFormatter {
     fn format_time(&self, w: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
-        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S%.6f"))
+        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S%.9f"))
     }
+}
+
+#[derive(Parser, Debug)]
+pub struct Command {
+    #[arg(long, required = true)]
+    grpc_subscribe_type: String,
+    #[arg(long, required = true)]
+    dex_json_path: String,
 }
 
 #[tokio::main]
@@ -38,7 +48,26 @@ async fn main() -> anyhow::Result<()> {
         )
         .with(filter)
         .init();
-    info!("arb-bot开始启动");
-    start_bot::run().await?;
+    let command = Command::parse();
+    let mut engine = Engine::default();
+    engine.add_executor(map_executor!(SimpleExecutor, ExecutorType::Simple));
+    if command.grpc_subscribe_type == "single" {
+        engine.add_collector(map_collector!(
+            SingleSubscribeCollector(command.dex_json_path),
+            CollectorType::Single
+        ));
+        engine.add_strategy(Box::new(SingleStrategy {
+            receiver_msg: HashMap::default(),
+        }));
+    } else {
+        engine.add_collector(map_collector!(
+            MultiSubscribeCollector(command.dex_json_path),
+            CollectorType::Multiple
+        ));
+        engine.add_strategy(Box::new(MultiStrategy {
+            receiver_msg: HashMap::default(),
+        }));
+    }
+    engine.run_and_join().await.unwrap();
     Ok(())
 }

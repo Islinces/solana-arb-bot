@@ -79,49 +79,11 @@ tracing-appender = "0.2.3"
 #anchor-spl = "0.29.0"
 #anchor-client = "0.29.0"
 
-[[test]]
-name = "test_pool_quote"
-path = "tests/test_pool_quote.rs"
-[[test]]
-name = "test_clmm_sub"
-path = "tests/test_clmm_sub.rs"
-[[test]]
-name = "test_clmm_sub_diff"
-path = "tests/test_clmm_sub_diff.rs"
-[[test]]
-name = "test_amm_sub"
-path = "tests/test_amm_sub.rs"
-[[test]]
-name = "test_pump_fun_sub"
-path = "tests/test_pump_fun_sub.rs"
-[[test]]
-name = "test_dlmm_sub"
-path = "tests/test_dlmm_sub.rs"
-[[test]]
-name = "test"
-path = "tests/test.rs"
-
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 serde-diff = "0.4"
 flamegraph = "0.6.8"
 tempfile = "3.19.1"
-
-[[bench]]
-name = "test_create_instruction"
-harness = false
-[[bench]]
-name = "test_route_quote"
-harness = false
-[[bench]]
-name = "test_hashmap"
-harness = false
-[[bench]]
-name = "test_dashmap"
-harness = false
-[[bench]]
-name = "test_build_graph"
-harness = false
 
 [profile.release]
 opt-level = 3            # 最高优化

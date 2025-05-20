@@ -1,12 +1,9 @@
 use solana_sdk::declare_id;
 
-pub mod dex;
-pub mod start_bot;
-pub mod arbitrage;
-pub mod cache;
+pub mod collector;
+pub mod executor;
 pub mod interface;
-pub mod file_db;
-mod keypair;
+pub mod strategy;
 
 #[cfg(feature = "devnet")]
 declare_id!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
