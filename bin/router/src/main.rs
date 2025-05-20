@@ -1,11 +1,13 @@
 use burberry::{map_collector, map_executor, Engine};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use clap::Parser;
-use router::collector::{CollectorType, MultiSubscribeCollector, SingleSubscribeCollector};
+use router::collector::{CollectorType, SubscribeCollector};
 use router::executor::{ExecutorType, SimpleExecutor};
-use router::strategy::{MultiStrategy, SingleStrategy};
+use router::grpc_processor::MessageProcessor;
+use router::grpc_subscribe::GrpcSubscribe;
+use router::strategy::{MessageStrategy};
 use std::collections::HashMap;
-use tokio::sync::broadcast;
+use tokio::time::Instant;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -31,6 +33,10 @@ pub struct Command {
     grpc_url: Option<String>,
     #[arg(long)]
     mod_value: Option<u64>,
+    #[arg(long)]
+    start_mode: Option<String>,
+    #[arg(long)]
+    specify_pool: Option<String>,
 }
 
 #[tokio::main]
@@ -46,30 +52,70 @@ async fn main() -> anyhow::Result<()> {
         .with(EnvFilter::new("info"))
         .init();
     let command = Command::parse();
+    let start_mode = command.start_mode.clone().unwrap_or("custom".to_string());
+    if start_mode.as_str() == "engine" {
+        start_with_engine(command).await;
+    } else {
+        start_with_custom(command).await;
+    }
+    Ok(())
+}
+
+async fn start_with_custom(command: Command) {
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(
+        Vec<u8>,
+        Vec<u8>,
+        Vec<u8>,
+        Vec<String>,
+        DateTime<Local>,
+        Instant,
+    )>();
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
+    let single_mode = if command.grpc_subscribe_type == "single" {
+        true
+    } else {
+        false
+    };
+    MessageProcessor(single_mode)
+        .start(receiver, HashMap::with_capacity(10000))
+        .await;
+    let subscribe = GrpcSubscribe {
+        grpc_url,
+        dex_json_path: command.dex_json_path.clone(),
+        message_sender: sender.clone(),
+        single_mode,
+        specify_pool: command.specify_pool.clone(),
+    };
+    subscribe.subscribe().await;
+}
+
+async fn start_with_engine(command: Command) {
+    let grpc_url = command
+        .grpc_url
+        .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
+    let single_mode = if command.grpc_subscribe_type == "single" {
+        true
+    } else {
+        false
+    };
     let mut engine = Engine::default();
     engine.add_executor(map_executor!(SimpleExecutor, ExecutorType::Simple));
-    if command.grpc_subscribe_type == "single" {
-        engine.add_collector(map_collector!(
-            SingleSubscribeCollector(command.dex_json_path, grpc_url),
-            CollectorType::Single
-        ));
-        engine.add_strategy(Box::new(SingleStrategy {
-            receiver_msg: HashMap::default(),
-            mod_value: command.mod_value,
-        }));
-    } else {
-        engine.add_collector(map_collector!(
-            MultiSubscribeCollector(command.dex_json_path, grpc_url),
-            CollectorType::Multiple
-        ));
-        engine.add_strategy(Box::new(MultiStrategy {
-            receiver_msg: HashMap::default(),
-            mod_value: command.mod_value,
-        }));
-    }
+    engine.add_collector(map_collector!(
+        SubscribeCollector{
+        grpc_url,
+        single_mode,
+        dex_json_path:command.dex_json_path.clone(),
+        specify_pool:command.specify_pool.clone()
+    },
+        CollectorType::Message
+    ));
+    engine.add_strategy(Box::new(MessageStrategy {
+        receiver_msg: HashMap::default(),
+        mod_value: command.mod_value,
+        single_mode,
+    }));
+
     engine.run_and_join().await.unwrap();
-    Ok(())
 }

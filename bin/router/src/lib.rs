@@ -4,6 +4,8 @@ pub mod collector;
 pub mod executor;
 pub mod interface;
 pub mod strategy;
+pub mod grpc_subscribe;
+pub mod grpc_processor;
 
 #[cfg(feature = "devnet")]
 declare_id!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");

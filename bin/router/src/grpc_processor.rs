@@ -1,78 +1,53 @@
-use crate::collector::CollectorType;
-use crate::executor::ExecutorType;
 use crate::interface::DexType;
 use base58::ToBase58;
-use borsh::BorshDeserialize;
-use burberry::{ActionSubmitter, Strategy};
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
-use std::collections::{HashMap, HashSet};
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::ptr::read;
+use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::Instant;
-use tokio_stream::StreamExt;
 use tracing::info;
 
-pub struct MessageStrategy {
-    pub receiver_msg: HashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>>,
-    pub mod_value: Option<u64>,
-    pub single_mode: bool,
-}
+pub struct MessageProcessor(pub bool);
 
-#[burberry::async_trait]
-impl Strategy<CollectorType, ExecutorType> for MessageStrategy {
-    async fn process_event(
+impl MessageProcessor {
+    pub async fn start(
         &mut self,
-        event: CollectorType,
-        _submitter: Arc<dyn ActionSubmitter<ExecutorType>>,
+        mut message_receiver: UnboundedReceiver<(
+            Vec<u8>,
+            Vec<u8>,
+            Vec<u8>,
+            Vec<String>,
+            DateTime<Local>,
+            Instant,
+        )>,
+        mut receiver_msg: HashMap<
+            String,
+            Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>,
+        >,
     ) {
-        match event {
-            CollectorType::Message((
-                tx,
-                account_key,
-                owner,
-                filters,
-                receiver_timestamp,
-                instant,
-            )) => {
-                let log = process_data(
-                    &mut self.receiver_msg,
-                    tx,
-                    account_key,
-                    owner,
-                    filters,
-                    receiver_timestamp,
-                    instant,
-                );
-                if let Some((tx, cost, msg)) = log {
-                    if let Some(v) = self.mod_value {
-                        if hash_string(tx.as_str(), v) {
+        let single_mode = self.0.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some((tx, account_key, owner, filters, receiver_timestamp, instant))  = message_receiver.recv() => {
+                        let log = process_data(&mut receiver_msg, tx, account_key, owner, filters, receiver_timestamp, instant);
+                        if let Some((tx, cost, msg)) = log {
                             info!(
-                                "\n{} tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
-                                if self.single_mode {
-                                    "单订阅 "
-                                } else {
+                                "\n{:?} tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
+                                if single_mode {
+                                    "单订阅"
+                                }else{
                                     "多订阅"
                                 },
-                                tx,
-                                cost,
-                                msg
+                                tx, cost, msg
                             );
                         }
                     }
                 }
             }
-            _ => {}
-        }
+        });
     }
-}
-
-fn hash_string(s: &str, mod_value: u64) -> bool {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish() % mod_value == 0
 }
 
 fn process_data(
@@ -87,10 +62,10 @@ fn process_data(
     let txn = tx.as_slice().to_base58();
     let pool_id_or_vault = Pubkey::try_from(account_key).unwrap();
     let maybe_owner = Pubkey::try_from(owner).unwrap();
-    // info!(
-    //     "tx : {:?}, account : {:?}, owner : {:?}, timestamp : {:?}",
-    //     txn, pool_id_or_vault, maybe_owner, receiver_timestamp
-    // );
+    info!(
+        "tx : {:?}, account : {:?}, owner : {:?}, timestamp : {:?}",
+        txn, pool_id_or_vault, maybe_owner, receiver_timestamp
+    );
     // 金库
     let (pool_id, vault, owner) = if maybe_owner != DexType::RaydiumAMM.get_program_id()
         && maybe_owner != DexType::PumpFunAMM.get_program_id()
