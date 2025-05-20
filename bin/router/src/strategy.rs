@@ -115,10 +115,10 @@ fn process_data(
     let txn = tx.as_slice().to_base58();
     let pool_id_or_vault = Pubkey::try_from(account_key).unwrap();
     let maybe_owner = Pubkey::try_from(owner).unwrap();
-    info!(
-        "tx : {:?}, account : {:?}, owner : {:?}, timestamp : {:?}",
-        txn, pool_id_or_vault, maybe_owner, receiver_timestamp
-    );
+    // info!(
+    //     "tx : {:?}, account : {:?}, owner : {:?}, timestamp : {:?}",
+    //     txn, pool_id_or_vault, maybe_owner, receiver_timestamp
+    // );
     // 金库
     let (pool_id, vault, owner) = if maybe_owner != DexType::RaydiumAMM.get_program_id()
         && maybe_owner != DexType::PumpFunAMM.get_program_id()
