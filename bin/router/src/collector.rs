@@ -25,9 +25,9 @@ use yellowstone_grpc_proto::tonic::Status;
 pub enum CollectorType {
     Single(
         (
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
-            Option<Vec<u8>>,
+            Vec<u8>,
+            Vec<u8>,
+            Vec<u8>,
             Vec<String>,
             DateTime<Local>,
             Instant,
@@ -75,34 +75,12 @@ impl MultiSubscribeCollector {
                 ..Default::default()
             },
         );
-        let mut raydium_transaction_accounts =
-            Vec::with_capacity(raydium_pool_accounts.len() + raydium_vault_accounts.len());
-        raydium_transaction_accounts.extend(raydium_pool_accounts);
-        raydium_transaction_accounts.extend(
-            raydium_vault_accounts
-                .iter()
-                .flat_map(|(_, vault_a, vault_b)| vec![vault_a.clone(), vault_b.clone()])
-                .collect::<Vec<_>>(),
-        );
-        let mut transactions = HashMap::new();
-        transactions.insert(
-            "transactions".to_string(),
-            SubscribeRequestFilterTransactions {
-                vote: Some(false),
-                failed: Some(false),
-                account_include: raydium_transaction_accounts
-                    .iter()
-                    .map(|key| key.to_string())
-                    .collect::<Vec<_>>(),
-                ..Default::default()
-            },
-        );
         let raydium_pool_subscribe_request = SubscribeRequest {
             accounts: raydium_pool_account_map,
-            transactions,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
             ..Default::default()
         };
+
         let mut raydium_vault_account_map = HashMap::new();
         for (pool_id, vault_a, vault_b) in raydium_vault_accounts {
             raydium_vault_account_map.insert(
@@ -137,11 +115,7 @@ impl MultiSubscribeCollector {
         };
 
         let mut pump_fun_vault_account_map = HashMap::new();
-        let mut pump_fun_transaction_accounts =
-            Vec::with_capacity(pump_fun_vault_accounts.len() * 2);
         for (pool_id, vault_a, vault_b) in pump_fun_vault_accounts {
-            pump_fun_transaction_accounts.push(vault_a.to_string());
-            pump_fun_transaction_accounts.push(vault_b.to_string());
             pump_fun_vault_account_map.insert(
                 format!(
                     "{:?}:{:?}:{:?}",
@@ -167,19 +141,8 @@ impl MultiSubscribeCollector {
                 },
             );
         }
-        let mut pump_fun_vault_transactions = HashMap::new();
-        pump_fun_vault_transactions.insert(
-            "transactions".to_string(),
-            SubscribeRequestFilterTransactions {
-                vote: Some(false),
-                failed: Some(false),
-                account_include: pump_fun_transaction_accounts,
-                ..Default::default()
-            },
-        );
         let pump_fun_vault_subscribe_request = SubscribeRequest {
             accounts: pump_fun_vault_account_map,
-            transactions: pump_fun_vault_transactions,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
             ..Default::default()
         };
@@ -295,28 +258,38 @@ impl SingleSubscribeCollector {
     ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
         let dex_data = get_dex_data(self.0.clone());
-        let mut pool_keys = Vec::with_capacity(dex_data.len() * 3);
-        let mut vault_keys = Vec::with_capacity(dex_data.len() * 3);
-        let mut accounts = HashMap::new();
+        let mut raydium_pool_keys = Vec::with_capacity(dex_data.len() * 3);
+        let mut raydium_accounts = HashMap::new();
+        let mut pump_fun_accounts = HashMap::new();
 
         for json in dex_data {
             if &json.owner == &DexType::RaydiumAMM.get_program_id() {
-                pool_keys.push(json.pool);
-            }
-            if &json.owner == &DexType::RaydiumAMM.get_program_id()
-                || &json.owner == &DexType::PumpFunAMM.get_program_id()
-            {
-                vault_keys.push(json.vault_a);
-                vault_keys.push(json.vault_b);
-                accounts.insert(
-                    format!("{:?}:{:?}", json.pool, 0),
+                raydium_pool_keys.push(json.pool);
+                raydium_accounts.insert(
+                    format!("{:?}:{:?}:{:?}", json.pool, 0, json.owner),
                     SubscribeRequestFilterAccounts {
                         account: vec![json.vault_a.to_string()],
                         ..Default::default()
                     },
                 );
-                accounts.insert(
-                    format!("{:?}:{:?}", json.pool, 1),
+                raydium_accounts.insert(
+                    format!("{:?}:{:?}:{:?}", json.pool, 1, json.owner),
+                    SubscribeRequestFilterAccounts {
+                        account: vec![json.vault_b.to_string()],
+                        ..Default::default()
+                    },
+                );
+            }
+            if &json.owner == &DexType::PumpFunAMM.get_program_id() {
+                pump_fun_accounts.insert(
+                    format!("{:?}:{:?}:{:?}", json.pool, 0, json.owner),
+                    SubscribeRequestFilterAccounts {
+                        account: vec![json.vault_a.to_string()],
+                        ..Default::default()
+                    },
+                );
+                pump_fun_accounts.insert(
+                    format!("{:?}:{:?}:{:?}", json.pool, 1, json.owner),
                     SubscribeRequestFilterAccounts {
                         account: vec![json.vault_b.to_string()],
                         ..Default::default()
@@ -324,11 +297,11 @@ impl SingleSubscribeCollector {
                 );
             }
         }
-        if !pool_keys.is_empty() {
-            accounts.insert(
+        if !raydium_pool_keys.is_empty() {
+            raydium_accounts.insert(
                 "accounts".to_string(),
                 SubscribeRequestFilterAccounts {
-                    account: pool_keys
+                    account: raydium_pool_keys
                         .iter()
                         .map(|key| key.to_string())
                         .collect::<Vec<_>>(),
@@ -336,24 +309,8 @@ impl SingleSubscribeCollector {
                 },
             );
         }
-
-        let mut transactions = HashMap::new();
-        transactions.insert(
-            "transactions".to_string(),
-            SubscribeRequestFilterTransactions {
-                vote: Some(false),
-                failed: Some(false),
-                account_include: pool_keys
-                    .iter()
-                    .chain(vault_keys.iter())
-                    .map(|key| key.to_string())
-                    .collect::<Vec<_>>(),
-                ..Default::default()
-            },
-        );
         let subscribe_request = SubscribeRequest {
-            accounts,
-            transactions,
+            accounts: raydium_accounts,
             commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
             ..Default::default()
         };
@@ -370,9 +327,9 @@ impl SingleSubscribeCollector {
 #[async_trait]
 impl
     Collector<(
-        Option<Vec<u8>>,
-        Option<Vec<u8>>,
-        Option<Vec<u8>>,
+        Vec<u8>,
+        Vec<u8>,
+        Vec<u8>,
         Vec<String>,
         DateTime<Local>,
         Instant,
@@ -384,9 +341,9 @@ impl
         CollectorStream<
             '_,
             (
-                Option<Vec<u8>>,
-                Option<Vec<u8>>,
-                Option<Vec<u8>>,
+                Vec<u8>,
+                Vec<u8>,
+                Vec<u8>,
                 Vec<String>,
                 DateTime<Local>,
                 Instant,
@@ -405,18 +362,9 @@ impl
                         if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                             let account= account.account.unwrap();
                             yield (
-                                account.txn_signature,
-                                Some(account.pubkey),
-                                Some(account.owner),
-                                filters,
-                                time,
-                                now,
-                            );
-                        } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
-                            yield (
-                                Some(transaction.transaction.unwrap().signature),
-                                None,
-                                None,
+                                account.txn_signature.unwrap(),
+                                account.pubkey,
+                                account.owner,
                                 filters,
                                 time,
                                 now,

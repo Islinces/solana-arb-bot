@@ -4,12 +4,12 @@ use crate::interface::DexType;
 use base58::ToBase58;
 use borsh::BorshDeserialize;
 use burberry::{ActionSubmitter, Strategy};
+use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::ptr::read;
 use std::str::FromStr;
 use std::sync::Arc;
-use chrono::{DateTime, Local};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 use tracing::info;
@@ -34,134 +34,136 @@ impl Strategy<CollectorType, ExecutorType> for SingleStrategy {
                 receiver_timestamp,
                 instant,
             )) => {
-                let txn = tx.unwrap().as_slice().to_base58();
-                let ready_tx = match (account_key, owner) {
-                    (None, None) => Some((txn, instant.elapsed().as_nanos())),
-                    (Some(key), Some(owner)) => {
-                        let pool_id_or_vault = Pubkey::try_from(key).unwrap();
-                        let maybe_owner = Pubkey::try_from(owner).unwrap();
-                        // 金库
-                        let (pool_id, vault) = if maybe_owner
-                            != DexType::RaydiumAMM.get_program_id()
-                            && maybe_owner != DexType::PumpFunAMM.get_program_id()
-                        {
-                            let items = filters.first().unwrap().split(":").collect::<Vec<&str>>();
-                            (
-                                Pubkey::from_str(items.first().unwrap()).unwrap(),
-                                Some(pool_id_or_vault),
-                            )
-                        } else {
-                            (pool_id_or_vault, None)
-                        };
-                        if let Some(value) = self.receiver_msg.get_mut(&txn) {
-                            match value.iter().position(|v| v.0 == pool_id) {
-                                None => {
-                                    value.push((
-                                        pool_id,
-                                        if maybe_owner == DexType::RaydiumAMM.get_program_id() {
-                                            vault.map_or(vec![pool_id], |v| vec![v])
-                                        } else {
-                                            vault.map_or(vec![], |v| vec![v])
-                                        },
-                                        if maybe_owner == DexType::RaydiumAMM.get_program_id() {
-                                            vault.map_or(vec![receiver_timestamp], |_| {
-                                                vec![receiver_timestamp]
-                                            })
-                                        } else {
-                                            vault.map_or(vec![], |_| vec![receiver_timestamp])
-                                        },
-                                        instant,
-                                    ));
-                                }
-                                Some(index) => {
-                                    let v = value.get_mut(index).unwrap();
-                                    v.1.push(vault.map_or(pool_id, |v| v));
-                                    v.2.push(receiver_timestamp);
-                                }
-                            }
-                        } else {
-                            self.receiver_msg.insert(
-                                txn,
-                                vec![(
-                                    pool_id,
-                                    if maybe_owner == DexType::RaydiumAMM.get_program_id() {
-                                        vault.map_or(vec![pool_id], |v| vec![v])
-                                    } else {
-                                        vault.map_or(vec![], |v| vec![v])
-                                    },
-                                    if maybe_owner == DexType::RaydiumAMM.get_program_id() {
-                                        vault.map_or(vec![receiver_timestamp], |_| {
-                                            vec![receiver_timestamp]
-                                        })
-                                    } else {
-                                        vault.map_or(vec![], |_| vec![receiver_timestamp])
-                                    },
-                                    instant,
-                                )],
-                            );
-                        };
-                        None
-                    }
-                    _ => None,
+                let txn = tx.as_slice().to_base58();
+                let pool_id_or_vault = Pubkey::try_from(account_key).unwrap();
+                let maybe_owner = Pubkey::try_from(owner).unwrap();
+                // 金库
+                let (pool_id, vault, owner) = if maybe_owner != DexType::RaydiumAMM.get_program_id()
+                    && maybe_owner != DexType::PumpFunAMM.get_program_id()
+                {
+                    let items = filters.first().unwrap().split(":").collect::<Vec<&str>>();
+                    (
+                        Pubkey::from_str(items.first().unwrap()).unwrap(),
+                        Some(pool_id_or_vault),
+                        Pubkey::from_str(items.last().unwrap()).unwrap(),
+                    )
+                } else {
+                    (pool_id_or_vault, None, maybe_owner)
                 };
-                if let Some((txn, cost)) = ready_tx {
-                    match self.receiver_msg.remove(&txn) {
-                        None => {}
+                let ready_index = if let Some(value) = self.receiver_msg.get_mut(&txn) {
+                    match value.iter().position(|v| v.0 == pool_id) {
+                        None => {
+                            value.push((
+                                pool_id,
+                                if owner == DexType::RaydiumAMM.get_program_id() {
+                                    vault.map_or(vec![pool_id], |v| vec![v])
+                                } else {
+                                    vault.map_or(vec![], |v| vec![v])
+                                },
+                                if owner == DexType::RaydiumAMM.get_program_id() {
+                                    vault.map_or(vec![receiver_timestamp], |_| {
+                                        vec![receiver_timestamp]
+                                    })
+                                } else {
+                                    vault.map_or(vec![], |_| vec![receiver_timestamp])
+                                },
+                                instant,
+                            ));
+                            None
+                        }
+                        Some(index) => {
+                            let v = value.get_mut(index).unwrap();
+                            v.1.push(vault.map_or(pool_id, |v| v));
+                            v.2.push(receiver_timestamp);
+                            if owner == DexType::RaydiumAMM.get_program_id() && v.1.len() == 3 {
+                                Some(index)
+                            } else {
+                                None
+                            }
+                        }
+                    }
+                } else {
+                    self.receiver_msg.insert(
+                        txn.clone(),
+                        vec![(
+                            pool_id,
+                            if owner == DexType::RaydiumAMM.get_program_id() {
+                                vault.map_or(vec![pool_id], |v| vec![v])
+                            } else {
+                                vault.map_or(vec![], |v| vec![v])
+                            },
+                            if owner == DexType::RaydiumAMM.get_program_id() {
+                                vault.map_or(vec![receiver_timestamp], |_| vec![receiver_timestamp])
+                            } else {
+                                vault.map_or(vec![], |_| vec![receiver_timestamp])
+                            },
+                            instant,
+                        )],
+                    );
+                    None
+                };
+                if let Some(position) = ready_index {
+                    let empty = match self.receiver_msg.get_mut(&txn) {
+                        None => false,
                         Some(ready_data) => {
-                            let log = ready_data
+                            let (pool_id, accounts, timestamp, instant) =
+                                ready_data.remove(position);
+                            let mut account_push_timestamp = accounts
                                 .into_iter()
-                                .map(|(pool_id, accounts, accounts_receiver_timestamp, _)| {
-                                    let account_len = accounts.len();
-                                    let mut account_push_timestamp = accounts
-                                        .into_iter()
-                                        .zip(accounts_receiver_timestamp)
-                                        .map(|(account, receiver_timestamp)| {
-                                            format!(
-                                                "账户 : {:?}, GRPC推送时间 : {:?}",
-                                                account.to_string(),
-                                                receiver_timestamp.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                                            )
-                                        })
-                                        .collect::<Vec<_>>();
-                                    account_push_timestamp.insert(
-                                        0,
-                                        format!(
-                                            "池子 : {:?}, 类型 : {:?}",
-                                            pool_id.to_string(),
-                                            if account_len == 2 {
-                                                DexType::PumpFunAMM.to_string()
-                                            } else if account_len == 3 {
-                                                DexType::RaydiumAMM.to_string()
-                                            } else {
-                                                "".to_string()
-                                            }
-                                        ),
-                                    );
-                                    account_push_timestamp.push(
-                                        format!(
-                                            "账户 : {:?}, GRPC推送时间 : {:?}",
-                                            txn, receiver_timestamp.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                                        ),
-                                    );
-                                    account_push_timestamp
+                                .zip(timestamp)
+                                .map(|(account, receiver_timestamp)| {
+                                    format!(
+                                        "账户 : {:?}, GRPC推送时间 : {:?}",
+                                        account.to_string(),
+                                        receiver_timestamp
+                                            .format("%Y-%m-%d %H:%M:%S%.9f")
+                                            .to_string()
+                                    )
                                 })
                                 .collect::<Vec<_>>();
+                            account_push_timestamp.insert(
+                                0,
+                                format!(
+                                    "池子 : {:?}, 类型 : {:?}",
+                                    pool_id.to_string(),
+                                    if owner == DexType::PumpFunAMM.get_program_id() {
+                                        DexType::PumpFunAMM.to_string()
+                                    } else if owner == DexType::RaydiumAMM.get_program_id() {
+                                        DexType::RaydiumAMM.to_string()
+                                    } else {
+                                        "".to_string()
+                                    }
+                                ),
+                            );
+                            account_push_timestamp.push(format!(
+                                "账户 : {:?}, GRPC推送时间 : {:?}",
+                                txn,
+                                receiver_timestamp
+                                    .format("%Y-%m-%d %H:%M:%S%.9f")
+                                    .to_string()
+                            ));
                             info!(
                                 "\n单订阅 tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
-                                txn, cost, log
+                                txn,
+                                instant.elapsed().as_nanos(),
+                                account_push_timestamp
                             );
+                            ready_data.is_empty()
                         }
+                    };
+                    if empty {
+                        self.receiver_msg.remove(&txn);
                     }
                 }
                 ()
             }
             CollectorType::Multiple((
-                tx,
-                account_key,
-                owner,
-                filters,
-                receiver_timestamp,
-                instant,
+                _tx,
+                _account_key,
+                _owner,
+                _filters,
+                _receiver_timestamp,
+                _instant,
             )) => {}
         }
     }
