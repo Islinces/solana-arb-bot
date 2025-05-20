@@ -5,6 +5,7 @@ use router::collector::{CollectorType, MultiSubscribeCollector, SingleSubscribeC
 use router::executor::{ExecutorType, SimpleExecutor};
 use router::strategy::{MultiStrategy, SingleStrategy};
 use std::collections::HashMap;
+use tokio::sync::broadcast;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -34,14 +35,6 @@ pub struct Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let filter = EnvFilter::new("info");
-    // let file_appender = RollingFileAppender::builder()
-    //     .filename_prefix("app")
-    //     .filename_suffix("log")
-    //     .rotation(Rotation::DAILY)
-    //     .build("./logs")
-    //     .expect("构建file_appender失败");
-    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
     let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
     tracing_subscriber::registry()
         .with(
@@ -50,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
                 .with_writer(non_blocking_writer)
                 .with_span_events(FmtSpan::NONE),
         )
-        .with(filter)
+        .with(EnvFilter::new("info"))
         .init();
     let command = Command::parse();
     let grpc_url = command
