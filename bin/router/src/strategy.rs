@@ -7,6 +7,7 @@ use burberry::{ActionSubmitter, Strategy};
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ptr::read;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -16,6 +17,7 @@ use tracing::info;
 
 pub struct SingleStrategy {
     pub receiver_msg: HashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>>,
+    pub mod_value: Option<u64>,
 }
 
 #[burberry::async_trait]
@@ -44,10 +46,14 @@ impl Strategy<CollectorType, ExecutorType> for SingleStrategy {
                     instant,
                 );
                 if let Some((tx, cost, msg)) = log {
-                    info!(
-                        "\n单订阅 tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
-                        tx, cost, msg
-                    );
+                    if let Some(v) = self.mod_value {
+                        if hash_string(tx.as_str(), v) {
+                            info!(
+                                "\n单订阅 tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
+                                tx, cost, msg
+                            );
+                        }
+                    }
                 }
             }
             CollectorType::Multiple((
@@ -64,6 +70,7 @@ impl Strategy<CollectorType, ExecutorType> for SingleStrategy {
 
 pub struct MultiStrategy {
     pub receiver_msg: HashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>>,
+    pub mod_value: Option<u64>,
 }
 
 #[burberry::async_trait]
@@ -92,15 +99,25 @@ impl Strategy<CollectorType, ExecutorType> for MultiStrategy {
                     instant,
                 );
                 if let Some((tx, cost, msg)) = log {
-                    info!(
-                        "\n多订阅 tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
-                        tx, cost, msg
-                    );
+                    if let Some(v) = self.mod_value {
+                        if hash_string(tx.as_str(), v) {
+                            info!(
+                                "\n多订阅 tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
+                                tx, cost, msg
+                            );
+                        }
+                    }
                 }
             }
             _ => {}
         }
     }
+}
+
+fn hash_string(s: &str, mod_value: u64) -> bool {
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    hasher.finish() % mod_value == 0
 }
 
 fn process_data(

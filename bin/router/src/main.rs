@@ -28,6 +28,8 @@ pub struct Command {
     dex_json_path: String,
     #[arg(long)]
     grpc_url: Option<String>,
+    #[arg(long)]
+    mod_value: Option<u64>,
 }
 
 #[tokio::main]
@@ -63,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
         ));
         engine.add_strategy(Box::new(SingleStrategy {
             receiver_msg: HashMap::default(),
+            mod_value: command.mod_value,
         }));
     } else {
         engine.add_collector(map_collector!(
@@ -71,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
         ));
         engine.add_strategy(Box::new(MultiStrategy {
             receiver_msg: HashMap::default(),
+            mod_value: command.mod_value,
         }));
     }
     engine.run_and_join().await.unwrap();
