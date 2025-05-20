@@ -26,6 +26,8 @@ pub struct Command {
     grpc_subscribe_type: String,
     #[arg(long, required = true)]
     dex_json_path: String,
+    #[arg(long)]
+    grpc_url: Option<String>,
 }
 
 #[tokio::main]
@@ -49,11 +51,14 @@ async fn main() -> anyhow::Result<()> {
         .with(filter)
         .init();
     let command = Command::parse();
+    let grpc_url = command
+        .grpc_url
+        .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
     let mut engine = Engine::default();
     engine.add_executor(map_executor!(SimpleExecutor, ExecutorType::Simple));
     if command.grpc_subscribe_type == "single" {
         engine.add_collector(map_collector!(
-            SingleSubscribeCollector(command.dex_json_path),
+            SingleSubscribeCollector(command.dex_json_path, grpc_url),
             CollectorType::Single
         ));
         engine.add_strategy(Box::new(SingleStrategy {
@@ -61,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         }));
     } else {
         engine.add_collector(map_collector!(
-            MultiSubscribeCollector(command.dex_json_path),
+            MultiSubscribeCollector(command.dex_json_path, grpc_url),
             CollectorType::Multiple
         ));
         engine.add_strategy(Box::new(MultiStrategy {

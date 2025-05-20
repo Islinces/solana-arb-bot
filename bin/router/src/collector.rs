@@ -2,13 +2,13 @@ use crate::interface::{DexType, GrpcAccountUpdateType};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use burberry::{Collector, CollectorStream};
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Deserializer};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fs::File;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use chrono::{DateTime, Local};
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 use tracing::{error, info, warn};
@@ -45,7 +45,7 @@ pub enum CollectorType {
     ),
 }
 
-pub struct MultiSubscribeCollector(pub String);
+pub struct MultiSubscribeCollector(pub String, pub String);
 
 impl MultiSubscribeCollector {
     pub async fn subscribe_grpc(
@@ -185,7 +185,7 @@ impl MultiSubscribeCollector {
         };
 
         let mut subscrbeitions = StreamMap::new();
-        let mut grpc_client = create_grpc_client().await;
+        let mut grpc_client = create_grpc_client(self.1.clone()).await;
         let (_, raydium_pool_stream) = grpc_client
             .subscribe_with_request(Some(raydium_pool_subscribe_request))
             .await?;
@@ -287,7 +287,7 @@ impl
 }
 
 #[derive(Debug)]
-pub struct SingleSubscribeCollector(pub String);
+pub struct SingleSubscribeCollector(pub String, pub String);
 
 impl SingleSubscribeCollector {
     pub async fn subscribe_grpc(
@@ -358,7 +358,7 @@ impl SingleSubscribeCollector {
             ..Default::default()
         };
         let mut subscrbeitions = StreamMap::new();
-        let mut grpc_client = create_grpc_client().await;
+        let mut grpc_client = create_grpc_client(self.1.clone()).await;
         let (_, stream) = grpc_client
             .subscribe_with_request(Some(subscribe_request))
             .await?;
@@ -477,8 +477,8 @@ where
     Ok(Some(Pubkey::from_str(s?.as_str()).unwrap()))
 }
 
-async fn create_grpc_client() -> GeyserGrpcClient<impl Interceptor + Sized> {
-    GeyserGrpcClient::build_from_shared("https://solana-yellowstone-grpc.publicnode.com")
+async fn create_grpc_client(grpc_url: String) -> GeyserGrpcClient<impl Interceptor + Sized> {
+    GeyserGrpcClient::build_from_shared(grpc_url)
         .unwrap()
         .tcp_nodelay(true)
         .http2_adaptive_window(true)
