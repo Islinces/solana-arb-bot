@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use chrono::{DateTime, Local};
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 use tracing::{error, info, warn};
@@ -28,7 +29,7 @@ pub enum CollectorType {
             Option<Vec<u8>>,
             Option<Vec<u8>>,
             Vec<String>,
-            u128,
+            DateTime<Local>,
             Instant,
         ),
     ),
@@ -38,7 +39,7 @@ pub enum CollectorType {
             Option<Vec<u8>>,
             Option<Vec<u8>>,
             Vec<String>,
-            u128,
+            DateTime<Local>,
             Instant,
         ),
     ),
@@ -229,7 +230,7 @@ impl
         Option<Vec<u8>>,
         Option<Vec<u8>>,
         Vec<String>,
-        u128,
+        DateTime<Local>,
         Instant,
     )> for MultiSubscribeCollector
 {
@@ -243,7 +244,7 @@ impl
                 Option<Vec<u8>>,
                 Option<Vec<u8>>,
                 Vec<String>,
-                u128,
+                DateTime<Local>,
                 Instant,
             ),
         >,
@@ -254,7 +255,7 @@ impl
             loop {
                 tokio::select! {
                     Some((_,Ok(data))) = subscrbeitions.next() => {
-                        let receiver_timestamp=SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        let time = Local::now();
                         let now=Instant::now();
                         let filters = data.filters;
                         if let Some(UpdateOneof::Account(account)) = data.update_oneof {
@@ -264,7 +265,7 @@ impl
                                 Some(account.pubkey),
                                 Some(account.owner),
                                 filters,
-                                receiver_timestamp,
+                                time,
                                 now,
                             );
                         } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
@@ -273,7 +274,7 @@ impl
                                 None,
                                 None,
                                 filters,
-                                receiver_timestamp,
+                                time,
                                 now,
                             );
                         }
@@ -373,7 +374,7 @@ impl
         Option<Vec<u8>>,
         Option<Vec<u8>>,
         Vec<String>,
-        u128,
+        DateTime<Local>,
         Instant,
     )> for SingleSubscribeCollector
 {
@@ -387,7 +388,7 @@ impl
                 Option<Vec<u8>>,
                 Option<Vec<u8>>,
                 Vec<String>,
-                u128,
+                DateTime<Local>,
                 Instant,
             ),
         >,
@@ -398,7 +399,7 @@ impl
             loop {
                 tokio::select! {
                     Some((_,Ok(data))) = subscrbeitions.next() => {
-                        let receiver_timestamp=SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_micros();
+                        let time = Local::now();
                         let now=Instant::now();
                         let filters = data.filters;
                         if let Some(UpdateOneof::Account(account)) = data.update_oneof {
@@ -408,7 +409,7 @@ impl
                                 Some(account.pubkey),
                                 Some(account.owner),
                                 filters,
-                                receiver_timestamp,
+                                time,
                                 now,
                             );
                         } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
@@ -417,7 +418,7 @@ impl
                                 None,
                                 None,
                                 filters,
-                                receiver_timestamp,
+                                time,
                                 now,
                             );
                         }
