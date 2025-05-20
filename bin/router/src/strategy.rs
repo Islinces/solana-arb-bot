@@ -110,6 +110,7 @@ impl Strategy<CollectorType, ExecutorType> for SingleStrategy {
                             let log = ready_data
                                 .into_iter()
                                 .map(|(pool_id, accounts, accounts_receiver_timestamp, _)| {
+                                    let account_len = accounts.len();
                                     let mut account_push_timestamp = accounts
                                         .into_iter()
                                         .zip(accounts_receiver_timestamp)
@@ -121,8 +122,20 @@ impl Strategy<CollectorType, ExecutorType> for SingleStrategy {
                                             )
                                         })
                                         .collect::<Vec<_>>();
-                                    account_push_timestamp
-                                        .insert(0, format!("池子 : {:?}", pool_id.to_string()));
+                                    account_push_timestamp.insert(
+                                        0,
+                                        format!(
+                                            "池子 : {:?}, 类型 : {:?}",
+                                            pool_id.to_string(),
+                                            if account_len == 2 {
+                                                DexType::PumpFunAMM.to_string()
+                                            } else if account_len == 3 {
+                                                DexType::RaydiumAMM.to_string()
+                                            } else {
+                                                "".to_string()
+                                            }
+                                        ),
+                                    );
                                     account_push_timestamp
                                 })
                                 .collect::<Vec<_>>();
@@ -184,13 +197,13 @@ impl Strategy<CollectorType, ExecutorType> for MultiStrategy {
             )) => {
                 let cost = instant.elapsed().as_nanos();
                 let txn = tx.unwrap().as_slice().to_base58();
-                info!("tx : {:?}, account : {:?}, owner : {:?}, receiver_timestamp : {:?}, instant : {:?}",
-                    txn,
-                    account_key.as_ref().map_or("".to_string(), |key| Pubkey::try_from(key.as_slice()).unwrap().to_string()),
-                    owner.as_ref().map_or("".to_string(), |key| Pubkey::try_from(key.as_slice()).unwrap().to_string()),
-                    receiver_timestamp,
-                   instant.elapsed().as_nanos(),
-                );
+                // info!("tx : {:?}, account : {:?}, owner : {:?}, receiver_timestamp : {:?}, instant : {:?}",
+                //     txn,
+                //     account_key.as_ref().map_or("".to_string(), |key| Pubkey::try_from(key.as_slice()).unwrap().to_string()),
+                //     owner.as_ref().map_or("".to_string(), |key| Pubkey::try_from(key.as_slice()).unwrap().to_string()),
+                //     receiver_timestamp,
+                //    instant.elapsed().as_nanos(),
+                // );
                 match (account_key, owner) {
                     // tx
                     (None, None) => {
@@ -354,7 +367,21 @@ impl Strategy<CollectorType, ExecutorType> for MultiStrategy {
                                 return None;
                             }
                             let mut item_log = Vec::with_capacity(10);
-                            item_log.push(format!("池子 : {:?}", item.0.unwrap().to_string()));
+                            let dex_type = match item.1 {
+                                None => "".to_string(),
+                                Some(owner) => {
+                                    if DexType::RaydiumAMM.get_program_id() == owner {
+                                        DexType::RaydiumAMM.to_string()
+                                    } else {
+                                        DexType::PumpFunAMM.to_string()
+                                    }
+                                }
+                            };
+                            item_log.push(format!(
+                                "池子 : {:?}, 类型 : {:?}",
+                                item.0.unwrap().to_string(),
+                                dex_type
+                            ));
                             let tx_position =
                                 item.3.iter().position(|v| v >= &tx_receive_timestamp);
                             if let Some(position) = tx_position {

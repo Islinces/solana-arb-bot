@@ -185,28 +185,28 @@ impl MultiSubscribeCollector {
 
         let mut subscrbeitions = StreamMap::new();
         let mut grpc_client = create_grpc_client().await;
-        // let (_, raydium_pool_stream) = grpc_client
-        //     .subscribe_with_request(Some(raydium_pool_subscribe_request))
-        //     .await?;
-        // subscrbeitions.insert(
-        //     format!(
-        //         "{:?}:{:?}",
-        //         DexType::RaydiumAMM,
-        //         GrpcAccountUpdateType::Pool
-        //     ),
-        //     raydium_pool_stream,
-        // );
-        // let (_, raydium_vault_stream) = grpc_client
-        //     .subscribe_with_request(Some(raydium_vault_subscribe_request))
-        //     .await?;
-        // subscrbeitions.insert(
-        //     format!(
-        //         "{:?}:{:?}",
-        //         DexType::RaydiumAMM,
-        //         GrpcAccountUpdateType::MintVault
-        //     ),
-        //     raydium_vault_stream,
-        // );
+        let (_, raydium_pool_stream) = grpc_client
+            .subscribe_with_request(Some(raydium_pool_subscribe_request))
+            .await?;
+        subscrbeitions.insert(
+            format!(
+                "{:?}:{:?}",
+                DexType::RaydiumAMM,
+                GrpcAccountUpdateType::Pool
+            ),
+            raydium_pool_stream,
+        );
+        let (_, raydium_vault_stream) = grpc_client
+            .subscribe_with_request(Some(raydium_vault_subscribe_request))
+            .await?;
+        subscrbeitions.insert(
+            format!(
+                "{:?}:{:?}",
+                DexType::RaydiumAMM,
+                GrpcAccountUpdateType::MintVault
+            ),
+            raydium_vault_stream,
+        );
         let (_, pump_fun_vault_stream) = grpc_client
             .subscribe_with_request(Some(pump_fun_vault_subscribe_request))
             .await?;
@@ -295,6 +295,7 @@ impl SingleSubscribeCollector {
     {
         let dex_data = get_dex_data(self.0.clone());
         let mut pool_keys = Vec::with_capacity(dex_data.len() * 3);
+        let mut vault_keys = Vec::with_capacity(dex_data.len() * 3);
         let mut accounts = HashMap::new();
 
         for json in dex_data {
@@ -304,6 +305,8 @@ impl SingleSubscribeCollector {
             if &json.owner == &DexType::RaydiumAMM.get_program_id()
                 || &json.owner == &DexType::PumpFunAMM.get_program_id()
             {
+                vault_keys.push(json.vault_a);
+                vault_keys.push(json.vault_b);
                 accounts.insert(
                     format!("{:?}:{:?}", json.pool, 0),
                     SubscribeRequestFilterAccounts {
@@ -320,17 +323,19 @@ impl SingleSubscribeCollector {
                 );
             }
         }
+        if !pool_keys.is_empty() {
+            accounts.insert(
+                "accounts".to_string(),
+                SubscribeRequestFilterAccounts {
+                    account: pool_keys
+                        .iter()
+                        .map(|key| key.to_string())
+                        .collect::<Vec<_>>(),
+                    ..Default::default()
+                },
+            );
+        }
 
-        accounts.insert(
-            "accounts".to_string(),
-            SubscribeRequestFilterAccounts {
-                account: pool_keys
-                    .iter()
-                    .map(|key| key.to_string())
-                    .collect::<Vec<_>>(),
-                ..Default::default()
-            },
-        );
         let mut transactions = HashMap::new();
         transactions.insert(
             "transactions".to_string(),
@@ -339,6 +344,7 @@ impl SingleSubscribeCollector {
                 failed: Some(false),
                 account_include: pool_keys
                     .iter()
+                    .chain(vault_keys.iter())
                     .map(|key| key.to_string())
                     .collect::<Vec<_>>(),
                 ..Default::default()
