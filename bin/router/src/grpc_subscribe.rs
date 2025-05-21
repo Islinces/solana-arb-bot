@@ -34,6 +34,7 @@ pub struct GrpcSubscribe {
         Instant,
     )>,
     pub single_mode: bool,
+    pub specify_pool: Option<String>,
 }
 
 impl GrpcSubscribe {
@@ -265,12 +266,19 @@ impl GrpcSubscribe {
                         let account = account.account.unwrap();
                         let tx = account.txn_signature.unwrap().to_base58();
                         let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-                        info!(
-                            "tx : {:?}, account : {:?}, timestamp : {:?}",
-                            tx,
-                            account_key,
-                            time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                        );
+                        if self
+                            .specify_pool
+                            .as_ref()
+                            .is_some_and(|v| v != &account_key.to_string())
+                        {
+                            info!(
+                                "tx : {:?}, account : {:?}, timestamp : {:?}",
+                                tx,
+                                account_key,
+                                time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                            );
+                        }
+
                         // let account = account.unwrap();
                         // let result = self.message_sender.send((
                         //     account.txn_signature.unwrap(),

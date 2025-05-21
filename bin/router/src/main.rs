@@ -86,6 +86,7 @@ async fn start_with_custom(command: Command) {
         dex_json_path: command.dex_json_path.clone(),
         message_sender: sender.clone(),
         single_mode,
+        specify_pool: command.specify_pool.clone(),
     };
     subscribe.subscribe().await;
 }
