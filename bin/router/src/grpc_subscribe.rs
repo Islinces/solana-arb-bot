@@ -1,3 +1,4 @@
+use crate::dex_data::DexJson;
 use crate::interface::{DexType, GrpcAccountUpdateType};
 use base58::ToBase58;
 use chrono::{DateTime, Local};
@@ -7,6 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fs::File;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
@@ -29,9 +31,7 @@ pub struct GrpcSubscribe {
         Vec<u8>,
         Vec<u8>,
         Vec<u8>,
-        Vec<String>,
         DateTime<Local>,
-        Instant,
     )>,
     pub single_mode: bool,
     pub specify_pool: Option<String>,
@@ -39,14 +39,13 @@ pub struct GrpcSubscribe {
 }
 
 impl GrpcSubscribe {
-    async fn single_subscribe_grpc_without_stream_map(
+    async fn single_subscribe_grpc(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>>
-    {
-        let dex_data = get_dex_data(self.dex_json_path.clone());
+        dex_data: Vec<DexJson>,
+    ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
         let mut account_keys = Vec::with_capacity(dex_data.len());
 
-        for json in dex_data {
+        for json in dex_data.iter() {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
                 account_keys.push(json.pool);
                 account_keys.push(json.vault_a);
@@ -83,57 +82,11 @@ impl GrpcSubscribe {
         Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
     }
 
-    async fn single_subscribe_grpc(
-        &self,
-    ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
-    {
-        let dex_data = get_dex_data(self.dex_json_path.clone());
-        let mut account_keys = Vec::with_capacity(dex_data.len());
-
-        for json in dex_data {
-            if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
-                account_keys.push(json.pool);
-                account_keys.push(json.vault_a);
-                account_keys.push(json.vault_b);
-            }
-            if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
-                account_keys.push(json.vault_a);
-                account_keys.push(json.vault_b);
-            }
-        }
-        let mut subscrbeitions = StreamMap::new();
-        let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
-        if !account_keys.is_empty() {
-            let mut filter_accounts = HashMap::new();
-            filter_accounts.insert(
-                "accounts".to_string(),
-                SubscribeRequestFilterAccounts {
-                    account: account_keys
-                        .iter()
-                        .map(|key| key.to_string())
-                        .collect::<Vec<_>>(),
-                    ..Default::default()
-                },
-            );
-            let subscribe_request = SubscribeRequest {
-                accounts: filter_accounts,
-                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                ..Default::default()
-            };
-            let (_, stream) = grpc_client
-                .subscribe_with_request(Some(subscribe_request))
-                .await?;
-            subscrbeitions.insert("test".to_string(), stream);
-            return Ok(subscrbeitions);
-        }
-        Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
-    }
-
     async fn multi_subscribe_grpc(
         &self,
+        dex_data: Vec<DexJson>,
     ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
-        let dex_data = get_dex_data(self.dex_json_path.clone());
         let mut raydium_pool_keys = Vec::with_capacity(dex_data.len());
         let mut raydium_vault_keys = Vec::with_capacity(dex_data.len() * 2);
         let mut pump_fun_vault_keys = Vec::with_capacity(dex_data.len() * 2);
@@ -301,124 +254,39 @@ impl GrpcSubscribe {
         }
     }
 
-    pub async fn subscribe(&self) {
-        if self.use_stream_map {
-            let mut stream = self.single_subscribe_grpc().await.unwrap();
-            info!("GRPC 订阅成功");
-            loop {
-                tokio::select! {
-                    Some((_,Ok(data))) = stream.next() => {
-                        let time = Local::now();
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            let account = account.account.unwrap();
-                            let tx = account.txn_signature.unwrap().to_base58();
-                            let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-                                if self.specify_pool.as_ref().is_none()
-                                    || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
-                                {
-                                    info!(
-                                        "tx : {:?}, account : {:?}, timestamp : {:?}",
-                                        tx,
-                                        account_key,
-                                        time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                                    );
-                                }
-                            }
-                    }else => warn!("subscrbeitions closed"),
+    pub async fn subscribe(&self, dex_data: Vec<DexJson>) {
+        let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
+        info!("GRPC 订阅成功");
+        while let Some(message) = stream.next().await {
+            match message {
+                Ok(data) => {
+                    let time = Local::now();
+                    if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                        let account = account.account.unwrap();
+                        let _ = self.message_sender.send((
+                            account.txn_signature.unwrap(),
+                            account.pubkey,
+                            account.owner,
+                            time,
+                        ));
+                        // if self.specify_pool.as_ref().is_none()
+                        //     || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
+                        // {
+                        //     info!(
+                        //         "tx : {:?}, account : {:?}, timestamp : {:?}",
+                        //         tx,
+                        //         account_key,
+                        //         time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                        //     );
+                        // }
+                    }
                 }
-            }
-        } else {
-            let mut stream = self.single_subscribe_grpc_without_stream_map().await.unwrap();
-            info!("GRPC 订阅成功");
-            while let Some(message) = stream.next().await {
-                match message {
-                    Ok(data) => {
-                        let time = Local::now();
-                        // let now = Instant::now();
-                        // let filters = data.filters;
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            let account = account.account.unwrap();
-                            let tx = account.txn_signature.unwrap().to_base58();
-                            let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-                            if self.specify_pool.as_ref().is_none()
-                                || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
-                            {
-                                info!(
-                                    "tx : {:?}, account : {:?}, timestamp : {:?}",
-                                    tx,
-                                    account_key,
-                                    time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                                );
-                            }
-
-                            // let account = account.unwrap();
-                            // let result = self.message_sender.send((
-                            //     account.txn_signature.unwrap(),
-                            //     account.pubkey,
-                            //     account.owner,
-                            //     filters,
-                            //     time,
-                            //     now,
-                            // ));
-                            // if let Err(e) = result {
-                            //     error!("failed to send update oneof: {}", e);
-                            // }
-                        }
-                    }
-                    Err(e) => {
-                        error!("grpc推送消息失败，原因：{}", e)
-                    }
+                Err(e) => {
+                    error!("grpc推送消息失败，原因：{}", e)
                 }
             }
         }
     }
-}
-
-fn get_dex_data(dex_json_path: String) -> Vec<crate::collector::DexJson> {
-    let dex_jsons: Vec<crate::collector::DexJson> = match File::open(dex_json_path.as_str()) {
-        Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
-        Err(e) => {
-            error!("{}", e);
-            vec![]
-        }
-    };
-    dex_jsons
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DexJson {
-    #[serde(deserialize_with = "deserialize_pubkey")]
-    pub pool: Pubkey,
-    #[serde(deserialize_with = "deserialize_pubkey")]
-    pub owner: Pubkey,
-    #[serde(deserialize_with = "deserialize_pubkey", rename = "vaultA")]
-    pub vault_a: Pubkey,
-    #[serde(deserialize_with = "deserialize_pubkey", rename = "vaultB")]
-    pub vault_b: Pubkey,
-    #[serde(
-        deserialize_with = "deserialize_option_pubkey",
-        rename = "addressLookupTableAddress"
-    )]
-    pub address_lookup_table_address: Option<Pubkey>,
-}
-
-fn deserialize_pubkey<'de, D>(deserializer: D) -> anyhow::Result<Pubkey, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(Pubkey::from_str(s.as_str()).unwrap())
-}
-
-fn deserialize_option_pubkey<'de, D>(deserializer: D) -> anyhow::Result<Option<Pubkey>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: anyhow::Result<String, _> = Deserialize::deserialize(deserializer);
-    if s.is_err() {
-        return Ok(None);
-    }
-    Ok(Some(Pubkey::from_str(s?.as_str()).unwrap()))
 }
 
 async fn create_grpc_client(grpc_url: String) -> GeyserGrpcClient<impl Interceptor + Sized> {

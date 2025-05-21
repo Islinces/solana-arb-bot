@@ -1,4 +1,5 @@
 use crate::interface::{DexType, RAYDIUM_AMM_VAULT_OWNER};
+use ahash::{AHashMap, AHashSet};
 use base58::ToBase58;
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
@@ -8,40 +9,34 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::Instant;
 use tracing::info;
 
-pub struct MessageProcessor(pub bool, pub Option<String>);
+pub struct MessageProcessor(pub bool, pub Option<Pubkey>);
 
 impl MessageProcessor {
     pub async fn start(
         &mut self,
-        mut message_receiver: UnboundedReceiver<(
-            Vec<u8>,
-            Vec<u8>,
-            Vec<u8>,
-            Vec<String>,
-            DateTime<Local>,
-            Instant,
-        )>,
-        mut receiver_msg: HashMap<
-            String,
-            Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>,
-        >,
+        mut message_receiver: UnboundedReceiver<(Vec<u8>, Vec<u8>, Vec<u8>, DateTime<Local>)>,
+        mut receiver_msg: AHashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>)>>,
+        pool_ids: AHashSet<Pubkey>,
+        vault_to_pool: AHashMap<Pubkey, (Pubkey, Pubkey)>,
     ) {
         let single_mode = self.0.clone();
         let specify_pool = self.1.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some((tx, account_key, owner, filters, receiver_timestamp, instant))  = message_receiver.recv() => {
-                        let log = process_data(&mut receiver_msg, tx, account_key, owner, filters, receiver_timestamp, instant, &specify_pool);
-                        if let Some((tx, cost, msg)) = log {
+                    Some((tx, account_key, owner, receiver_timestamp))  = message_receiver.recv() => {
+                        let log = process_data(
+                            &mut receiver_msg, tx, account_key, owner, receiver_timestamp,
+                            &specify_pool,&pool_ids,&vault_to_pool);
+                        if let Some((tx, msg)) = log {
                             info!(
-                                "\n{:?} tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
+                                "\n{:?} tx : {:?}\n推送过程 : \n{:#?}",
                                 if single_mode {
                                     "单订阅"
                                 }else{
                                     "多订阅"
                                 },
-                                tx, cost, msg
+                                tx, msg
                             );
                         }
                     }
@@ -52,43 +47,45 @@ impl MessageProcessor {
 }
 
 fn process_data(
-    receiver_msg: &mut HashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>>,
+    receiver_msg: &mut AHashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>)>>,
     tx: Vec<u8>,
     account_key: Vec<u8>,
     owner: Vec<u8>,
-    mut filters: Vec<String>,
     receiver_timestamp: DateTime<Local>,
-    instant: Instant,
-    specify_pool: &Option<String>,
-) -> Option<(String, u128, Vec<String>)> {
+    specify_pool: &Option<Pubkey>,
+    _pool_ids: &AHashSet<Pubkey>,
+    vault_to_pool: &AHashMap<Pubkey, (Pubkey, Pubkey)>,
+) -> Option<(String, Vec<String>)> {
     let txn = tx.as_slice().to_base58();
-    let unique_key = filters.remove(0);
-    let unique_key_items = unique_key.split(":").collect::<Vec<&str>>();
-    let program_id = *unique_key_items.first().unwrap();
-    let pool_id = Pubkey::from_str(*unique_key_items.last().unwrap()).unwrap();
     let account = Pubkey::try_from(account_key.clone()).unwrap();
-    let wait_account_len = if program_id == DexType::RaydiumAMM.get_str_program_id() {
+    let owner = Pubkey::try_from(owner.as_slice()).unwrap();
+    let (pool_id, program_id) = if &owner == DexType::RaydiumAMM.get_ref_program_id()
+        || &owner == DexType::PumpFunAMM.get_ref_program_id()
+    {
+        (account, owner)
+    } else {
+        vault_to_pool.get(&account).unwrap().clone()
+    };
+
+    let wait_account_len = if &program_id == DexType::RaydiumAMM.get_ref_program_id() {
         3
-    } else if program_id == DexType::PumpFunAMM.get_str_program_id() {
+    } else if &program_id == DexType::PumpFunAMM.get_ref_program_id() {
         2
     } else {
         0
     };
-    // let mint_vault = if account == pool_id {
-    //     None
-    // } else {
-    //     Some(account)
-    // };
-    // info!(
-    //     "tx : {:?}, account : {:?}, timestamp : {:?}",
-    //     txn,
-    //     Pubkey::try_from(account_key).unwrap(),
-    //     receiver_timestamp
-    // );
+    info!(
+        "tx : {:?}, account : {:?}, pool_id : {:?}, program_id : {:?}, timestamp : {:?}",
+        txn,
+        account,
+        pool_id,
+        program_id,
+        receiver_timestamp
+    );
     let ready_index = if let Some(value) = receiver_msg.get_mut(&txn) {
         match value.iter().position(|v| v.0 == pool_id) {
             None => {
-                value.push((pool_id, vec![account], vec![receiver_timestamp], instant));
+                value.push((pool_id, vec![account], vec![receiver_timestamp]));
                 None
             }
             Some(index) => {
@@ -105,7 +102,7 @@ fn process_data(
     } else {
         receiver_msg.insert(
             txn.clone(),
-            vec![(pool_id, vec![account], vec![receiver_timestamp], instant)],
+            vec![(pool_id, vec![account], vec![receiver_timestamp])],
         );
         None
     };
@@ -113,7 +110,7 @@ fn process_data(
         let empty = match receiver_msg.get_mut(&txn) {
             None => (false, None),
             Some(ready_data) => {
-                let (pool_id, accounts, timestamp, instant) = ready_data.remove(position);
+                let (pool_id, accounts, timestamp) = ready_data.remove(position);
                 let mut account_push_timestamp = accounts
                     .into_iter()
                     .zip(timestamp)
@@ -132,9 +129,9 @@ fn process_data(
                     format!(
                         "池子 : {:?}, 类型 : {:?}",
                         pool_id.to_string(),
-                        if program_id == DexType::PumpFunAMM.get_str_program_id() {
+                        if &program_id == DexType::PumpFunAMM.get_ref_program_id() {
                             DexType::PumpFunAMM.to_string()
-                        } else if program_id == DexType::RaydiumAMM.get_str_program_id() {
+                        } else if &program_id == DexType::RaydiumAMM.get_ref_program_id() {
                             DexType::RaydiumAMM.to_string()
                         } else {
                             "".to_string()
@@ -143,17 +140,11 @@ fn process_data(
                 );
                 (
                     ready_data.is_empty(),
-                    if specify_pool
-                        .as_ref()
-                        .is_some_and(|v| v != &pool_id.to_string())
+                    if specify_pool.as_ref().is_none() || specify_pool.as_ref().unwrap() == &account
                     {
-                        None
+                        Some((txn.clone(), account_push_timestamp))
                     } else {
-                        Some((
-                            txn.clone(),
-                            instant.elapsed().as_nanos(),
-                            account_push_timestamp,
-                        ))
+                        None
                     },
                 )
             }
