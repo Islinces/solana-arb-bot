@@ -40,7 +40,8 @@ pub struct GrpcSubscribe {
 impl GrpcSubscribe {
     async fn single_subscribe_grpc(
         &self,
-    ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
+    ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
+    {
         let dex_data = get_dex_data(self.dex_json_path.clone());
         let mut account_keys = Vec::with_capacity(dex_data.len());
 
@@ -55,6 +56,7 @@ impl GrpcSubscribe {
                 account_keys.push(json.vault_b);
             }
         }
+        let mut subscrbeitions = StreamMap::new();
         let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
         if !account_keys.is_empty() {
             let mut filter_accounts = HashMap::new();
@@ -76,7 +78,8 @@ impl GrpcSubscribe {
             let (_, stream) = grpc_client
                 .subscribe_with_request(Some(subscribe_request))
                 .await?;
-            return Ok(stream);
+            subscrbeitions.insert("test".to_string(), stream);
+            return Ok(subscrbeitions);
         }
         Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
     }
@@ -256,46 +259,68 @@ impl GrpcSubscribe {
     pub async fn subscribe(&self) {
         let mut stream = self.single_subscribe_grpc().await.unwrap();
         info!("GRPC 订阅成功");
-        while let Some(message) = stream.next().await {
-            match message {
-                Ok(data) => {
+        loop {
+            tokio::select! {
+                Some((_,Ok(data))) = stream.next() => {
                     let time = Local::now();
-                    // let now = Instant::now();
-                    // let filters = data.filters;
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         let account = account.account.unwrap();
                         let tx = account.txn_signature.unwrap().to_base58();
                         let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-                        if self.specify_pool.as_ref().is_none()
-                            || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
-                        {
-                            info!(
-                                "tx : {:?}, account : {:?}, timestamp : {:?}",
-                                tx,
-                                account_key,
-                                time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                            );
+                            if self.specify_pool.as_ref().is_none()
+                                || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
+                            {
+                                info!(
+                                    "tx : {:?}, account : {:?}, timestamp : {:?}",
+                                    tx,
+                                    account_key,
+                                    time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                                );
+                            }
                         }
-
-                        // let account = account.unwrap();
-                        // let result = self.message_sender.send((
-                        //     account.txn_signature.unwrap(),
-                        //     account.pubkey,
-                        //     account.owner,
-                        //     filters,
-                        //     time,
-                        //     now,
-                        // ));
-                        // if let Err(e) = result {
-                        //     error!("failed to send update oneof: {}", e);
-                        // }
-                    }
-                }
-                Err(e) => {
-                    error!("grpc推送消息失败，原因：{}", e)
-                }
+                }else => warn!("subscrbeitions closed"),
             }
         }
+        // while let Some(message) = stream.next().await {
+        //     match message {
+        //         Ok(data) => {
+        //             let time = Local::now();
+        //             // let now = Instant::now();
+        //             // let filters = data.filters;
+        //             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+        //                 let account = account.account.unwrap();
+        //                 let tx = account.txn_signature.unwrap().to_base58();
+        //                 let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
+        //                 if self.specify_pool.as_ref().is_none()
+        //                     || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
+        //                 {
+        //                     info!(
+        //                         "tx : {:?}, account : {:?}, timestamp : {:?}",
+        //                         tx,
+        //                         account_key,
+        //                         time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+        //                     );
+        //                 }
+        //
+        //                 // let account = account.unwrap();
+        //                 // let result = self.message_sender.send((
+        //                 //     account.txn_signature.unwrap(),
+        //                 //     account.pubkey,
+        //                 //     account.owner,
+        //                 //     filters,
+        //                 //     time,
+        //                 //     now,
+        //                 // ));
+        //                 // if let Err(e) = result {
+        //                 //     error!("failed to send update oneof: {}", e);
+        //                 // }
+        //             }
+        //         }
+        //         Err(e) => {
+        //             error!("grpc推送消息失败，原因：{}", e)
+        //         }
+        //     }
+        // }
     }
 }
 
