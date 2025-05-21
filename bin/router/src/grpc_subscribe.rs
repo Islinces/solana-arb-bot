@@ -329,6 +329,7 @@ impl GrpcSubscribe {
             }
         } else {
             let mut stream = self.single_subscribe_grpc_without_stream_map().await.unwrap();
+            info!("GRPC 订阅成功");
             while let Some(message) = stream.next().await {
                 match message {
                     Ok(data) => {
