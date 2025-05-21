@@ -74,14 +74,14 @@ fn process_data(
     } else {
         0
     };
-    info!(
-        "tx : {:?}, account : {:?}, pool_id : {:?}, program_id : {:?}, timestamp : {:?}",
-        txn,
-        account,
-        pool_id,
-        program_id,
-        receiver_timestamp
-    );
+    // info!(
+    //     "tx : {:?}, account : {:?}, pool_id : {:?}, program_id : {:?}, timestamp : {:?}",
+    //     txn,
+    //     account,
+    //     pool_id,
+    //     program_id,
+    //     receiver_timestamp
+    // );
     let ready_index = if let Some(value) = receiver_msg.get_mut(&txn) {
         match value.iter().position(|v| v.0 == pool_id) {
             None => {

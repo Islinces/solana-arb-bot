@@ -9,14 +9,10 @@ use router::grpc_processor::MessageProcessor;
 use router::grpc_subscribe::GrpcSubscribe;
 use router::interface::DexType;
 use router::strategy::MessageStrategy;
-use serde::{Deserialize, Deserializer};
+use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
-use std::fs::File;
 use std::str::FromStr;
-use std::sync::Arc;
-use tokio::time::Instant;
-use tracing::error;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -48,6 +44,8 @@ pub struct Command {
     specify_pool: Option<String>,
     #[arg(long)]
     use_stream_map: Option<bool>,
+    #[arg(long)]
+    standard_program: Option<bool>,
 }
 
 #[tokio::main]
@@ -106,6 +104,7 @@ async fn start_with_custom(command: Command) {
         single_mode,
         specify_pool: command.specify_pool.clone(),
         use_stream_map: command.use_stream_map.unwrap_or(true),
+        standard_program: command.standard_program.unwrap_or(true),
     };
     subscribe.subscribe(dex_data).await;
 }

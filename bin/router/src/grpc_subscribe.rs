@@ -27,15 +27,11 @@ use yellowstone_grpc_proto::tonic::Status;
 pub struct GrpcSubscribe {
     pub grpc_url: String,
     pub dex_json_path: String,
-    pub message_sender: UnboundedSender<(
-        Vec<u8>,
-        Vec<u8>,
-        Vec<u8>,
-        DateTime<Local>,
-    )>,
+    pub message_sender: UnboundedSender<(Vec<u8>, Vec<u8>, Vec<u8>, DateTime<Local>)>,
     pub single_mode: bool,
     pub specify_pool: Option<String>,
     pub use_stream_map: bool,
+    pub standard_program: bool,
 }
 
 impl GrpcSubscribe {
@@ -94,9 +90,11 @@ impl GrpcSubscribe {
         for json in dex_data {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
                 raydium_pool_keys.push(json.pool);
-                raydium_vault_keys.push((json.pool, json.vault_a, json.vault_b));
+                raydium_vault_keys.push(json.vault_a);
+                raydium_vault_keys.push(json.vault_b);
             } else if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
-                pump_fun_vault_keys.push((json.pool, json.vault_a, json.vault_b));
+                pump_fun_vault_keys.push(json.vault_a);
+                pump_fun_vault_keys.push(json.vault_b);
             }
         }
         let mut subscrbeitions = StreamMap::new();
@@ -104,19 +102,16 @@ impl GrpcSubscribe {
 
         if !raydium_pool_keys.is_empty() {
             let mut raydium_pool_account_map = HashMap::new();
-            for pool_id in raydium_pool_keys {
-                raydium_pool_account_map.insert(
-                    format!(
-                        "{}:{}",
-                        DexType::RaydiumAMM.get_str_program_id(),
-                        pool_id.to_string()
-                    ),
-                    SubscribeRequestFilterAccounts {
-                        account: vec![pool_id.to_string()],
-                        ..Default::default()
-                    },
-                );
-            }
+            raydium_pool_account_map.insert(
+                "account1".to_string(),
+                SubscribeRequestFilterAccounts {
+                    account: raydium_pool_keys
+                        .into_iter()
+                        .map(|key| key.to_string())
+                        .collect(),
+                    ..Default::default()
+                },
+            );
             let raydium_pool_subscribe_request = SubscribeRequest {
                 accounts: raydium_pool_account_map,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
@@ -147,106 +142,106 @@ impl GrpcSubscribe {
                 raydium_pool_stream,
             );
         }
-        if !raydium_vault_keys.is_empty() {
-            let mut raydium_vault_account_map = HashMap::new();
-            for (pool_id, vault_a, vault_b) in raydium_vault_keys {
-                raydium_vault_account_map.insert(
-                    format!(
-                        "{}:{}",
-                        DexType::RaydiumAMM.get_str_program_id(),
-                        pool_id.to_string()
-                    ),
-                    SubscribeRequestFilterAccounts {
-                        account: vec![vault_a.to_string(), vault_b.to_string()],
-                        ..Default::default()
-                    },
-                );
-            }
-            let raydium_vault_subscribe_request = SubscribeRequest {
-                accounts: raydium_vault_account_map,
-                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                // accounts_data_slice: vec![
-                //     // mint
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 0,
-                //         length: 32,
-                //     },
-                //     // amount
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 64,
-                //         length: 8,
-                //     },
-                //     // state
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 108,
-                //         length: 1,
-                //     },
-                // ],
-                ..Default::default()
-            };
-            let (_, raydium_vault_stream) = grpc_client
-                .subscribe_with_request(Some(raydium_vault_subscribe_request))
-                .await?;
-            subscrbeitions.insert(
-                format!(
-                    "{:?}:{:?}",
-                    DexType::RaydiumAMM,
-                    GrpcAccountUpdateType::MintVault
-                ),
-                raydium_vault_stream,
-            );
-        }
+        // if !raydium_vault_keys.is_empty() {
+        //     let mut raydium_vault_account_map = HashMap::new();
+        //     for (pool_id, vault_a, vault_b) in raydium_vault_keys {
+        //         raydium_vault_account_map.insert(
+        //             format!(
+        //                 "{}:{}",
+        //                 DexType::RaydiumAMM.get_str_program_id(),
+        //                 pool_id.to_string()
+        //             ),
+        //             SubscribeRequestFilterAccounts {
+        //                 account: vec![vault_a.to_string(), vault_b.to_string()],
+        //                 ..Default::default()
+        //             },
+        //         );
+        //     }
+        //     let raydium_vault_subscribe_request = SubscribeRequest {
+        //         accounts: raydium_vault_account_map,
+        //         commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+        //         // accounts_data_slice: vec![
+        //         //     // mint
+        //         //     SubscribeRequestAccountsDataSlice {
+        //         //         offset: 0,
+        //         //         length: 32,
+        //         //     },
+        //         //     // amount
+        //         //     SubscribeRequestAccountsDataSlice {
+        //         //         offset: 64,
+        //         //         length: 8,
+        //         //     },
+        //         //     // state
+        //         //     SubscribeRequestAccountsDataSlice {
+        //         //         offset: 108,
+        //         //         length: 1,
+        //         //     },
+        //         // ],
+        //         ..Default::default()
+        //     };
+        //     let (_, raydium_vault_stream) = grpc_client
+        //         .subscribe_with_request(Some(raydium_vault_subscribe_request))
+        //         .await?;
+        //     subscrbeitions.insert(
+        //         format!(
+        //             "{:?}:{:?}",
+        //             DexType::RaydiumAMM,
+        //             GrpcAccountUpdateType::MintVault
+        //         ),
+        //         raydium_vault_stream,
+        //     );
+        // }
 
-        if !pump_fun_vault_keys.is_empty() {
-            let mut pump_fun_vault_account_map = HashMap::new();
-            for (pool_id, vault_a, vault_b) in pump_fun_vault_keys {
-                pump_fun_vault_account_map.insert(
-                    format!(
-                        "{}:{}",
-                        DexType::PumpFunAMM.get_str_program_id(),
-                        pool_id.to_string()
-                    ),
-                    SubscribeRequestFilterAccounts {
-                        account: vec![vault_a.to_string(), vault_b.to_string()],
-                        ..Default::default()
-                    },
-                );
-            }
-            let pump_fun_vault_subscribe_request = SubscribeRequest {
-                accounts: pump_fun_vault_account_map,
-                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                // accounts_data_slice: vec![
-                //     // mint
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 0,
-                //         length: 32,
-                //     },
-                //     // amount
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 64,
-                //         length: 8,
-                //     },
-                //     // state
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 108,
-                //         length: 1,
-                //     },
-                // ],
-                ..Default::default()
-            };
-
-            let (_, pump_fun_vault_stream) = grpc_client
-                .subscribe_with_request(Some(pump_fun_vault_subscribe_request))
-                .await?;
-            subscrbeitions.insert(
-                format!(
-                    "{:?}:{:?}",
-                    DexType::PumpFunAMM,
-                    GrpcAccountUpdateType::MintVault
-                ),
-                pump_fun_vault_stream,
-            );
-        }
+        // if !pump_fun_vault_keys.is_empty() {
+        //     let mut pump_fun_vault_account_map = HashMap::new();
+        //     for (pool_id, vault_a, vault_b) in pump_fun_vault_keys {
+        //         pump_fun_vault_account_map.insert(
+        //             format!(
+        //                 "{}:{}",
+        //                 DexType::PumpFunAMM.get_str_program_id(),
+        //                 pool_id.to_string()
+        //             ),
+        //             SubscribeRequestFilterAccounts {
+        //                 account: vec![vault_a.to_string(), vault_b.to_string()],
+        //                 ..Default::default()
+        //             },
+        //         );
+        //     }
+        //     let pump_fun_vault_subscribe_request = SubscribeRequest {
+        //         accounts: pump_fun_vault_account_map,
+        //         commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+        //         // accounts_data_slice: vec![
+        //         //     // mint
+        //         //     SubscribeRequestAccountsDataSlice {
+        //         //         offset: 0,
+        //         //         length: 32,
+        //         //     },
+        //         //     // amount
+        //         //     SubscribeRequestAccountsDataSlice {
+        //         //         offset: 64,
+        //         //         length: 8,
+        //         //     },
+        //         //     // state
+        //         //     SubscribeRequestAccountsDataSlice {
+        //         //         offset: 108,
+        //         //         length: 1,
+        //         //     },
+        //         // ],
+        //         ..Default::default()
+        //     };
+        //
+        //     let (_, pump_fun_vault_stream) = grpc_client
+        //         .subscribe_with_request(Some(pump_fun_vault_subscribe_request))
+        //         .await?;
+        //     subscrbeitions.insert(
+        //         format!(
+        //             "{:?}:{:?}",
+        //             DexType::PumpFunAMM,
+        //             GrpcAccountUpdateType::MintVault
+        //         ),
+        //         pump_fun_vault_stream,
+        //     );
+        // }
         if subscrbeitions.is_empty() {
             Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
         } else {
@@ -257,32 +252,50 @@ impl GrpcSubscribe {
     pub async fn subscribe(&self, dex_data: Vec<DexJson>) {
         let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
         info!("GRPC 订阅成功");
-        while let Some(message) = stream.next().await {
-            match message {
-                Ok(data) => {
-                    let time = Local::now();
-                    if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                        let account = account.account.unwrap();
-                        let _ = self.message_sender.send((
-                            account.txn_signature.unwrap(),
-                            account.pubkey,
-                            account.owner,
-                            time,
-                        ));
-                        // if self.specify_pool.as_ref().is_none()
-                        //     || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
-                        // {
-                        //     info!(
-                        //         "tx : {:?}, account : {:?}, timestamp : {:?}",
-                        //         tx,
-                        //         account_key,
-                        //         time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                        //     );
-                        // }
+        if self.standard_program {
+            while let Some(message) = stream.next().await {
+                match message {
+                    Ok(data) => {
+                        let time = Local::now();
+                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                            let account = account.account.unwrap();
+                            let tx = account.txn_signature.as_ref().unwrap().to_base58();
+                            let account_key = Pubkey::try_from(account.pubkey).unwrap();
+                            if self.specify_pool.as_ref().is_none()
+                                || self.specify_pool.as_ref().unwrap() == &account_key.to_string()
+                            {
+                                info!(
+                                    "tx : {:?}, account : {:?}, timestamp : {:?}",
+                                    tx,
+                                    account_key,
+                                    time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("grpc推送消息失败，原因：{}", e)
                     }
                 }
-                Err(e) => {
-                    error!("grpc推送消息失败，原因：{}", e)
+            }
+        } else {
+            while let Some(message) = stream.next().await {
+                match message {
+                    Ok(data) => {
+                        let time = Local::now();
+                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                            let account = account.account.unwrap();
+                            let _ = self.message_sender.send((
+                                account.txn_signature.unwrap(),
+                                account.pubkey,
+                                account.owner,
+                                time,
+                            ));
+                        }
+                    }
+                    Err(e) => {
+                        error!("grpc推送消息失败，原因：{}", e)
+                    }
                 }
             }
         }
