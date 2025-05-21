@@ -385,16 +385,26 @@ where
 }
 
 async fn create_grpc_client(grpc_url: String) -> GeyserGrpcClient<impl Interceptor + Sized> {
-    GeyserGrpcClient::build_from_shared(grpc_url)
-        .unwrap()
-        .tcp_nodelay(true)
+    let use_tls = grpc_url.starts_with("https://");
+    let mut builder = GeyserGrpcClient::build_from_shared(grpc_url).unwrap();
+    if use_tls {
+        builder = builder
+            .tls_config(ClientTlsConfig::new().with_native_roots())
+            .unwrap();
+    }
+    builder
+        .max_decoding_message_size(100 * 1024 * 1024) // 100MB
+        .connect_timeout(Duration::from_secs(2))
+        .buffer_size(64 * 1024) // 64KB buffer
         .http2_adaptive_window(true)
-        .buffer_size(65536)
-        .initial_connection_window_size(5242880)
-        .initial_stream_window_size(4194304)
-        .connect_timeout(Duration::from_millis(30 * 1000))
-        .tls_config(ClientTlsConfig::new().with_native_roots())
-        .unwrap()
+        .http2_keep_alive_interval(Duration::from_secs(15))
+        .initial_connection_window_size(2 * 1024 * 1024) // 2MB
+        .initial_stream_window_size(2 * 1024 * 1024) // 2MB
+        .keep_alive_timeout(Duration::from_secs(30))
+        .keep_alive_while_idle(true)
+        .tcp_keepalive(Some(Duration::from_secs(30)))
+        .tcp_nodelay(true)
+        .timeout(Duration::from_secs(10))
         .connect()
         .await
         .map_err(|e| {
