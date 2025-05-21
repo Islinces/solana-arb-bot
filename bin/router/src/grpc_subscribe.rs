@@ -1,4 +1,5 @@
 use crate::interface::{DexType, GrpcAccountUpdateType};
+use base58::ToBase58;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Deserializer};
 use serde_json::json;
@@ -38,78 +39,45 @@ pub struct GrpcSubscribe {
 impl GrpcSubscribe {
     async fn single_subscribe_grpc(
         &self,
-    ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
-    {
+    ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
         let dex_data = get_dex_data(self.dex_json_path.clone());
-        let mut raydium_keys = Vec::with_capacity(dex_data.len());
-        let mut pump_fun_keys = Vec::with_capacity(dex_data.len());
+        let mut account_keys = Vec::with_capacity(dex_data.len());
 
         for json in dex_data {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
-                raydium_keys.push(vec![json.pool, json.vault_a, json.vault_b]);
+                account_keys.push(json.pool);
+                account_keys.push(json.vault_a);
+                account_keys.push(json.vault_b);
             }
             if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
-                pump_fun_keys.push(vec![json.pool, json.vault_a, json.vault_b]);
+                account_keys.push(json.vault_a);
+                account_keys.push(json.vault_b);
             }
         }
-        let mut subscrbeitions = StreamMap::new();
         let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
-        if !raydium_keys.is_empty() {
-            let mut raydium_accounts = HashMap::new();
-            for keys in raydium_keys {
-                raydium_accounts.insert(
-                    format!(
-                        "{}:{}",
-                        DexType::RaydiumAMM.get_str_program_id(),
-                        keys.get(0).unwrap().to_string()
-                    ),
-                    SubscribeRequestFilterAccounts {
-                        account: keys.iter().map(|key| key.to_string()).collect::<Vec<_>>(),
-                        ..Default::default()
-                    },
-                );
-            }
-            let raydium_subscribe_request = SubscribeRequest {
-                accounts: raydium_accounts,
+        if !account_keys.is_empty() {
+            let mut filter_accounts = HashMap::new();
+            filter_accounts.insert(
+                "accounts".to_string(),
+                SubscribeRequestFilterAccounts {
+                    account: account_keys
+                        .iter()
+                        .map(|key| key.to_string())
+                        .collect::<Vec<_>>(),
+                    ..Default::default()
+                },
+            );
+            let subscribe_request = SubscribeRequest {
+                accounts: filter_accounts,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
                 ..Default::default()
             };
-            let (_, raydium_stream) = grpc_client
-                .subscribe_with_request(Some(raydium_subscribe_request))
+            let (_, stream) = grpc_client
+                .subscribe_with_request(Some(subscribe_request))
                 .await?;
-            subscrbeitions.insert(DexType::RaydiumAMM.to_string(), raydium_stream);
+            return Ok(stream);
         }
-        if !pump_fun_keys.is_empty() {
-            let mut pump_fun_accounts = HashMap::new();
-            for mut keys in pump_fun_keys {
-                let pool_id = keys.remove(0);
-                pump_fun_accounts.insert(
-                    format!(
-                        "{}:{}",
-                        DexType::PumpFunAMM.get_str_program_id(),
-                        pool_id.to_string()
-                    ),
-                    SubscribeRequestFilterAccounts {
-                        account: keys.iter().map(|key| key.to_string()).collect::<Vec<_>>(),
-                        ..Default::default()
-                    },
-                );
-            }
-            let pump_fun_subscribe_request = SubscribeRequest {
-                accounts: pump_fun_accounts,
-                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                ..Default::default()
-            };
-            let (_, pump_fun_stream) = grpc_client
-                .subscribe_with_request(Some(pump_fun_subscribe_request))
-                .await?;
-            subscrbeitions.insert(DexType::PumpFunAMM.to_string(), pump_fun_stream);
-        }
-        if subscrbeitions.is_empty() {
-            Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
-        } else {
-            Ok(subscrbeitions)
-        }
+        Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
     }
 
     async fn multi_subscribe_grpc(
@@ -285,55 +253,36 @@ impl GrpcSubscribe {
     }
 
     pub async fn subscribe(&self) {
-        if self.single_mode {
-            let mut subscrbeitions = self.single_subscribe_grpc().await.unwrap();
-            info!("GRPC 订阅成功");
-            loop {
-                tokio::select! {
-                    Some((_,Ok(data))) = subscrbeitions.next() => {
-                        let time = Local::now();
-                        let now=Instant::now();
-                        let filters = data.filters;
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            let account= account.account.unwrap();
-                            let  result = self.message_sender.send((account.txn_signature.unwrap(),
-                                account.pubkey,
-                                account.owner,
-                                filters,
-                                time,
-                                now));
-                            if let Err(e)=result{
-                                error!("failed to send update oneof: {}", e);
-                            }
-                        }
-                    }else => warn!("subscrbeitions closed"),
-                }
+        let mut stream = self.single_subscribe_grpc().await.unwrap();
+        info!("GRPC 订阅成功");
+        while let Some(Ok(data)) = stream.next().await {
+            let time = Local::now();
+            // let now = Instant::now();
+            // let filters = data.filters;
+            if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                let account = account.account.unwrap();
+                let tx = account.txn_signature.unwrap().to_base58();
+                let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
+                info!(
+                    "tx : {:?}, account : {:?}, timestamp : {:?}",
+                    tx,
+                    account_key,
+                    time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                );
+                // let account = account.unwrap();
+                // let result = self.message_sender.send((
+                //     account.txn_signature.unwrap(),
+                //     account.pubkey,
+                //     account.owner,
+                //     filters,
+                //     time,
+                //     now,
+                // ));
+                // if let Err(e) = result {
+                //     error!("failed to send update oneof: {}", e);
+                // }
             }
-        } else {
-            let mut subscrbeitions = self.multi_subscribe_grpc().await.unwrap();
-            info!("GRPC 订阅成功");
-            loop {
-                tokio::select! {
-                    Some((_,Ok(data))) = subscrbeitions.next() => {
-                        let time = Local::now();
-                        let now=Instant::now();
-                        let filters = data.filters;
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            let account= account.account.unwrap();
-                            let  result = self.message_sender.send((account.txn_signature.unwrap(),
-                                account.pubkey,
-                                account.owner,
-                                filters,
-                                time,
-                                now));
-                            if let Err(e)=result{
-                                error!("failed to send update oneof: {}", e);
-                            }
-                        }
-                    }else => warn!("subscrbeitions closed"),
-                }
-            }
-        };
+        }
     }
 }
 
