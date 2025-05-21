@@ -52,10 +52,10 @@ impl SubscribeCollector {
         let mut raydium_vault_accounts = Vec::with_capacity(dex_data.len() * 2);
         let mut pump_fun_vault_accounts = Vec::with_capacity(dex_data.len() * 2);
         for json in dex_data {
-            if !self
+            if self
                 .specify_pool
                 .as_ref()
-                .is_some_and(|v| json.pool.to_string() == *v)
+                .is_some_and(|v| json.pool.to_string() != *v)
             {
                 continue;
             }
@@ -220,10 +220,10 @@ impl SubscribeCollector {
         let mut pump_fun_accounts = HashMap::new();
 
         for json in dex_data {
-            if !self
+            if self
                 .specify_pool
                 .as_ref()
-                .is_some_and(|v| json.pool.to_string() == *v)
+                .is_some_and(|v| json.pool.to_string() != *v)
             {
                 continue;
             }
