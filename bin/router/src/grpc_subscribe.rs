@@ -142,106 +142,100 @@ impl GrpcSubscribe {
                 raydium_pool_stream,
             );
         }
-        // if !raydium_vault_keys.is_empty() {
-        //     let mut raydium_vault_account_map = HashMap::new();
-        //     for (pool_id, vault_a, vault_b) in raydium_vault_keys {
-        //         raydium_vault_account_map.insert(
-        //             format!(
-        //                 "{}:{}",
-        //                 DexType::RaydiumAMM.get_str_program_id(),
-        //                 pool_id.to_string()
-        //             ),
-        //             SubscribeRequestFilterAccounts {
-        //                 account: vec![vault_a.to_string(), vault_b.to_string()],
-        //                 ..Default::default()
-        //             },
-        //         );
-        //     }
-        //     let raydium_vault_subscribe_request = SubscribeRequest {
-        //         accounts: raydium_vault_account_map,
-        //         commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-        //         // accounts_data_slice: vec![
-        //         //     // mint
-        //         //     SubscribeRequestAccountsDataSlice {
-        //         //         offset: 0,
-        //         //         length: 32,
-        //         //     },
-        //         //     // amount
-        //         //     SubscribeRequestAccountsDataSlice {
-        //         //         offset: 64,
-        //         //         length: 8,
-        //         //     },
-        //         //     // state
-        //         //     SubscribeRequestAccountsDataSlice {
-        //         //         offset: 108,
-        //         //         length: 1,
-        //         //     },
-        //         // ],
-        //         ..Default::default()
-        //     };
-        //     let (_, raydium_vault_stream) = grpc_client
-        //         .subscribe_with_request(Some(raydium_vault_subscribe_request))
-        //         .await?;
-        //     subscrbeitions.insert(
-        //         format!(
-        //             "{:?}:{:?}",
-        //             DexType::RaydiumAMM,
-        //             GrpcAccountUpdateType::MintVault
-        //         ),
-        //         raydium_vault_stream,
-        //     );
-        // }
+        if !raydium_vault_keys.is_empty() {
+            let mut raydium_vault_account_map = HashMap::new();
+            raydium_vault_account_map.insert(
+                "vault1".to_string(),
+                SubscribeRequestFilterAccounts {
+                    account: raydium_vault_keys
+                        .into_iter()
+                        .map(|key| key.to_string())
+                        .collect(),
+                    ..Default::default()
+                },
+            );
+            let raydium_vault_subscribe_request = SubscribeRequest {
+                accounts: raydium_vault_account_map,
+                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+                // accounts_data_slice: vec![
+                //     // mint
+                //     SubscribeRequestAccountsDataSlice {
+                //         offset: 0,
+                //         length: 32,
+                //     },
+                //     // amount
+                //     SubscribeRequestAccountsDataSlice {
+                //         offset: 64,
+                //         length: 8,
+                //     },
+                //     // state
+                //     SubscribeRequestAccountsDataSlice {
+                //         offset: 108,
+                //         length: 1,
+                //     },
+                // ],
+                ..Default::default()
+            };
+            let (_, raydium_vault_stream) = grpc_client
+                .subscribe_with_request(Some(raydium_vault_subscribe_request))
+                .await?;
+            subscrbeitions.insert(
+                format!(
+                    "{:?}:{:?}",
+                    DexType::RaydiumAMM,
+                    GrpcAccountUpdateType::MintVault
+                ),
+                raydium_vault_stream,
+            );
+        }
 
-        // if !pump_fun_vault_keys.is_empty() {
-        //     let mut pump_fun_vault_account_map = HashMap::new();
-        //     for (pool_id, vault_a, vault_b) in pump_fun_vault_keys {
-        //         pump_fun_vault_account_map.insert(
-        //             format!(
-        //                 "{}:{}",
-        //                 DexType::PumpFunAMM.get_str_program_id(),
-        //                 pool_id.to_string()
-        //             ),
-        //             SubscribeRequestFilterAccounts {
-        //                 account: vec![vault_a.to_string(), vault_b.to_string()],
-        //                 ..Default::default()
-        //             },
-        //         );
-        //     }
-        //     let pump_fun_vault_subscribe_request = SubscribeRequest {
-        //         accounts: pump_fun_vault_account_map,
-        //         commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-        //         // accounts_data_slice: vec![
-        //         //     // mint
-        //         //     SubscribeRequestAccountsDataSlice {
-        //         //         offset: 0,
-        //         //         length: 32,
-        //         //     },
-        //         //     // amount
-        //         //     SubscribeRequestAccountsDataSlice {
-        //         //         offset: 64,
-        //         //         length: 8,
-        //         //     },
-        //         //     // state
-        //         //     SubscribeRequestAccountsDataSlice {
-        //         //         offset: 108,
-        //         //         length: 1,
-        //         //     },
-        //         // ],
-        //         ..Default::default()
-        //     };
-        //
-        //     let (_, pump_fun_vault_stream) = grpc_client
-        //         .subscribe_with_request(Some(pump_fun_vault_subscribe_request))
-        //         .await?;
-        //     subscrbeitions.insert(
-        //         format!(
-        //             "{:?}:{:?}",
-        //             DexType::PumpFunAMM,
-        //             GrpcAccountUpdateType::MintVault
-        //         ),
-        //         pump_fun_vault_stream,
-        //     );
-        // }
+        if !pump_fun_vault_keys.is_empty() {
+            let mut pump_fun_vault_account_map = HashMap::new();
+            pump_fun_vault_account_map.insert(
+                "vault2".to_string(),
+                SubscribeRequestFilterAccounts {
+                    account: pump_fun_vault_keys
+                        .into_iter()
+                        .map(|key| key.to_string())
+                        .collect(),
+                    ..Default::default()
+                },
+            );
+            let pump_fun_vault_subscribe_request = SubscribeRequest {
+                accounts: pump_fun_vault_account_map,
+                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+                // accounts_data_slice: vec![
+                //     // mint
+                //     SubscribeRequestAccountsDataSlice {
+                //         offset: 0,
+                //         length: 32,
+                //     },
+                //     // amount
+                //     SubscribeRequestAccountsDataSlice {
+                //         offset: 64,
+                //         length: 8,
+                //     },
+                //     // state
+                //     SubscribeRequestAccountsDataSlice {
+                //         offset: 108,
+                //         length: 1,
+                //     },
+                // ],
+                ..Default::default()
+            };
+
+            let (_, pump_fun_vault_stream) = grpc_client
+                .subscribe_with_request(Some(pump_fun_vault_subscribe_request))
+                .await?;
+            subscrbeitions.insert(
+                format!(
+                    "{:?}:{:?}",
+                    DexType::PumpFunAMM,
+                    GrpcAccountUpdateType::MintVault
+                ),
+                pump_fun_vault_stream,
+            );
+        }
         if subscrbeitions.is_empty() {
             Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
         } else {
@@ -250,9 +244,9 @@ impl GrpcSubscribe {
     }
 
     pub async fn subscribe(&self, dex_data: Vec<DexJson>) {
-        let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
-        info!("GRPC 订阅成功");
         if self.standard_program {
+            let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
+            info!("GRPC 订阅成功");
             while let Some(message) = stream.next().await {
                 match message {
                     Ok(data) => {
@@ -279,7 +273,30 @@ impl GrpcSubscribe {
                 }
             }
         } else {
-            while let Some(message) = stream.next().await {
+            // let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
+            // info!("GRPC 订阅成功");
+            // while let Some(message) = stream.next().await {
+            //     match message {
+            //         Ok(data) => {
+            //             let time = Local::now();
+            //             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+            //                 let account = account.account.unwrap();
+            //                 let _ = self.message_sender.send((
+            //                     account.txn_signature.unwrap(),
+            //                     account.pubkey,
+            //                     account.owner,
+            //                     time,
+            //                 ));
+            //             }
+            //         }
+            //         Err(e) => {
+            //             error!("grpc推送消息失败，原因：{}", e)
+            //         }
+            //     }
+            // }
+            let mut stream = self.multi_subscribe_grpc(dex_data).await.unwrap();
+            info!("GRPC 订阅成功");
+            while let Some((_, message)) = stream.next().await {
                 match message {
                     Ok(data) => {
                         let time = Local::now();
