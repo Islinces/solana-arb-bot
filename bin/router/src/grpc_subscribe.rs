@@ -255,32 +255,39 @@ impl GrpcSubscribe {
     pub async fn subscribe(&self) {
         let mut stream = self.single_subscribe_grpc().await.unwrap();
         info!("GRPC 订阅成功");
-        while let Some(Ok(data)) = stream.next().await {
-            let time = Local::now();
-            // let now = Instant::now();
-            // let filters = data.filters;
-            if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                let account = account.account.unwrap();
-                let tx = account.txn_signature.unwrap().to_base58();
-                let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-                info!(
-                    "tx : {:?}, account : {:?}, timestamp : {:?}",
-                    tx,
-                    account_key,
-                    time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                );
-                // let account = account.unwrap();
-                // let result = self.message_sender.send((
-                //     account.txn_signature.unwrap(),
-                //     account.pubkey,
-                //     account.owner,
-                //     filters,
-                //     time,
-                //     now,
-                // ));
-                // if let Err(e) = result {
-                //     error!("failed to send update oneof: {}", e);
-                // }
+        while let Some(message) = stream.next().await {
+            match message {
+                Ok(data) => {
+                    let time = Local::now();
+                    // let now = Instant::now();
+                    // let filters = data.filters;
+                    if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                        let account = account.account.unwrap();
+                        let tx = account.txn_signature.unwrap().to_base58();
+                        let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
+                        info!(
+                            "tx : {:?}, account : {:?}, timestamp : {:?}",
+                            tx,
+                            account_key,
+                            time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                        );
+                        // let account = account.unwrap();
+                        // let result = self.message_sender.send((
+                        //     account.txn_signature.unwrap(),
+                        //     account.pubkey,
+                        //     account.owner,
+                        //     filters,
+                        //     time,
+                        //     now,
+                        // ));
+                        // if let Err(e) = result {
+                        //     error!("failed to send update oneof: {}", e);
+                        // }
+                    }
+                }
+                Err(e) => {
+                    error!("grpc推送消息失败，原因：{}", e)
+                }
             }
         }
     }
