@@ -140,7 +140,7 @@ fn process_data(
                 );
                 (
                     ready_data.is_empty(),
-                    if specify_pool.as_ref().is_none() || specify_pool.as_ref().unwrap() == &account
+                    if specify_pool.as_ref().is_none() || specify_pool.as_ref().unwrap() == &pool_id
                     {
                         Some((txn.clone(), account_push_timestamp))
                     } else {
