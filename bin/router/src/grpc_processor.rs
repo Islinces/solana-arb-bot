@@ -79,12 +79,12 @@ fn process_data(
     // } else {
     //     Some(account)
     // };
-    info!(
-        "tx : {:?}, account : {:?}, timestamp : {:?}",
-        txn,
-        Pubkey::try_from(account_key).unwrap(),
-        receiver_timestamp
-    );
+    // info!(
+    //     "tx : {:?}, account : {:?}, timestamp : {:?}",
+    //     txn,
+    //     Pubkey::try_from(account_key).unwrap(),
+    //     receiver_timestamp
+    // );
     let ready_index = if let Some(value) = receiver_msg.get_mut(&txn) {
         match value.iter().position(|v| v.0 == pool_id) {
             None => {
