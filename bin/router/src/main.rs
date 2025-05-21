@@ -37,6 +37,8 @@ pub struct Command {
     start_mode: Option<String>,
     #[arg(long)]
     specify_pool: Option<String>,
+    #[arg(long)]
+    use_stream_map: Option<bool>,
 }
 
 #[tokio::main]
@@ -87,6 +89,7 @@ async fn start_with_custom(command: Command) {
         message_sender: sender.clone(),
         single_mode,
         specify_pool: command.specify_pool.clone(),
+        use_stream_map: command.use_stream_map.unwrap_or(true),
     };
     subscribe.subscribe().await;
 }
