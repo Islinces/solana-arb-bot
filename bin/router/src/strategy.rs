@@ -95,8 +95,8 @@ fn process_data(
     //     txn, pool_id_or_vault, maybe_owner, receiver_timestamp
     // );
     // 金库
-    let (pool_id, vault, owner) = if maybe_owner != DexType::RaydiumAMM.get_program_id()
-        && maybe_owner != DexType::PumpFunAMM.get_program_id()
+    let (pool_id, vault, owner) = if &maybe_owner != DexType::RaydiumAMM.get_ref_program_id()
+        && &maybe_owner != DexType::PumpFunAMM.get_ref_program_id()
     {
         let items = filters.first().unwrap().split(":").collect::<Vec<&str>>();
         (
@@ -112,12 +112,12 @@ fn process_data(
             None => {
                 value.push((
                     pool_id,
-                    if owner == DexType::RaydiumAMM.get_program_id() {
+                    if &owner == DexType::RaydiumAMM.get_ref_program_id() {
                         vault.map_or(vec![pool_id], |v| vec![v])
                     } else {
                         vault.map_or(vec![], |v| vec![v])
                     },
-                    if owner == DexType::RaydiumAMM.get_program_id() {
+                    if &owner == DexType::RaydiumAMM.get_ref_program_id() {
                         vault.map_or(vec![receiver_timestamp], |_| vec![receiver_timestamp])
                     } else {
                         vault.map_or(vec![], |_| vec![receiver_timestamp])
@@ -130,7 +130,7 @@ fn process_data(
                 let v = value.get_mut(index).unwrap();
                 v.1.push(vault.map_or(pool_id, |v| v));
                 v.2.push(receiver_timestamp);
-                if owner == DexType::RaydiumAMM.get_program_id() && v.1.len() == 3 {
+                if &owner == DexType::RaydiumAMM.get_ref_program_id() && v.1.len() == 3 {
                     Some(index)
                 } else {
                     None
@@ -142,12 +142,12 @@ fn process_data(
             txn.clone(),
             vec![(
                 pool_id,
-                if owner == DexType::RaydiumAMM.get_program_id() {
+                if &owner == DexType::RaydiumAMM.get_ref_program_id() {
                     vault.map_or(vec![pool_id], |v| vec![v])
                 } else {
                     vault.map_or(vec![], |v| vec![v])
                 },
-                if owner == DexType::RaydiumAMM.get_program_id() {
+                if &owner == DexType::RaydiumAMM.get_ref_program_id() {
                     vault.map_or(vec![receiver_timestamp], |_| vec![receiver_timestamp])
                 } else {
                     vault.map_or(vec![], |_| vec![receiver_timestamp])
@@ -180,9 +180,9 @@ fn process_data(
                     format!(
                         "池子 : {:?}, 类型 : {:?}",
                         pool_id.to_string(),
-                        if owner == DexType::PumpFunAMM.get_program_id() {
+                        if &owner == DexType::PumpFunAMM.get_ref_program_id() {
                             DexType::PumpFunAMM.to_string()
-                        } else if owner == DexType::RaydiumAMM.get_program_id() {
+                        } else if &owner == DexType::RaydiumAMM.get_ref_program_id() {
                             DexType::RaydiumAMM.to_string()
                         } else {
                             "".to_string()

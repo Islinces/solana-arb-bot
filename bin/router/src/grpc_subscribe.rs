@@ -1,6 +1,7 @@
 use crate::interface::{DexType, GrpcAccountUpdateType};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Deserializer};
+use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fs::File;
@@ -40,46 +41,34 @@ impl GrpcSubscribe {
     ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
         let dex_data = get_dex_data(self.dex_json_path.clone());
-        let mut raydium_pool_keys = Vec::with_capacity(dex_data.len() * 3);
-        let mut raydium_accounts = HashMap::new();
-        let mut pump_fun_accounts = HashMap::new();
+        let mut raydium_keys = Vec::with_capacity(dex_data.len());
+        let mut pump_fun_keys = Vec::with_capacity(dex_data.len());
 
         for json in dex_data {
-            if &json.owner == &DexType::RaydiumAMM.get_program_id() {
-                raydium_pool_keys.push(json.pool);
-                raydium_accounts.insert(
-                    format!("{:?}:{:?}", json.pool, json.owner),
-                    SubscribeRequestFilterAccounts {
-                        account: vec![json.vault_a.to_string(), json.vault_b.to_string()],
-                        ..Default::default()
-                    },
-                );
+            if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
+                raydium_keys.push(vec![json.pool, json.vault_a, json.vault_b]);
             }
-            if &json.owner == &DexType::PumpFunAMM.get_program_id() {
-                pump_fun_accounts.insert(
-                    format!("{:?}:{:?}", json.pool, json.owner),
-                    SubscribeRequestFilterAccounts {
-                        account: vec![json.vault_a.to_string(), json.vault_b.to_string()],
-                        ..Default::default()
-                    },
-                );
+            if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
+                pump_fun_keys.push(vec![json.pool, json.vault_a, json.vault_b]);
             }
-        }
-        if !raydium_pool_keys.is_empty() {
-            raydium_accounts.insert(
-                "accounts".to_string(),
-                SubscribeRequestFilterAccounts {
-                    account: raydium_pool_keys
-                        .iter()
-                        .map(|key| key.to_string())
-                        .collect::<Vec<_>>(),
-                    ..Default::default()
-                },
-            );
         }
         let mut subscrbeitions = StreamMap::new();
         let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
-        if !raydium_accounts.is_empty() {
+        if !raydium_keys.is_empty() {
+            let mut raydium_accounts = HashMap::new();
+            for keys in raydium_keys {
+                raydium_accounts.insert(
+                    format!(
+                        "{}:{}",
+                        DexType::RaydiumAMM.get_str_program_id(),
+                        keys.get(0).unwrap().to_string()
+                    ),
+                    SubscribeRequestFilterAccounts {
+                        account: keys.iter().map(|key| key.to_string()).collect::<Vec<_>>(),
+                        ..Default::default()
+                    },
+                );
+            }
             let raydium_subscribe_request = SubscribeRequest {
                 accounts: raydium_accounts,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
@@ -90,8 +79,22 @@ impl GrpcSubscribe {
                 .await?;
             subscrbeitions.insert(DexType::RaydiumAMM.to_string(), raydium_stream);
         }
-
-        if !pump_fun_accounts.is_empty() {
+        if !pump_fun_keys.is_empty() {
+            let mut pump_fun_accounts = HashMap::new();
+            for mut keys in pump_fun_keys {
+                let pool_id = keys.remove(0);
+                pump_fun_accounts.insert(
+                    format!(
+                        "{}:{}",
+                        DexType::PumpFunAMM.get_str_program_id(),
+                        pool_id.to_string()
+                    ),
+                    SubscribeRequestFilterAccounts {
+                        account: keys.iter().map(|key| key.to_string()).collect::<Vec<_>>(),
+                        ..Default::default()
+                    },
+                );
+            }
             let pump_fun_subscribe_request = SubscribeRequest {
                 accounts: pump_fun_accounts,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
@@ -114,32 +117,36 @@ impl GrpcSubscribe {
     ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
         let dex_data = get_dex_data(self.dex_json_path.clone());
-        let mut raydium_pool_accounts = Vec::with_capacity(dex_data.len());
-        let mut raydium_vault_accounts = Vec::with_capacity(dex_data.len() * 2);
-        let mut pump_fun_vault_accounts = Vec::with_capacity(dex_data.len() * 2);
+        let mut raydium_pool_keys = Vec::with_capacity(dex_data.len());
+        let mut raydium_vault_keys = Vec::with_capacity(dex_data.len() * 2);
+        let mut pump_fun_vault_keys = Vec::with_capacity(dex_data.len() * 2);
+
         for json in dex_data {
-            if &json.owner == &DexType::RaydiumAMM.get_program_id() {
-                raydium_pool_accounts.push(json.pool);
-                raydium_vault_accounts.push((json.pool, json.vault_a, json.vault_b));
-            } else if &json.owner == &DexType::PumpFunAMM.get_program_id() {
-                pump_fun_vault_accounts.push((json.pool, json.vault_a, json.vault_b));
+            if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
+                raydium_pool_keys.push(json.pool);
+                raydium_vault_keys.push((json.pool, json.vault_a, json.vault_b));
+            } else if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
+                pump_fun_vault_keys.push((json.pool, json.vault_a, json.vault_b));
             }
         }
         let mut subscrbeitions = StreamMap::new();
         let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
 
-        if !raydium_pool_accounts.is_empty() {
+        if !raydium_pool_keys.is_empty() {
             let mut raydium_pool_account_map = HashMap::new();
-            raydium_pool_account_map.insert(
-                DexType::RaydiumAMM.to_string(),
-                SubscribeRequestFilterAccounts {
-                    account: raydium_pool_accounts
-                        .iter()
-                        .map(|key| key.to_string())
-                        .collect::<Vec<_>>(),
-                    ..Default::default()
-                },
-            );
+            for pool_id in raydium_pool_keys {
+                raydium_pool_account_map.insert(
+                    format!(
+                        "{}:{}",
+                        DexType::RaydiumAMM.get_str_program_id(),
+                        pool_id.to_string()
+                    ),
+                    SubscribeRequestFilterAccounts {
+                        account: vec![pool_id.to_string()],
+                        ..Default::default()
+                    },
+                );
+            }
             let raydium_pool_subscribe_request = SubscribeRequest {
                 accounts: raydium_pool_account_map,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
@@ -170,11 +177,15 @@ impl GrpcSubscribe {
                 raydium_pool_stream,
             );
         }
-        if !raydium_vault_accounts.is_empty() {
+        if !raydium_vault_keys.is_empty() {
             let mut raydium_vault_account_map = HashMap::new();
-            for (pool_id, vault_a, vault_b) in raydium_vault_accounts {
+            for (pool_id, vault_a, vault_b) in raydium_vault_keys {
                 raydium_vault_account_map.insert(
-                    format!("{:?}:{:?}", pool_id, DexType::RaydiumAMM.get_program_id()),
+                    format!(
+                        "{}:{}",
+                        DexType::RaydiumAMM.get_str_program_id(),
+                        pool_id.to_string()
+                    ),
                     SubscribeRequestFilterAccounts {
                         account: vec![vault_a.to_string(), vault_b.to_string()],
                         ..Default::default()
@@ -216,11 +227,15 @@ impl GrpcSubscribe {
             );
         }
 
-        if !pump_fun_vault_accounts.is_empty() {
+        if !pump_fun_vault_keys.is_empty() {
             let mut pump_fun_vault_account_map = HashMap::new();
-            for (pool_id, vault_a, vault_b) in pump_fun_vault_accounts {
+            for (pool_id, vault_a, vault_b) in pump_fun_vault_keys {
                 pump_fun_vault_account_map.insert(
-                    format!("{:?}:{:?}", pool_id, DexType::PumpFunAMM.get_program_id()),
+                    format!(
+                        "{}:{}",
+                        DexType::PumpFunAMM.get_str_program_id(),
+                        pool_id.to_string()
+                    ),
                     SubscribeRequestFilterAccounts {
                         account: vec![vault_a.to_string(), vault_b.to_string()],
                         ..Default::default()
