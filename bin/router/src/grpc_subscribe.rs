@@ -266,10 +266,8 @@ impl GrpcSubscribe {
                         let account = account.account.unwrap();
                         let tx = account.txn_signature.unwrap().to_base58();
                         let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-                        if self
-                            .specify_pool
-                            .as_ref()
-                            .is_some_and(|v| v != &account_key.to_string())
+                        if self.specify_pool.as_ref().is_none()
+                            || self.specify_pool.as_ref().unwrap() == &account_key
                         {
                             info!(
                                 "tx : {:?}, account : {:?}, timestamp : {:?}",
