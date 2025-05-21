@@ -32,7 +32,6 @@ pub struct GrpcSubscribe {
         Instant,
     )>,
     pub single_mode: bool,
-    pub specify_pool: Option<String>,
 }
 
 impl GrpcSubscribe {
@@ -46,13 +45,6 @@ impl GrpcSubscribe {
         let mut pump_fun_accounts = HashMap::new();
 
         for json in dex_data {
-            if self
-                .specify_pool
-                .as_ref()
-                .is_some_and(|v| json.pool.to_string() != *v)
-            {
-                continue;
-            }
             if &json.owner == &DexType::RaydiumAMM.get_program_id() {
                 raydium_pool_keys.push(json.pool);
                 raydium_accounts.insert(
@@ -126,13 +118,6 @@ impl GrpcSubscribe {
         let mut raydium_vault_accounts = Vec::with_capacity(dex_data.len() * 2);
         let mut pump_fun_vault_accounts = Vec::with_capacity(dex_data.len() * 2);
         for json in dex_data {
-            if self
-                .specify_pool
-                .as_ref()
-                .is_some_and(|v| json.pool.to_string() != *v)
-            {
-                continue;
-            }
             if &json.owner == &DexType::RaydiumAMM.get_program_id() {
                 raydium_pool_accounts.push(json.pool);
                 raydium_vault_accounts.push((json.pool, json.vault_a, json.vault_b));

@@ -5,7 +5,7 @@ use router::collector::{CollectorType, SubscribeCollector};
 use router::executor::{ExecutorType, SimpleExecutor};
 use router::grpc_processor::MessageProcessor;
 use router::grpc_subscribe::GrpcSubscribe;
-use router::strategy::{MessageStrategy};
+use router::strategy::MessageStrategy;
 use std::collections::HashMap;
 use tokio::time::Instant;
 use tracing_appender::non_blocking;
@@ -78,7 +78,7 @@ async fn start_with_custom(command: Command) {
     } else {
         false
     };
-    MessageProcessor(single_mode)
+    MessageProcessor(single_mode, command.specify_pool.clone())
         .start(receiver, HashMap::with_capacity(10000))
         .await;
     let subscribe = GrpcSubscribe {
@@ -86,7 +86,6 @@ async fn start_with_custom(command: Command) {
         dex_json_path: command.dex_json_path.clone(),
         message_sender: sender.clone(),
         single_mode,
-        specify_pool: command.specify_pool.clone(),
     };
     subscribe.subscribe().await;
 }
@@ -103,18 +102,19 @@ async fn start_with_engine(command: Command) {
     let mut engine = Engine::default();
     engine.add_executor(map_executor!(SimpleExecutor, ExecutorType::Simple));
     engine.add_collector(map_collector!(
-        SubscribeCollector{
-        grpc_url,
-        single_mode,
-        dex_json_path:command.dex_json_path.clone(),
-        specify_pool:command.specify_pool.clone()
-    },
+        SubscribeCollector {
+            grpc_url,
+            single_mode,
+            dex_json_path: command.dex_json_path.clone(),
+            specify_pool: command.specify_pool.clone()
+        },
         CollectorType::Message
     ));
     engine.add_strategy(Box::new(MessageStrategy {
         receiver_msg: HashMap::default(),
         mod_value: command.mod_value,
         single_mode,
+        specify_pool: command.specify_pool.clone(),
     }));
 
     engine.run_and_join().await.unwrap();

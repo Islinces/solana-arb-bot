@@ -19,6 +19,7 @@ pub struct MessageStrategy {
     pub receiver_msg: HashMap<String, Vec<(Pubkey, Vec<Pubkey>, Vec<DateTime<Local>>, Instant)>>,
     pub mod_value: Option<u64>,
     pub single_mode: bool,
+    pub specify_pool: Option<String>,
 }
 
 #[burberry::async_trait]
@@ -45,6 +46,7 @@ impl Strategy<CollectorType, ExecutorType> for MessageStrategy {
                     filters,
                     receiver_timestamp,
                     instant,
+                    &self.specify_pool,
                 );
                 if let Some((tx, cost, msg)) = log {
                     if let Some(v) = self.mod_value {
@@ -83,6 +85,7 @@ fn process_data(
     filters: Vec<String>,
     receiver_timestamp: DateTime<Local>,
     instant: Instant,
+    specify_pool: &Option<String>,
 ) -> Option<(String, u128, Vec<String>)> {
     let txn = tx.as_slice().to_base58();
     let pool_id_or_vault = Pubkey::try_from(account_key).unwrap();
@@ -188,11 +191,18 @@ fn process_data(
                 );
                 (
                     ready_data.is_empty(),
-                    Some((
-                        txn.clone(),
-                        instant.elapsed().as_nanos(),
-                        account_push_timestamp,
-                    )),
+                    if specify_pool
+                        .as_ref()
+                        .is_some_and(|v| v != &pool_id.to_string())
+                    {
+                        None
+                    } else {
+                        Some((
+                            txn.clone(),
+                            instant.elapsed().as_nanos(),
+                            account_push_timestamp,
+                        ))
+                    },
                 )
             }
         };

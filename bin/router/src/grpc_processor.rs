@@ -8,7 +8,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::Instant;
 use tracing::info;
 
-pub struct MessageProcessor(pub bool);
+pub struct MessageProcessor(pub bool, pub Option<String>);
 
 impl MessageProcessor {
     pub async fn start(
@@ -27,11 +27,12 @@ impl MessageProcessor {
         >,
     ) {
         let single_mode = self.0.clone();
+        let specify_pool = self.1.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     Some((tx, account_key, owner, filters, receiver_timestamp, instant))  = message_receiver.recv() => {
-                        let log = process_data(&mut receiver_msg, tx, account_key, owner, filters, receiver_timestamp, instant);
+                        let log = process_data(&mut receiver_msg, tx, account_key, owner, filters, receiver_timestamp, instant, &specify_pool);
                         if let Some((tx, cost, msg)) = log {
                             info!(
                                 "\n{:?} tx : {:?},\n耗时 : {:?}ns\n推送过程 : \n{:#?}",
@@ -58,14 +59,15 @@ fn process_data(
     filters: Vec<String>,
     receiver_timestamp: DateTime<Local>,
     instant: Instant,
+    specify_pool: &Option<String>,
 ) -> Option<(String, u128, Vec<String>)> {
     let txn = tx.as_slice().to_base58();
     let pool_id_or_vault = Pubkey::try_from(account_key).unwrap();
     let maybe_owner = Pubkey::try_from(owner).unwrap();
-    info!(
-        "tx : {:?}, account : {:?}, owner : {:?}, timestamp : {:?}",
-        txn, pool_id_or_vault, maybe_owner, receiver_timestamp
-    );
+    // info!(
+    //     "tx : {:?}, account : {:?}, owner : {:?}, timestamp : {:?}",
+    //     txn, pool_id_or_vault, maybe_owner, receiver_timestamp
+    // );
     // 金库
     let (pool_id, vault, owner) = if maybe_owner != DexType::RaydiumAMM.get_program_id()
         && maybe_owner != DexType::PumpFunAMM.get_program_id()
@@ -163,11 +165,15 @@ fn process_data(
                 );
                 (
                     ready_data.is_empty(),
-                    Some((
-                        txn.clone(),
-                        instant.elapsed().as_nanos(),
-                        account_push_timestamp,
-                    )),
+                    if specify_pool.as_ref().is_some_and(|v| v != &pool_id.to_string()) {
+                        None
+                    } else {
+                        Some((
+                            txn.clone(),
+                            instant.elapsed().as_nanos(),
+                            account_push_timestamp,
+                        ))
+                    },
                 )
             }
         };
