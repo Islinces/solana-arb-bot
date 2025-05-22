@@ -52,7 +52,12 @@ impl MessageProcessor {
                     &vault_to_pool,
                 );
                 if let Some((tx, msg)) = log {
-                    info!("{}\ntx : {:?}\n推送过程 : \n{:#?}", a, tx, msg);
+                    info!(
+                        "{}\ntx : {:?}\n推送过程 : \n{:#?}",
+                        a,
+                        tx.as_slice().to_base58(),
+                        msg
+                    );
                 }
             }
         });
