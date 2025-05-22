@@ -273,45 +273,48 @@ impl GrpcSubscribe {
                 }
             }
         } else {
-            // let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
-            // info!("GRPC 订阅成功");
-            // while let Some(message) = stream.next().await {
-            //     match message {
-            //         Ok(data) => {
-            //             let time = Local::now();
-            //             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-            //                 let account = account.account.unwrap();
-            //                 let _ = self.message_sender.send((
-            //                     account.txn_signature.unwrap(),
-            //                     account.pubkey,
-            //                     account.owner,
-            //                     time,
-            //                 ));
-            //             }
-            //         }
-            //         Err(e) => {
-            //             error!("grpc推送消息失败，原因：{}", e)
-            //         }
-            //     }
-            // }
-            let mut stream = self.multi_subscribe_grpc(dex_data).await.unwrap();
-            info!("GRPC 订阅成功");
-            while let Some((_, message)) = stream.next().await {
-                match message {
-                    Ok(data) => {
-                        let time = Local::now();
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            let account = account.account.unwrap();
-                            let _ = self.message_sender.send((
-                                account.txn_signature.unwrap(),
-                                account.pubkey,
-                                account.owner,
-                                time,
-                            ));
+            if self.single_mode {
+                let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
+                info!("GRPC 订阅成功");
+                while let Some(message) = stream.next().await {
+                    match message {
+                        Ok(data) => {
+                            let time = Local::now();
+                            if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                                let account = account.account.unwrap();
+                                let _ = self.message_sender.send((
+                                    account.txn_signature.unwrap(),
+                                    account.pubkey,
+                                    account.owner,
+                                    time,
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            error!("grpc推送消息失败，原因：{}", e)
                         }
                     }
-                    Err(e) => {
-                        error!("grpc推送消息失败，原因：{}", e)
+                }
+            } else {
+                let mut stream = self.multi_subscribe_grpc(dex_data).await.unwrap();
+                info!("GRPC 订阅成功");
+                while let Some((_, message)) = stream.next().await {
+                    match message {
+                        Ok(data) => {
+                            let time = Local::now();
+                            if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                                let account = account.account.unwrap();
+                                let _ = self.message_sender.send((
+                                    account.txn_signature.unwrap(),
+                                    account.pubkey,
+                                    account.owner,
+                                    time,
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            error!("grpc推送消息失败，原因：{}", e)
+                        }
                     }
                 }
             }
