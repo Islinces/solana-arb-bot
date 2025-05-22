@@ -100,13 +100,23 @@ pub fn process_data(
     } else if &owner == pumpfun_program_id {
         (&account, pumpfun_program_id, 2)
     } else if let Some((pid, prog_id)) = vault_to_pool.get(&account) {
-        (pid, prog_id, 0)
+        (
+            pid,
+            prog_id,
+            if raydium_program_id == prog_id {
+                3
+            } else if pumpfun_program_id == prog_id {
+                2
+            } else {
+                0
+            },
+        )
     } else {
         return None;
     };
     // info!(
     //     "tx : {:?}, account : {:?}, pool_id : {:?}, program_id : {:?}, timestamp : {:?}",
-    //     txn,
+    //     txn.as_slice().to_base58(),
     //     account,
     //     pool_id,
     //     program_id,
@@ -134,7 +144,7 @@ pub fn process_data(
                 let (pool_id, accounts, timestamp) = value.get_mut(index).unwrap();
                 accounts.push(account);
                 timestamp.push(receiver_timestamp);
-                if accounts.len() == wait_account_len {
+                if wait_account_len == 0 || accounts.len() == wait_account_len {
                     let mut account_push_timestamp = accounts
                         .into_iter()
                         .zip(timestamp)
@@ -158,7 +168,7 @@ pub fn process_data(
                             } else if program_id == raydium_program_id {
                                 DexType::RaydiumAMM.to_string()
                             } else {
-                                "".to_string()
+                                program_id.to_string()
                             }
                         ),
                     );
