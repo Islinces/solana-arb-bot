@@ -11,7 +11,6 @@ use router::interface::DexType;
 use router::strategy::MessageStrategy;
 use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
 use std::str::FromStr;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -71,8 +70,13 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn start_with_custom(command: Command) {
-    let (sender, receiver) =
-        tokio::sync::mpsc::unbounded_channel::<(Vec<u8>, Vec<u8>, Vec<u8>, DateTime<Local>)>();
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel::<(
+        String,
+        Vec<u8>,
+        Vec<u8>,
+        Vec<u8>,
+        DateTime<Local>,
+    )>();
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
@@ -118,6 +122,8 @@ async fn start_with_engine(command: Command) {
     } else {
         false
     };
+    let dex_data = get_dex_data(command.dex_json_path.clone());
+    let (pool_ids, vault_to_pool) = vault_to_pool(&dex_data);
     let mut engine = Engine::default();
     engine.add_executor(map_executor!(SimpleExecutor, ExecutorType::Simple));
     engine.add_collector(map_collector!(
@@ -125,15 +131,23 @@ async fn start_with_engine(command: Command) {
             grpc_url,
             single_mode,
             dex_json_path: command.dex_json_path.clone(),
-            specify_pool: command.specify_pool.clone()
+            specify_pool: command.specify_pool.clone(),
+            dex_data,
+            standard_program: command.standard_program.unwrap_or(true),
         },
         CollectorType::Message
     ));
     engine.add_strategy(Box::new(MessageStrategy {
-        receiver_msg: HashMap::default(),
+        receiver_msg: AHashMap::with_capacity(10000),
         mod_value: command.mod_value,
         single_mode,
-        specify_pool: command.specify_pool.clone(),
+        specify_pool: command
+            .specify_pool
+            .clone()
+            .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap())),
+        pool_ids,
+        vault_to_pool,
+        standard_program: command.standard_program.unwrap_or(true),
     }));
 
     engine.run_and_join().await.unwrap();
