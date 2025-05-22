@@ -51,11 +51,12 @@ impl MessageProcessor {
                     &pool_ids,
                     &vault_to_pool,
                 );
-                if let Some((tx, msg)) = log {
+                if let Some((tx, msg, cost)) = log {
                     info!(
-                        "{}\ntx : {:?}\n推送过程 : \n{:#?}",
+                        "{}\ntx : {:?}\n耗时 : {}\n推送过程 : \n{:#?}",
                         a,
                         tx.as_slice().to_base58(),
+                        cost,
                         msg
                     );
                 }

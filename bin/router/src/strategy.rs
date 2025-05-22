@@ -56,11 +56,12 @@ impl Strategy<CollectorType, ExecutorType> for MessageStrategy {
                         &self.pool_ids,
                         &self.vault_to_pool,
                     );
-                    if let Some((tx, msg)) = log {
+                    if let Some((tx, msg, cost)) = log {
                         info!(
-                            "{}\ntx : {:?}\n推送过程 : \n{:#?}",
+                            "{}\ntx : {:?}\n耗时 : {}\n推送过程 : \n{:#?}",
                             a,
                             tx.as_slice().to_base58(),
+                            cost,
                             msg
                         );
                     }
@@ -89,7 +90,8 @@ pub fn process_data(
     specify_pool: &Option<Pubkey>,
     _pool_ids: &AHashSet<Pubkey>,
     vault_to_pool: &AHashMap<Pubkey, (Pubkey, Pubkey)>,
-) -> Option<([u8; 64], Vec<String>)> {
+) -> Option<([u8; 64], Vec<String>, u128)> {
+    let now = Instant::now();
     let txn: [u8; 64] = tx.try_into().unwrap();
     let account = Pubkey::try_from(account_key).unwrap();
     let owner = Pubkey::try_from(owner).unwrap();
@@ -173,7 +175,7 @@ pub fn process_data(
                         ),
                     );
                     if specify_pool.is_none_or(|v| &v == pool_id) {
-                        Some((txn, account_push_timestamp))
+                        Some((txn, account_push_timestamp, now.elapsed().as_micros()))
                     } else {
                         None
                     }
