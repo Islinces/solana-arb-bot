@@ -16,9 +16,7 @@ use tokio_stream::{Stream, StreamExt, StreamMap};
 use tracing::{error, info, warn};
 use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
-use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest, SubscribeRequestFilterAccounts, SubscribeUpdate,
-};
+use yellowstone_grpc_proto::geyser::{CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice, SubscribeRequestFilterAccounts, SubscribeUpdate};
 use yellowstone_grpc_proto::tonic::service::Interceptor;
 use yellowstone_grpc_proto::tonic::transport::ClientTlsConfig;
 use yellowstone_grpc_proto::tonic::Status;
@@ -115,18 +113,18 @@ impl GrpcSubscribe {
             let raydium_pool_subscribe_request = SubscribeRequest {
                 accounts: raydium_pool_account_map,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                // accounts_data_slice: vec![
-                //     // state_data.need_take_pnl_coin
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 192,
-                //         length: 8,
-                //     },
-                //     // state_data.need_take_pnl_pc
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 200,
-                //         length: 8,
-                //     },
-                // ],
+                accounts_data_slice: vec![
+                    // state_data.need_take_pnl_coin
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 192,
+                        length: 8,
+                    },
+                    // state_data.need_take_pnl_pc
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 200,
+                        length: 8,
+                    },
+                ],
                 ..Default::default()
             };
 
@@ -157,23 +155,23 @@ impl GrpcSubscribe {
             let raydium_vault_subscribe_request = SubscribeRequest {
                 accounts: raydium_vault_account_map,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                // accounts_data_slice: vec![
-                //     // mint
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 0,
-                //         length: 32,
-                //     },
-                //     // amount
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 64,
-                //         length: 8,
-                //     },
-                //     // state
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 108,
-                //         length: 1,
-                //     },
-                // ],
+                accounts_data_slice: vec![
+                    // mint
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 0,
+                        length: 32,
+                    },
+                    // amount
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 64,
+                        length: 8,
+                    },
+                    // state
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 108,
+                        length: 1,
+                    },
+                ],
                 ..Default::default()
             };
             let (_, raydium_vault_stream) = grpc_client
@@ -204,23 +202,23 @@ impl GrpcSubscribe {
             let pump_fun_vault_subscribe_request = SubscribeRequest {
                 accounts: pump_fun_vault_account_map,
                 commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                // accounts_data_slice: vec![
-                //     // mint
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 0,
-                //         length: 32,
-                //     },
-                //     // amount
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 64,
-                //         length: 8,
-                //     },
-                //     // state
-                //     SubscribeRequestAccountsDataSlice {
-                //         offset: 108,
-                //         length: 1,
-                //     },
-                // ],
+                accounts_data_slice: vec![
+                    // mint
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 0,
+                        length: 32,
+                    },
+                    // amount
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 64,
+                        length: 8,
+                    },
+                    // state
+                    SubscribeRequestAccountsDataSlice {
+                        offset: 108,
+                        length: 1,
+                    },
+                ],
                 ..Default::default()
             };
 
