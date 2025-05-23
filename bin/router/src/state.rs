@@ -1,0 +1,79 @@
+use ahash::{AHashMap, AHasher};
+use chrono::{DateTime, Local};
+use solana_sdk::pubkey::Pubkey;
+use std::hash::{Hash, Hasher};
+use yellowstone_grpc_proto::geyser::SubscribeUpdateAccount;
+
+pub struct GrpcMessage {
+    pub tx: Vec<u8>,
+    pub account_key: Vec<u8>,
+    pub owner_key: Vec<u8>,
+    pub data: Vec<u8>,
+    pub write_version: u64,
+    pub received_timestamp: DateTime<Local>,
+}
+
+impl From<SubscribeUpdateAccount> for GrpcMessage {
+    fn from(subscribe_update_account: SubscribeUpdateAccount) -> Self {
+        let time = Local::now();
+        let account = subscribe_update_account.account.unwrap();
+        Self {
+            tx: account.txn_signature.unwrap_or([0; 64].try_into().unwrap()),
+            account_key: account.pubkey,
+            owner_key: account.owner,
+            data: account.data,
+            write_version: account.write_version,
+            received_timestamp: time,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct TxId(pub [u8; 64]);
+
+impl Hash for TxId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let mut hasher = AHasher::default();
+        self.0.hash(&mut hasher);
+        state.write_u64(hasher.finish());
+    }
+}
+
+impl From<Vec<u8>> for TxId {
+    fn from(value: Vec<u8>) -> Self {
+        let txn: [u8; 64] = value.try_into().unwrap();
+        Self(txn)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CacheValue(pub AHashMap<Pubkey, (Vec<u8>, DateTime<Local>)>);
+
+impl CacheValue {
+    pub fn new(account: Pubkey, data: Vec<u8>, received_timestamp: DateTime<Local>) -> Self {
+        let mut value = Self(AHashMap::with_capacity(3));
+        value.insert(account, data, received_timestamp);
+        value
+    }
+
+    pub fn insert(&mut self, pubkey: Pubkey, data: Vec<u8>, received_timestamp: DateTime<Local>) {
+        self.0.insert(pubkey, (data, received_timestamp));
+    }
+
+    pub fn is_ready(&self, condition: impl FnOnce(usize) -> bool) -> bool {
+        condition(self.0.len())
+    }
+
+    pub fn ready_cost(&self) -> u64 {
+        let mut timestamps = self
+            .0
+            .values()
+            .map(|(_, timestamp)| timestamp)
+            .collect::<Vec<_>>();
+        timestamps.sort_unstable();
+        let first = timestamps.first().unwrap();
+        let last = timestamps.last().unwrap();
+        let duration = last.signed_duration_since(*first);
+        duration.num_microseconds().unwrap_or(0).abs() as u64
+    }
+}

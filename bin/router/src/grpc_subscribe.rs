@@ -1,5 +1,6 @@
 use crate::dex_data::DexJson;
 use crate::interface::{DexType, GrpcAccountUpdateType};
+use crate::state::GrpcMessage;
 use base58::ToBase58;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Deserializer};
@@ -10,6 +11,8 @@ use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use flume::Sender;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt, StreamMap};
@@ -18,7 +21,7 @@ use yellowstone_grpc_client::GeyserGrpcClient;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestAccountsDataSlice,
-    SubscribeRequestFilterAccounts, SubscribeUpdate,
+    SubscribeRequestFilterAccounts, SubscribeUpdate, SubscribeUpdateAccount,
 };
 use yellowstone_grpc_proto::tonic::service::Interceptor;
 use yellowstone_grpc_proto::tonic::transport::ClientTlsConfig;
@@ -28,7 +31,7 @@ use yellowstone_grpc_proto::tonic::Status;
 pub struct GrpcSubscribe {
     pub grpc_url: String,
     pub dex_json_path: String,
-    pub message_sender: UnboundedSender<(String, Vec<u8>, Vec<u8>, Vec<u8>, DateTime<Local>)>,
+    pub message_sender: Sender<GrpcMessage>,
     pub single_mode: bool,
     pub specify_pool: Option<String>,
     pub use_stream_map: bool,
@@ -312,16 +315,13 @@ impl GrpcSubscribe {
                 while let Some(message) = stream.next().await {
                     match message {
                         Ok(data) => {
-                            let time = Local::now();
                             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                                let account = account.account.unwrap();
-                                let _ = self.message_sender.send((
-                                    "非基准程序单订阅".to_string(),
-                                    account.txn_signature.unwrap(),
-                                    account.pubkey,
-                                    account.owner,
-                                    time,
-                                ));
+                                match self.message_sender.send(GrpcMessage::from(account)) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("推送GRPC消息失败, 原因 : {}", e);
+                                    }
+                                }
                             }
                         }
                         Err(e) => {
@@ -335,16 +335,13 @@ impl GrpcSubscribe {
                 while let Some((_, message)) = stream.next().await {
                     match message {
                         Ok(data) => {
-                            let time = Local::now();
                             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                                let account = account.account.unwrap();
-                                let _ = self.message_sender.send((
-                                    "非基准程序多订阅".to_string(),
-                                    account.txn_signature.unwrap(),
-                                    account.pubkey,
-                                    account.owner,
-                                    time,
-                                ));
+                                match self.message_sender.send(GrpcMessage::from(account)) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("推送GRPC消息失败, 原因 : {}", e);
+                                    }
+                                }
                             }
                         }
                         Err(e) => {
