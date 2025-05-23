@@ -52,18 +52,18 @@ impl MessageProcessor {
                     let now = Local::now();
                     let (should_trigger_swap, update_cache_cost) = Self::update_cache(data);
                     info!(
-                        "processor_{}, \
-                        tx : {:?}, \
-                        等待所有数据耗时 : {}, \
-                        最后一条数据耗时 : {}, \
-                        更新缓存时间 : {:?}, \
-                        更新缓存耗时 : {:?}, \
+                        "processor_{}\n
+                        tx : {:?}\n
+                        等待所有数据耗时 : {}µs\n
+                        最后一条数据耗时 : {}µs\n
+                        更新缓存时间 : {:?}\n
+                        更新缓存耗时 : {:?}ns\n
                         缓存是否发生变化 : {:?}",
                         index,
                         tx.0.as_slice().to_base58(),
                         all_msg_cost,
                         last_msg_cost,
-                        now.format("%Y-%m-%d %H:%M:%S%.9f"),
+                        now.format("%Y-%m-%d %H:%M:%S%.9f").to_string(),
                         update_cache_cost,
                         should_trigger_swap,
                     );
@@ -188,8 +188,7 @@ impl MessageProcessor {
                 return None;
             }
             let value = entry.into_value();
-            let cost = value.0 .1.elapsed().as_micros();
-            Some((txn, cost, now.elapsed().as_micros(), value))
+            Some((txn, value.0 .1.elapsed().as_micros(), now.elapsed().as_micros(), value))
         } else {
             None
         }
