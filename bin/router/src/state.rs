@@ -2,6 +2,7 @@ use ahash::{AHashMap, AHasher};
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::hash::{Hash, Hasher};
+use tokio::time::Instant;
 use yellowstone_grpc_proto::geyser::SubscribeUpdateAccount;
 
 pub struct GrpcMessage {
@@ -47,33 +48,25 @@ impl From<Vec<u8>> for TxId {
 }
 
 #[derive(Debug, Clone)]
-pub struct CacheValue(pub AHashMap<Pubkey, (Vec<u8>, DateTime<Local>)>);
+pub struct CacheValue(pub (AHashMap<Pubkey, (Vec<u8>, DateTime<Local>)>, Instant));
 
 impl CacheValue {
-    pub fn new(account: Pubkey, data: Vec<u8>, received_timestamp: DateTime<Local>) -> Self {
-        let mut value = Self(AHashMap::with_capacity(3));
+    pub fn new(
+        account: Pubkey,
+        data: Vec<u8>,
+        received_timestamp: DateTime<Local>,
+        instant: Instant,
+    ) -> Self {
+        let mut value = Self((AHashMap::with_capacity(3), instant));
         value.insert(account, data, received_timestamp);
         value
     }
 
     pub fn insert(&mut self, pubkey: Pubkey, data: Vec<u8>, received_timestamp: DateTime<Local>) {
-        self.0.insert(pubkey, (data, received_timestamp));
+        self.0 .0.insert(pubkey, (data, received_timestamp));
     }
 
     pub fn is_ready(&self, condition: impl FnOnce(usize) -> bool) -> bool {
-        condition(self.0.len())
-    }
-
-    pub fn ready_cost(&self) -> u64 {
-        let mut timestamps = self
-            .0
-            .values()
-            .map(|(_, timestamp)| timestamp)
-            .collect::<Vec<_>>();
-        timestamps.sort_unstable();
-        let first = timestamps.first().unwrap();
-        let last = timestamps.last().unwrap();
-        let duration = last.signed_duration_since(*first);
-        duration.num_microseconds().unwrap_or(0).abs() as u64
+        condition(self.0 .0.len())
     }
 }

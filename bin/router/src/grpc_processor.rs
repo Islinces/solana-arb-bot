@@ -48,20 +48,22 @@ impl MessageProcessor {
                 let ready_data =
                     Self::process_data(grpc_message, specify_pool.clone(), vault_to_pool.clone())
                         .await;
-                if let Some((tx, last_msg_cost, data)) = ready_data {
-                    let ready_cost = data.ready_cost();
+                if let Some((tx, all_msg_cost, last_msg_cost, data)) = ready_data {
+                    let now = Local::now();
                     let (should_trigger_swap, update_cache_cost) = Self::update_cache(data);
                     info!(
                         "processor_{}, \
                         tx : {:?}, \
-                        等待数据耗时 : {}, \
-                        数据最后pop耗时 : {}, \
+                        等待所有数据耗时 : {}, \
+                        最后一条数据耗时 : {}, \
+                        更新缓存时间 : {:?}, \
                         更新缓存耗时 : {:?}, \
                         缓存是否发生变化 : {:?}",
                         index,
                         tx.0.as_slice().to_base58(),
-                        ready_cost,
+                        all_msg_cost,
                         last_msg_cost,
+                        now.format("%Y-%m-%d %H:%M:%S%.9f"),
                         update_cache_cost,
                         should_trigger_swap,
                     );
@@ -74,16 +76,16 @@ impl MessageProcessor {
         let now = Instant::now();
         let account_cache = ACCOUNT_CACHE.get().unwrap();
         let mut changed = false;
-        for (account_key, data) in data.0 {
+        for (account_key, (data, _timestamp)) in data.0 .0 {
             let un_same = if let Some(exists) = account_cache.get(&account_key) {
-                let same = exists.value().eq(&data.0);
+                let same = exists.value().eq(&data);
                 // 释放读锁
                 drop(exists);
                 !same
             } else {
                 true
             };
-            account_cache.insert(account_key, data.0);
+            account_cache.insert(account_key, data);
             changed |= un_same;
         }
         (changed, now.elapsed().as_nanos())
@@ -135,7 +137,7 @@ impl MessageProcessor {
         grpc_message: GrpcMessage,
         _specify_pool: Arc<Option<Pubkey>>,
         vault_to_pool: Arc<AHashMap<Pubkey, (Pubkey, Pubkey)>>,
-    ) -> Option<(TxId, u128, CacheValue)> {
+    ) -> Option<(TxId, u128, u128, CacheValue)> {
         let now = Instant::now();
         let txn = TxId::from(grpc_message.tx);
         let account: Pubkey = grpc_message.account_key.try_into().unwrap();
@@ -175,7 +177,7 @@ impl MessageProcessor {
                     cache_value.insert(account, data, grpc_message.received_timestamp);
                     cache_value
                 } else {
-                    CacheValue::new(account, data, grpc_message.received_timestamp)
+                    CacheValue::new(account, data, grpc_message.received_timestamp, now)
                 }
             });
         if entry.is_old_value_replaced() {
@@ -185,7 +187,9 @@ impl MessageProcessor {
             {
                 return None;
             }
-            Some((txn, now.elapsed().as_micros(), entry.into_value()))
+            let value = entry.into_value();
+            let cost = value.0 .1.elapsed().as_micros();
+            Some((txn, cost, now.elapsed().as_micros(), value))
         } else {
             None
         }
