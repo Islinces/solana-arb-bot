@@ -9,7 +9,6 @@ use flume::Receiver;
 use futures_util::future;
 use futures_util::future::Lazy;
 use moka::sync::{Cache, CacheBuilder};
-use smallvec::{smallvec, SmallVec};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::ops::Deref;

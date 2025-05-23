@@ -93,7 +93,7 @@ async fn start_with_custom(command: Command) {
             .clone()
             .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap())),
     );
-    let processor_size = command.processor_size.unwrap_or(1);
+    let processor_size = command.processor_size.unwrap_or(num_cpus::get());
     let dex_data = get_dex_data(command.dex_json_path.clone());
     let (_pool_ids, vault_to_pool) = vault_to_pool(&dex_data);
     let vault_to_pool = Arc::new(vault_to_pool);
