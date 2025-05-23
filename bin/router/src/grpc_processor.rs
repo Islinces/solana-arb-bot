@@ -52,12 +52,12 @@ impl MessageProcessor {
                     let now = Local::now();
                     let (should_trigger_swap, update_cache_cost) = Self::update_cache(data);
                     info!(
-                        "processor_{}\n
+                        "processor_{}, \
                         tx : {:?}\n
-                        等待所有数据耗时 : {}µs\n
-                        最后一条数据耗时 : {}µs\n
-                        更新缓存时间 : {:?}\n
-                        更新缓存耗时 : {:?}ns\n
+                        等待所有数据耗时 : {}µs, \
+                        最后一条数据耗时 : {}µs, \
+                        更新缓存时间 : {:?}, \
+                        更新缓存耗时 : {:?}ns, \
                         缓存是否发生变化 : {:?}",
                         index,
                         tx.0.as_slice().to_base58(),
