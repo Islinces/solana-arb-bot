@@ -3,6 +3,7 @@ use crate::interface::{DexType, GrpcAccountUpdateType};
 use crate::state::GrpcMessage;
 use base58::ToBase58;
 use chrono::{DateTime, Local};
+use flume::Sender;
 use serde::{Deserialize, Deserializer};
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
@@ -11,9 +12,7 @@ use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use flume::Sender;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt, StreamMap};
 use tracing::{error, info, warn};
@@ -31,16 +30,14 @@ use yellowstone_grpc_proto::tonic::Status;
 pub struct GrpcSubscribe {
     pub grpc_url: String,
     pub dex_json_path: String,
-    pub message_sender: Sender<GrpcMessage>,
     pub single_mode: bool,
     pub specify_pool: Option<String>,
-    pub use_stream_map: bool,
     pub standard_program: bool,
 }
 
 impl GrpcSubscribe {
     async fn single_subscribe_grpc(
-        &self,
+        grpc_url: String,
         dex_data: Vec<DexJson>,
     ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
         let mut account_keys = Vec::with_capacity(dex_data.len());
@@ -56,7 +53,7 @@ impl GrpcSubscribe {
                 account_keys.push(json.vault_b);
             }
         }
-        let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
+        let mut grpc_client = create_grpc_client(grpc_url).await;
         if !account_keys.is_empty() {
             let mut filter_accounts = HashMap::new();
             filter_accounts.insert(
@@ -83,7 +80,7 @@ impl GrpcSubscribe {
     }
 
     async fn multi_subscribe_grpc(
-        &self,
+        grpc_url: String,
         dex_data: Vec<DexJson>,
     ) -> anyhow::Result<StreamMap<String, impl Stream<Item = Result<SubscribeUpdate, Status>>>>
     {
@@ -102,7 +99,7 @@ impl GrpcSubscribe {
             }
         }
         let mut subscrbeitions = StreamMap::new();
-        let mut grpc_client = create_grpc_client(self.grpc_url.clone()).await;
+        let mut grpc_client = create_grpc_client(grpc_url).await;
 
         if !raydium_pool_keys.is_empty() {
             let mut raydium_pool_account_map = HashMap::new();
@@ -247,10 +244,14 @@ impl GrpcSubscribe {
         }
     }
 
-    pub async fn subscribe(&self, dex_data: Vec<DexJson>) {
+    pub async fn subscribe(&self, dex_data: Vec<DexJson>, message_sender: Sender<GrpcMessage>) {
         if self.standard_program {
             if self.single_mode {
-                let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
+                let specify_pool = self.specify_pool.clone();
+                let grpc_url = self.grpc_url.clone();
+                let mut stream = Self::single_subscribe_grpc(grpc_url, dex_data)
+                    .await
+                    .unwrap();
                 info!("GRPC 基准程序单订阅成功");
                 while let Some(message) = stream.next().await {
                     match message {
@@ -260,9 +261,8 @@ impl GrpcSubscribe {
                                 let account = account.account.unwrap();
                                 let tx = account.txn_signature.as_ref().unwrap().to_base58();
                                 let account_key = Pubkey::try_from(account.pubkey).unwrap();
-                                if self.specify_pool.as_ref().is_none()
-                                    || self.specify_pool.as_ref().unwrap()
-                                        == &account_key.to_string()
+                                if specify_pool.as_ref().is_none()
+                                    || specify_pool.as_ref().unwrap() == &account_key.to_string()
                                 {
                                     info!(
                                         "基准程序单订阅, tx : {:?}, account : {:?}, timestamp : {:?}",
@@ -279,7 +279,11 @@ impl GrpcSubscribe {
                     }
                 }
             } else {
-                let mut stream = self.multi_subscribe_grpc(dex_data).await.unwrap();
+                let specify_pool = self.specify_pool.clone();
+                let grpc_url = self.grpc_url.clone();
+                let mut stream = Self::multi_subscribe_grpc(grpc_url, dex_data)
+                    .await
+                    .unwrap();
                 info!("GRPC 基准程序多订阅成功");
                 while let Some((_, message)) = stream.next().await {
                     match message {
@@ -289,9 +293,8 @@ impl GrpcSubscribe {
                                 let account = account.account.unwrap();
                                 let tx = account.txn_signature.as_ref().unwrap().to_base58();
                                 let account_key = Pubkey::try_from(account.pubkey).unwrap();
-                                if self.specify_pool.as_ref().is_none()
-                                    || self.specify_pool.as_ref().unwrap()
-                                        == &account_key.to_string()
+                                if specify_pool.as_ref().is_none()
+                                    || specify_pool.as_ref().unwrap() == &account_key.to_string()
                                 {
                                     info!(
                                         "基准程序多订阅, tx : {:?}, account : {:?}, timestamp : {:?}",
@@ -310,13 +313,16 @@ impl GrpcSubscribe {
             }
         } else {
             if self.single_mode {
-                let mut stream = self.single_subscribe_grpc(dex_data).await.unwrap();
+                let grpc_url = self.grpc_url.clone();
+                let mut stream = Self::single_subscribe_grpc(grpc_url, dex_data)
+                    .await
+                    .unwrap();
                 info!("GRPC 非基准程序单订阅成功");
                 while let Some(message) = stream.next().await {
                     match message {
                         Ok(data) => {
                             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                                match self.message_sender.send(GrpcMessage::from(account)) {
+                                match message_sender.send(GrpcMessage::from(account)) {
                                     Ok(_) => {}
                                     Err(e) => {
                                         error!("推送GRPC消息失败, 原因 : {}", e);
@@ -330,13 +336,16 @@ impl GrpcSubscribe {
                     }
                 }
             } else {
-                let mut stream = self.multi_subscribe_grpc(dex_data).await.unwrap();
+                let grpc_url = self.grpc_url.clone();
+                let mut stream = Self::multi_subscribe_grpc(grpc_url, dex_data)
+                    .await
+                    .unwrap();
                 info!("GRPC 非基准程序多订阅成功");
                 while let Some((_, message)) = stream.next().await {
                     match message {
                         Ok(data) => {
                             if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                                match self.message_sender.send(GrpcMessage::from(account)) {
+                                match message_sender.send(GrpcMessage::from(account)) {
                                     Ok(_) => {}
                                     Err(e) => {
                                         error!("推送GRPC消息失败, 原因 : {}", e);

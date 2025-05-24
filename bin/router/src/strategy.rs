@@ -19,7 +19,6 @@ pub struct MessageStrategy {
             ); 4],
         >,
     >,
-    pub mod_value: Option<u64>,
     pub single_mode: bool,
     pub specify_pool: Option<Pubkey>,
     pub pool_ids: AHashSet<Pubkey>,

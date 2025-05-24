@@ -1,28 +1,31 @@
 use ahash::{AHashMap, AHashSet};
 use burberry::{map_collector, map_executor, Engine};
-use chrono::{DateTime, Local};
+use chrono::Local;
 use clap::Parser;
-use moka::sync::{Cache, CacheBuilder};
+use mimalloc::MiMalloc;
+use router::arb::Arb;
 use router::collector::{CollectorType, SubscribeCollector};
 use router::dex_data::{get_dex_data, DexJson};
 use router::executor::{ExecutorType, SimpleExecutor};
 use router::grpc_processor::MessageProcessor;
 use router::grpc_subscribe::GrpcSubscribe;
 use router::interface::DexType;
-use router::state::{GrpcMessage, TxId};
+use router::state::GrpcMessage;
 use router::strategy::MessageStrategy;
 use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio::task::JoinSet;
+use tracing::error;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
+use yellowstone_grpc_proto::prost::bytes::Buf;
 
 pub struct MicrosecondFormatter;
 
@@ -31,6 +34,9 @@ impl FormatTime for MicrosecondFormatter {
         write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S%.9f"))
     }
 }
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(Parser, Debug)]
 pub struct Command {
@@ -41,17 +47,17 @@ pub struct Command {
     #[arg(long)]
     grpc_url: Option<String>,
     #[arg(long)]
-    mod_value: Option<u64>,
-    #[arg(long)]
     start_mode: Option<String>,
     #[arg(long)]
     specify_pool: Option<String>,
     #[arg(long)]
-    use_stream_map: Option<bool>,
-    #[arg(long)]
     standard_program: Option<bool>,
     #[arg(long)]
     processor_size: Option<usize>,
+    #[arg(long)]
+    arb_size: Option<usize>,
+    #[arg(long)]
+    arb_channel_capacity: Option<usize>,
 }
 
 #[tokio::main]
@@ -77,51 +83,59 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn start_with_custom(command: Command) {
-    // grpc消息消费通道，无界
-    let (message_sender, message_receiver) = flume::unbounded::<GrpcMessage>();
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
+    let processor_size = command.processor_size.unwrap_or(num_cpus::get() / 4);
+    let arb_size = command.arb_size.unwrap_or(1);
+    // Account本地缓存更新后广播通道容量
+    let arb_channel_capacity = command.arb_channel_capacity.unwrap_or(10_000);
     let single_mode = if command.grpc_subscribe_type == "single" {
         true
     } else {
         false
     };
-    let specify_pool = Arc::new(
-        command
-            .specify_pool
-            .clone()
-            .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap())),
-    );
-    let processor_size = command.processor_size.unwrap_or(num_cpus::get()/2);
+    let specify_pool = command
+        .specify_pool
+        .clone()
+        .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap()));
     let dex_data = get_dex_data(command.dex_json_path.clone());
     let (_pool_ids, vault_to_pool) = vault_to_pool(&dex_data);
-    let vault_to_pool = Arc::new(vault_to_pool);
+    // grpc消息消费通道
+    let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
+    // Account本地缓存更新后广播通道
+    let (cached_message_sender, _) = broadcast::channel(arb_channel_capacity);
+    // 接收发生改变的缓存数据，判断是否需要触发route
     let mut join_set = JoinSet::new();
-    // 创建processor
-    for index in 0..processor_size {
-        let vault_to_pool = vault_to_pool.clone();
-        let specify_pool = specify_pool.clone();
-        let message_receiver = message_receiver.clone();
-        join_set.spawn(async move {
-            MessageProcessor::new(vault_to_pool, specify_pool, index)
-                .start(message_receiver)
-                .await
-        });
+    // 将GRPC通过过来的数据保存到本地缓存中
+    // 缓存数据发生改变，将数据发送出来
+    MessageProcessor::new(processor_size)
+        .start(
+            &mut join_set,
+            &grpc_message_receiver,
+            &cached_message_sender,
+        )
+        .await;
+    // 接收更新缓存的Account信息，判断是否需要触发route
+    Arb::new(arb_size, vault_to_pool, specify_pool)
+        .start(&mut join_set, &cached_message_sender)
+        .await;
+    join_set.spawn(async move {
+        // 订阅GRPC
+        let subscribe = GrpcSubscribe {
+            grpc_url,
+            dex_json_path: command.dex_json_path.clone(),
+            single_mode,
+            specify_pool: command.specify_pool.clone(),
+            standard_program: command.standard_program.unwrap_or(true),
+        };
+        subscribe.subscribe(dex_data, grpc_message_sender).await
+    });
+    while let Some(event) = join_set.join_next().await {
+        if let Err(err) = event {
+            error!("task terminated unexpectedly: {err:#}");
+        }
     }
-    // 等待所有processor初始化完成
-    let _ = join_set.join_all().await;
-    // 订阅GRPC
-    let subscribe = GrpcSubscribe {
-        grpc_url,
-        dex_json_path: command.dex_json_path.clone(),
-        message_sender: message_sender.clone(),
-        single_mode,
-        specify_pool: command.specify_pool.clone(),
-        use_stream_map: command.use_stream_map.unwrap_or(true),
-        standard_program: command.standard_program.unwrap_or(true),
-    };
-    subscribe.subscribe(dex_data).await;
 }
 
 fn vault_to_pool(
@@ -168,7 +182,6 @@ async fn start_with_engine(command: Command) {
     ));
     engine.add_strategy(Box::new(MessageStrategy {
         receiver_msg: AHashMap::with_capacity(10000),
-        mod_value: command.mod_value,
         single_mode,
         specify_pool: command
             .specify_pool

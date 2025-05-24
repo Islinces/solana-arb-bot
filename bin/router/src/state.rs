@@ -1,4 +1,4 @@
-use ahash::{AHashMap, AHasher};
+use ahash::{AHashSet, AHasher};
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::hash::{Hash, Hasher};
@@ -48,22 +48,17 @@ impl From<Vec<u8>> for TxId {
 }
 
 #[derive(Debug, Clone)]
-pub struct CacheValue(pub (AHashMap<Pubkey, (Vec<u8>, DateTime<Local>)>, Instant));
+pub struct CacheValue(pub (AHashSet<Pubkey>, Instant));
 
 impl CacheValue {
-    pub fn new(
-        account: Pubkey,
-        data: Vec<u8>,
-        received_timestamp: DateTime<Local>,
-        instant: Instant,
-    ) -> Self {
-        let mut value = Self((AHashMap::with_capacity(3), instant));
-        value.insert(account, data, received_timestamp);
+    pub fn new(account: Pubkey, instant: Instant) -> Self {
+        let mut value = Self((AHashSet::with_capacity(3), instant));
+        value.insert(account);
         value
     }
 
-    pub fn insert(&mut self, pubkey: Pubkey, data: Vec<u8>, received_timestamp: DateTime<Local>) {
-        self.0 .0.insert(pubkey, (data, received_timestamp));
+    pub fn insert(&mut self, pubkey: Pubkey) {
+        self.0 .0.insert(pubkey);
     }
 
     pub fn is_ready(&self, condition: impl FnOnce(usize) -> bool) -> bool {
