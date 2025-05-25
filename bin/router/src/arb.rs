@@ -1,10 +1,8 @@
-use crate::interface::DexType;
-use crate::state::{BalanceChangeInfo, CacheValue, GrpcMessage, GrpcTransactionMsg, TxId};
-use ahash::{AHashMap, AHasher, HashMap, HashSet};
+use crate::state::{BalanceChangeInfo, GrpcTransactionMsg};
+use ahash::AHashMap;
 use base58::ToBase58;
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Sender;
@@ -42,27 +40,26 @@ impl Arb {
             let specify_pool = self.specify_pool.clone();
             let mut receiver = message_cached_sender.subscribe();
             join_set.spawn(async move {
-                while let data = receiver.recv().await {
-                    let incoming_arb_timestamp = Local::now();
-                    match data {
+                loop {
+                    match receiver.recv().await {
                         Ok((transaction_msg, send_timestamp)) => {
+                            let incoming_arb_timestamp = Local::now();
                             let instant = Instant::now();
                             let tx = transaction_msg.transaction.unwrap();
                             let meta = transaction_msg.meta.unwrap();
-                            let account_keys = tx.message.unwrap().account_keys;
-                            let writable_accounts = meta.loaded_writable_addresses;
-                            let readable_accounts = meta.loaded_readonly_addresses;
-                            let account_keys = account_keys
-                                .iter()
-                                .chain(writable_accounts.iter())
-                                .chain(readable_accounts.iter())
-                                .map(|v| Pubkey::try_from(v.as_slice()).unwrap().to_string())
-                                .collect::<Vec<_>>();
-                            let pre_token_balances = meta.pre_token_balances;
-                            let post_token_balances = meta.post_token_balances;
-                            let changed_balances = pre_token_balances
+                            let account_keys = tx
+                                .message
+                                .unwrap()
+                                .account_keys
                                 .into_iter()
-                                .zip(post_token_balances.into_iter())
+                                .chain(meta.loaded_writable_addresses)
+                                .chain(meta.loaded_readonly_addresses)
+                                .map(|v| Pubkey::try_from(v).unwrap())
+                                .collect::<Vec<_>>();
+                            let changed_balances = meta
+                                .pre_token_balances
+                                .into_iter()
+                                .zip(meta.post_token_balances.into_iter())
                                 .filter_map(|(pre, post)| {
                                     BalanceChangeInfo::new(
                                         &pre,
@@ -83,9 +80,8 @@ impl Arb {
                                     .num_microseconds()
                                     .unwrap() as u128;
                             let any_balance_change = !changed_balances.is_empty();
-                            if specify_pool.is_none_or(|v| {
-                                    changed_balances.iter().any(|t| &t.pool_id == &v)
-                                })
+                            if specify_pool
+                                .is_none_or(|v| changed_balances.iter().any(|t| &t.pool_id == &v))
                             {
                                 info!(
                                     "Arb_{index} ==> \n🤝Transaction, 总耗时 : {:?}μs\n\

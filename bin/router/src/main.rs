@@ -80,7 +80,7 @@ async fn start_with_custom(command: Command) {
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
-    let processor_size = command.processor_size.unwrap_or(num_cpus::get() / 4);
+    let processor_size = command.processor_size.unwrap_or(1);
     let arb_size = command.arb_size.unwrap_or(1);
     // Account本地缓存更新后广播通道容量
     let arb_channel_capacity = command.arb_channel_capacity.unwrap_or(10_000);

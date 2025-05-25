@@ -1,16 +1,14 @@
-use std::fmt::{Debug, Display, Formatter};
 use crate::interface::DexType;
-use ahash::{AHashMap, AHashSet, AHasher};
+use ahash::AHashMap;
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
-use std::hash::{Hash, Hasher};
+use std::fmt::{Debug, Formatter};
 use std::ops::Sub;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::time::Instant;
 use yellowstone_grpc_proto::geyser::{SubscribeUpdateAccount, SubscribeUpdateTransactionInfo};
 use yellowstone_grpc_proto::prelude::{
-    TokenBalance, Transaction, TransactionStatusMeta, UiTokenAmount,
+    TokenBalance, Transaction, TransactionStatusMeta,
 };
 
 #[derive(Debug, Clone)]
@@ -66,43 +64,6 @@ impl From<SubscribeUpdateTransactionInfo> for GrpcTransactionMsg {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct TxId(pub [u8; 64]);
-
-impl Hash for TxId {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut hasher = AHasher::default();
-        self.0.hash(&mut hasher);
-        state.write_u64(hasher.finish());
-    }
-}
-
-impl From<Vec<u8>> for TxId {
-    fn from(value: Vec<u8>) -> Self {
-        let txn: [u8; 64] = value.try_into().unwrap();
-        Self(txn)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CacheValue(pub (AHashSet<Pubkey>, Instant));
-
-impl CacheValue {
-    pub fn new(account: Pubkey, instant: Instant) -> Self {
-        let mut value = Self((AHashSet::with_capacity(3), instant));
-        value.insert(account);
-        value
-    }
-
-    pub fn insert(&mut self, pubkey: Pubkey) {
-        self.0 .0.insert(pubkey);
-    }
-
-    pub fn is_ready(&self, condition: impl FnOnce(usize) -> bool) -> bool {
-        condition(self.0 .0.len())
-    }
-}
-
 pub struct BalanceChangeInfo {
     pub dex_type: DexType,
     pub pool_id: Pubkey,
@@ -115,7 +76,7 @@ impl BalanceChangeInfo {
     pub fn new(
         pre: &TokenBalance,
         post: &TokenBalance,
-        account_keys: &Vec<String>,
+        account_keys: &[Pubkey],
         vault_to_pool: Arc<AHashMap<Pubkey, (Pubkey, Pubkey)>>,
     ) -> Option<Self> {
         let account_index = pre.account_index as usize;
@@ -124,14 +85,14 @@ impl BalanceChangeInfo {
                 if pre_amount.ui_amount == post_amount.ui_amount {
                     None
                 } else {
-                    let vault_account = Pubkey::from_str(&account_keys[account_index]).unwrap();
+                    let vault_account = &account_keys[account_index];
                     let owner = Pubkey::from_str(pre.owner.as_str()).unwrap();
-                    match DexType::is_follow_vault(&vault_account, &owner, vault_to_pool.clone()) {
+                    match DexType::is_follow_vault(vault_account, &owner, vault_to_pool) {
                         Some((dex_type, pool_id)) => Some(Self {
                             dex_type,
                             pool_id,
                             account_index,
-                            vault_account,
+                            vault_account: vault_account.clone(),
                             change_value: post_amount.ui_amount.sub(pre_amount.ui_amount),
                         }),
                         None => None,
