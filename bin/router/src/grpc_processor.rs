@@ -1,10 +1,10 @@
 use crate::interface::DexType;
-use crate::state::{CacheValue, GrpcMessage, TxId};
+use crate::state::{CacheValue, GrpcMessage, GrpcTransactionMsg, TxId};
 use ahash::{AHashMap, AHasher, HashSet, RandomState};
+use base58::ToBase58;
 use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use flume::{Receiver, RecvError};
-use moka::sync::{Cache, CacheBuilder};
 use solana_sdk::pubkey::Pubkey;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -14,8 +14,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::Instant;
 use tracing::{error, info};
 
-static ACCOUNT_CACHE: OnceCell<DashMap<Pubkey, (Vec<u8>, u64), RandomState>> =
-    OnceCell::const_new();
+static ACCOUNT_CACHE: OnceCell<DashMap<Pubkey, Vec<u8>, RandomState>> = OnceCell::const_new();
 
 pub struct MessageProcessor {
     pub process_size: usize,
@@ -28,42 +27,61 @@ impl MessageProcessor {
 
     pub async fn start(
         &mut self,
-        mut join_set: &mut JoinSet<()>,
-        mut grpc_message_receiver: &Receiver<GrpcMessage>,
-        cached_message_sender: &broadcast::Sender<(
-            TxId,
-            Pubkey,
-            Pubkey,
-            DateTime<Local>,
-            DateTime<Local>,
-            bool,
-            u128,
-        )>,
+        join_set: &mut JoinSet<()>,
+        grpc_message_receiver: &Receiver<GrpcMessage>,
+        cached_message_sender: &broadcast::Sender<(GrpcTransactionMsg, DateTime<Local>)>,
     ) {
         // 初始化账户本地缓存
         self.init_account_cache().await;
-        for _ in 0..self.process_size {
+        for _index in 0..self.process_size {
             let cached_message_sender = cached_message_sender.clone();
             let grpc_message_receiver = grpc_message_receiver.clone();
             join_set.spawn(async move {
                 loop {
                     match grpc_message_receiver.recv_async().await {
                         Ok(grpc_message) => {
-                            let update_cache_start_timestamp = Local::now();
-                            let (changed, account_key, update_cache_cost) =
-                                Self::update_cache(grpc_message.account_key, grpc_message.data);
-                            match cached_message_sender.send((
-                                TxId::from(grpc_message.tx),
-                                account_key,
-                                grpc_message.owner_key.try_into().unwrap(),
-                                grpc_message.received_timestamp,
-                                update_cache_start_timestamp,
-                                changed,
-                                update_cache_cost,
-                            )) {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    error!("发送缓存更新完成消息失败，原因：{}", e);
+                            let incoming_processor_timestamp = Local::now();
+                            match grpc_message {
+                                GrpcMessage::Account(account_msg) => {
+                                    let _ = Self::update_cache(
+                                        account_msg.account_key,
+                                        account_msg.data,
+                                    );
+                                    // let grpc_to_processor_channel_cost =
+                                    //     (incoming_processor_timestamp
+                                    //         - account_msg.received_timestamp)
+                                    //         .num_microseconds()
+                                    //         .unwrap()
+                                    //         as u128;
+                                    // info!(
+                                    //     "Processor_{index} ==> \n日志类型: Account, 总耗时 : {:?}μs, 交易 : {:?}\n\
+                                    //     当前账户 : {:?}, \
+                                    //     GRPC推送时间 : {:?}, \
+                                    //     缓存是否发生变化 : {:?}\n\
+                                    //     GRPC到更新缓存通道耗时 : {:?}μs, \
+                                    //     更新缓存耗时 : {:?}ns",
+                                    //     grpc_to_processor_channel_cost
+                                    //         + (update_cache_cost.div_ceil(1000)),
+                                    //     account_msg.tx.as_slice().to_base58(),
+                                    //     account_key.to_string(),
+                                    //     account_msg
+                                    //         .received_timestamp
+                                    //         .format("%Y-%m-%d %H:%M:%S%.9f")
+                                    //         .to_string(),
+                                    //     changed,
+                                    //     grpc_to_processor_channel_cost,
+                                    //     update_cache_cost,
+                                    // );
+                                }
+                                GrpcMessage::Transaction(transaction_msg) => {
+                                    match cached_message_sender
+                                        .send((transaction_msg, incoming_processor_timestamp))
+                                    {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            error!("发送Transaction到Arb失败，原因：{}", e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -74,23 +92,12 @@ impl MessageProcessor {
         }
     }
 
-    pub fn update_cache(account_key: Vec<u8>, data: Vec<u8>) -> (bool, Pubkey, u128) {
+    pub fn update_cache(account_key: Vec<u8>, data: Vec<u8>) -> u128 {
         let now = Instant::now();
-        let current_hash = {
-            let mut hasher = AHasher::default();
-            data.as_slice().hash(&mut hasher);
-            hasher.finish()
-        };
         let account_cache = ACCOUNT_CACHE.get().unwrap();
         let account_key: Pubkey = account_key.try_into().unwrap();
-        match account_cache.insert(account_key, (data, current_hash)) {
-            None => (true, account_key, now.elapsed().as_nanos()),
-            Some((_, previous_hash)) => (
-                current_hash == previous_hash,
-                account_key,
-                now.elapsed().as_nanos(),
-            ),
-        }
+        account_cache.insert(account_key, data);
+        now.elapsed().as_nanos()
     }
 
     async fn init_account_cache(&self) {

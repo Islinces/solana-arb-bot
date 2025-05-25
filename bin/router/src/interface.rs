@@ -1,12 +1,14 @@
+use ahash::AHashMap;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
+use std::sync::Arc;
 
 pub type SubscribeKey = (DexType, GrpcAccountUpdateType);
 const RAYDIUM_AMM_PROGRAM_ID: Pubkey = pubkey!("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8");
+const RAYDIUM_AMM_VAULT_OWNER: Pubkey = pubkey!("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1");
 
-const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 const PUMP_FUN_AMM_PROGRAM_ID: Pubkey = pubkey!("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
 
@@ -31,16 +33,6 @@ impl Display for DexType {
     }
 }
 
-#[test]
-fn test() {
-    println!(
-        "{:?}",
-        Pubkey::from_str("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1")
-            .unwrap()
-            .to_bytes()
-    );
-}
-
 impl DexType {
     pub fn get_ref_program_id(&self) -> &Pubkey {
         match self {
@@ -48,6 +40,25 @@ impl DexType {
             DexType::RaydiumCLmm => &RAYDIUM_CLMM_PROGRAM_ID,
             DexType::PumpFunAMM => &PUMP_FUN_AMM_PROGRAM_ID,
             DexType::MeteoraDLMM => &METEORA_DLMM_PROGRAM_ID,
+        }
+    }
+
+    #[inline]
+    pub fn is_follow_vault(
+        account: &Pubkey,
+        owner: &Pubkey,
+        vault_to_pool: Arc<AHashMap<Pubkey, (Pubkey, Pubkey)>>,
+    ) -> Option<(DexType, Pubkey)> {
+        if owner == &PUMP_FUN_AMM_PROGRAM_ID {
+            vault_to_pool
+                .get(account)
+                .map_or(None, |(acc, _)| Some((DexType::PumpFunAMM, acc.clone())))
+        } else if owner == &RAYDIUM_AMM_VAULT_OWNER {
+            vault_to_pool
+                .get(account)
+                .map_or(None, |(acc, _)| Some((DexType::RaydiumAMM, acc.clone())))
+        } else {
+            None
         }
     }
 }

@@ -60,15 +60,15 @@ arrayref = "0.3.7"
 clap = { version = "4.5.37", features = ["derive"] }
 ahash = "0.8.12"
 flume = "0.11.1"
-crossbeam-channel = "0.5.15"
-smallvec = "1.15.0"
+#crossbeam-channel = "0.5.15"
+#smallvec = "1.15.0"
 num_cpus = "1.16.0"
 
-burberry = { git = "https://github.com/tonyke-bot/burberry.git", rev = "8bdb3cadf18e9be01622f9acbe562ee2d4f65ac2", default-features = false }
-eyre = "0.6.12"
+#burberry = { git = "https://github.com/tonyke-bot/burberry.git", rev = "8bdb3cadf18e9be01622f9acbe562ee2d4f65ac2", default-features = false }
+#eyre = "0.6.12"
 
 dashmap = "6.1.0"
-moka = { version = "0.12.10", features = ["sync"] }
+#moka = { version = "0.12.10", features = ["sync"] }
 
 mimalloc = "0.1.46"
 

@@ -1,21 +1,15 @@
 use ahash::{AHashMap, AHashSet};
-use burberry::{map_collector, map_executor, Engine};
 use chrono::Local;
 use clap::Parser;
 use mimalloc::MiMalloc;
 use router::arb::Arb;
-use router::collector::{CollectorType, SubscribeCollector};
 use router::dex_data::{get_dex_data, DexJson};
-use router::executor::{ExecutorType, SimpleExecutor};
 use router::grpc_processor::MessageProcessor;
 use router::grpc_subscribe::GrpcSubscribe;
 use router::interface::DexType;
 use router::state::GrpcMessage;
-use router::strategy::MessageStrategy;
-use serde::Deserializer;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tracing::error;
@@ -25,7 +19,6 @@ use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
-use yellowstone_grpc_proto::prost::bytes::Buf;
 
 pub struct MicrosecondFormatter;
 
@@ -46,8 +39,8 @@ pub struct Command {
     dex_json_path: String,
     #[arg(long)]
     grpc_url: Option<String>,
-    #[arg(long)]
-    start_mode: Option<String>,
+    // #[arg(long)]
+    // start_mode: Option<String>,
     #[arg(long)]
     specify_pool: Option<String>,
     #[arg(long)]
@@ -73,12 +66,13 @@ async fn main() -> anyhow::Result<()> {
         .with(EnvFilter::new("info"))
         .init();
     let command = Command::parse();
-    let start_mode = command.start_mode.clone().unwrap_or("custom".to_string());
-    if start_mode.as_str() == "engine" {
-        start_with_engine(command).await;
-    } else {
-        start_with_custom(command).await;
-    }
+    // let start_mode = command.start_mode.clone().unwrap_or("custom".to_string());
+    // if start_mode.as_str() == "engine" {
+    //     start_with_engine(command).await;
+    // } else {
+    //
+    // }
+    start_with_custom(command).await;
     Ok(())
 }
 
@@ -154,43 +148,4 @@ fn vault_to_pool(
         }
     }
     (pool_ids, vault_to_pool)
-}
-
-async fn start_with_engine(command: Command) {
-    let grpc_url = command
-        .grpc_url
-        .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
-    let single_mode = if command.grpc_subscribe_type == "single" {
-        true
-    } else {
-        false
-    };
-    let dex_data = get_dex_data(command.dex_json_path.clone());
-    let (pool_ids, vault_to_pool) = vault_to_pool(&dex_data);
-    let mut engine = Engine::default();
-    engine.add_executor(map_executor!(SimpleExecutor, ExecutorType::Simple));
-    engine.add_collector(map_collector!(
-        SubscribeCollector {
-            grpc_url,
-            single_mode,
-            dex_json_path: command.dex_json_path.clone(),
-            specify_pool: command.specify_pool.clone(),
-            dex_data,
-            standard_program: command.standard_program.unwrap_or(true),
-        },
-        CollectorType::Message
-    ));
-    engine.add_strategy(Box::new(MessageStrategy {
-        receiver_msg: AHashMap::with_capacity(10000),
-        single_mode,
-        specify_pool: command
-            .specify_pool
-            .clone()
-            .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap())),
-        pool_ids,
-        vault_to_pool,
-        standard_program: command.standard_program.unwrap_or(true),
-    }));
-
-    engine.run_and_join().await.unwrap();
 }
