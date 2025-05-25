@@ -39,7 +39,7 @@ impl Arb {
         let arb_size = self.arb_size as u64;
         for index in 0..arb_size {
             let vault_to_pool = self.vault_to_pool.clone();
-            // let specify_pool = self.specify_pool.clone();
+            let specify_pool = self.specify_pool.clone();
             let mut receiver = message_cached_sender.subscribe();
             join_set.spawn(async move {
                 while let data = receiver.recv().await {
@@ -83,28 +83,34 @@ impl Arb {
                                     .num_microseconds()
                                     .unwrap() as u128;
                             let any_balance_change = !changed_balances.is_empty();
-                            info!(
-                                "Arb_{index} ==> \n🤝Transaction, 总耗时 : {:?}μs\n\
+                            if any_balance_change
+                                && specify_pool.is_none_or(|v| {
+                                    changed_balances.iter().any(|t| &t.pool_id == &v)
+                                })
+                            {
+                                info!(
+                                    "Arb_{index} ==> \n🤝Transaction, 总耗时 : {:?}μs\n\
                                         交易 : {:?}, GRPC推送时间 : {:?}\n\
                                         GRPC到Processor通道耗时 : {:?}μs, \
                                         Processor到Arb通道耗时 : {:?}μs, \
                                         获取变化的Balances耗时 : {:?}ns\n\
                                         Balance是否发生变化 : {:?}\n\
                                         Balances : {:#?}",
-                                grpc_to_processor_channel_cost
-                                    + processor_to_arb_channel_cost
-                                    + (get_change_balance_cost.div_ceil(1000)),
-                                transaction_msg.signature.as_slice().to_base58(),
-                                transaction_msg
-                                    .received_timestamp
-                                    .format("%Y-%m-%d %H:%M:%S%.9f")
-                                    .to_string(),
-                                grpc_to_processor_channel_cost,
-                                processor_to_arb_channel_cost,
-                                get_change_balance_cost,
-                                any_balance_change,
-                                changed_balances,
-                            );
+                                    grpc_to_processor_channel_cost
+                                        + processor_to_arb_channel_cost
+                                        + (get_change_balance_cost.div_ceil(1000)),
+                                    transaction_msg.signature.as_slice().to_base58(),
+                                    transaction_msg
+                                        .received_timestamp
+                                        .format("%Y-%m-%d %H:%M:%S%.9f")
+                                        .to_string(),
+                                    grpc_to_processor_channel_cost,
+                                    processor_to_arb_channel_cost,
+                                    get_change_balance_cost,
+                                    any_balance_change,
+                                    changed_balances,
+                                );
+                            }
                         }
                         Err(RecvError::Closed) => {
                             error!("action channel closed!");
