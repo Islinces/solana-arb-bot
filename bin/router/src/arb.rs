@@ -83,8 +83,7 @@ impl Arb {
                                     .num_microseconds()
                                     .unwrap() as u128;
                             let any_balance_change = !changed_balances.is_empty();
-                            if any_balance_change
-                                && specify_pool.is_none_or(|v| {
+                            if specify_pool.is_none_or(|v| {
                                     changed_balances.iter().any(|t| &t.pool_id == &v)
                                 })
                             {
