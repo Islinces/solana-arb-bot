@@ -4,3 +4,4 @@ pub mod grpc_subscribe;
 pub mod interface;
 pub mod state;
 pub mod arb;
+pub mod arb_bot;
