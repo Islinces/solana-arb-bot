@@ -1,5 +1,4 @@
 use crate::state::{BalanceChangeInfo, GrpcTransactionMsg};
-use ahash::AHashMap;
 use base58::ToBase58;
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
@@ -12,19 +11,16 @@ use tracing::{error, info, warn};
 
 pub struct Arb {
     pub arb_size: usize,
-    pub vault_to_pool: Arc<AHashMap<Pubkey, (Pubkey, Pubkey)>>,
     pub specify_pool: Arc<Option<Pubkey>>,
 }
 
 impl Arb {
     pub fn new(
         arb_size: usize,
-        vault_to_pool: AHashMap<Pubkey, (Pubkey, Pubkey)>,
         specify_pool: Option<Pubkey>,
     ) -> Self {
         Self {
             arb_size,
-            vault_to_pool: Arc::new(vault_to_pool),
             specify_pool: Arc::new(specify_pool),
         }
     }
@@ -36,7 +32,6 @@ impl Arb {
     ) {
         let arb_size = self.arb_size as u64;
         for index in 0..arb_size {
-            let vault_to_pool = self.vault_to_pool.clone();
             let specify_pool = self.specify_pool.clone();
             let mut receiver = message_cached_sender.subscribe();
             join_set.spawn(async move {
@@ -56,6 +51,11 @@ impl Arb {
                                 .chain(meta.loaded_readonly_addresses)
                                 .map(|v| Pubkey::try_from(v).unwrap())
                                 .collect::<Vec<_>>();
+                            // let keys = account_keys
+                            //     .iter()
+                            //     .map(|v| v.to_string())
+                            //     .collect::<Vec<_>>();
+                            // let txn = transaction_msg.signature.as_slice().to_base58();
                             let changed_balances = meta
                                 .pre_token_balances
                                 .into_iter()
@@ -65,7 +65,6 @@ impl Arb {
                                         &pre,
                                         &post,
                                         &account_keys,
-                                        vault_to_pool.clone(),
                                     )
                                 })
                                 .collect::<Vec<_>>();

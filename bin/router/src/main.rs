@@ -1,12 +1,10 @@
-use ahash::{AHashMap, AHashSet};
 use chrono::Local;
 use clap::Parser;
 use mimalloc::MiMalloc;
 use router::arb::Arb;
-use router::dex_data::{get_dex_data, DexJson};
 use router::grpc_processor::MessageProcessor;
 use router::grpc_subscribe::GrpcSubscribe;
-use router::interface::DexType;
+use router::interface::init_dex_data;
 use router::state::GrpcMessage;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
@@ -56,14 +54,14 @@ pub struct Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let file_appender = RollingFileAppender::builder()
-    //     .filename_prefix("app")
-    //     .filename_suffix("log")
-    //     .rotation(Rotation::DAILY)
-    //     .build("./logs")
-    //     .expect("构建file_appender失败");
-    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    let file_appender = RollingFileAppender::builder()
+        .filename_prefix("app")
+        .filename_suffix("log")
+        .rotation(Rotation::DAILY)
+        .build("./logs")
+        .expect("构建file_appender失败");
+    let (non_blocking_writer, _guard) = non_blocking(file_appender);
+    // let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
     tracing_subscriber::registry()
         .with(
             fmt::layer()
@@ -82,6 +80,7 @@ async fn start_with_custom(command: Command) {
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
+    let dex_json_path = command.dex_json_path;
     let processor_size = command.processor_size.unwrap_or(1);
     let arb_size = command.arb_size.unwrap_or(1);
     // Account本地缓存更新后广播通道容量
@@ -95,8 +94,7 @@ async fn start_with_custom(command: Command) {
         .specify_pool
         .clone()
         .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap()));
-    let dex_data = get_dex_data(command.dex_json_path.clone());
-    let (_pool_ids, vault_to_pool) = vault_to_pool(&dex_data);
+    let dex_data = init_dex_data(dex_json_path).unwrap();
     // grpc消息消费通道
     let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
     // Account本地缓存更新后广播通道
@@ -113,14 +111,13 @@ async fn start_with_custom(command: Command) {
         )
         .await;
     // 接收更新缓存的Account信息，判断是否需要触发route
-    Arb::new(arb_size, vault_to_pool, specify_pool)
+    Arb::new(arb_size, specify_pool)
         .start(&mut join_set, &cached_message_sender)
         .await;
     join_set.spawn(async move {
         // 订阅GRPC
         let subscribe = GrpcSubscribe {
             grpc_url,
-            dex_json_path: command.dex_json_path.clone(),
             single_mode,
             specify_pool: command.specify_pool.clone(),
             standard_program: command.standard_program.unwrap_or(true),
@@ -132,22 +129,4 @@ async fn start_with_custom(command: Command) {
             error!("task terminated unexpectedly: {err:#}");
         }
     }
-}
-
-fn vault_to_pool(
-    dex_data: &Vec<DexJson>,
-) -> (AHashSet<Pubkey>, AHashMap<Pubkey, (Pubkey, Pubkey)>) {
-    let mut pool_ids: AHashSet<Pubkey> = AHashSet::with_capacity(dex_data.len());
-    let mut vault_to_pool: AHashMap<Pubkey, (Pubkey, Pubkey)> =
-        AHashMap::with_capacity(dex_data.len() * 2);
-    for json in dex_data.iter() {
-        if &json.owner == DexType::PumpFunAMM.get_ref_program_id()
-            || &json.owner == DexType::RaydiumAMM.get_ref_program_id()
-        {
-            pool_ids.insert(json.pool);
-            vault_to_pool.insert(json.vault_a, (json.pool, json.owner));
-            vault_to_pool.insert(json.vault_b, (json.pool, json.owner));
-        }
-    }
-    (pool_ids, vault_to_pool)
 }

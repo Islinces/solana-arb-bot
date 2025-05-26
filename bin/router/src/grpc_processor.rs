@@ -1,5 +1,7 @@
+use crate::interface;
 use crate::state::{GrpcMessage, GrpcTransactionMsg};
 use ahash::RandomState;
+use borsh::BorshDeserialize;
 use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use flume::Receiver;
@@ -39,34 +41,10 @@ impl MessageProcessor {
                             match grpc_message {
                                 GrpcMessage::Account(account_msg) => {
                                     let _ = Self::update_cache(
+                                        account_msg.owner_key,
                                         account_msg.account_key,
                                         account_msg.data,
                                     );
-                                    // let grpc_to_processor_channel_cost =
-                                    //     (incoming_processor_timestamp
-                                    //         - account_msg.received_timestamp)
-                                    //         .num_microseconds()
-                                    //         .unwrap()
-                                    //         as u128;
-                                    // info!(
-                                    //     "Processor_{index} ==> \n日志类型: Account, 总耗时 : {:?}μs, 交易 : {:?}\n\
-                                    //     当前账户 : {:?}, \
-                                    //     GRPC推送时间 : {:?}, \
-                                    //     缓存是否发生变化 : {:?}\n\
-                                    //     GRPC到更新缓存通道耗时 : {:?}μs, \
-                                    //     更新缓存耗时 : {:?}ns",
-                                    //     grpc_to_processor_channel_cost
-                                    //         + (update_cache_cost.div_ceil(1000)),
-                                    //     account_msg.tx.as_slice().to_base58(),
-                                    //     account_key.to_string(),
-                                    //     account_msg
-                                    //         .received_timestamp
-                                    //         .format("%Y-%m-%d %H:%M:%S%.9f")
-                                    //         .to_string(),
-                                    //     changed,
-                                    //     grpc_to_processor_channel_cost,
-                                    //     update_cache_cost,
-                                    // );
                                 }
                                 GrpcMessage::Transaction(transaction_msg) => {
                                     match cached_message_sender
@@ -87,12 +65,27 @@ impl MessageProcessor {
         }
     }
 
-    pub fn update_cache(account_key: Vec<u8>, data: Vec<u8>) -> u128 {
+    fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, mut data: Vec<u8>) -> (u128, u128) {
+        let slice_data_instant = Instant::now();
+        let sliced_data = interface::slice_data(
+            &Pubkey::try_from_slice(account_key.as_slice()).unwrap(),
+            &Pubkey::try_from_slice(owner.as_slice()).unwrap(),
+            &mut data,
+        );
+        let slice_data_cost = slice_data_instant.elapsed().as_nanos();
         let now = Instant::now();
-        let account_cache = ACCOUNT_CACHE.get().unwrap();
-        let account_key: Pubkey = account_key.try_into().unwrap();
-        account_cache.insert(account_key, data);
-        now.elapsed().as_nanos()
+        match sliced_data {
+            Ok(sliced_data) => {
+                let account_cache = ACCOUNT_CACHE.get().unwrap();
+                let account_key: Pubkey = account_key.try_into().unwrap();
+                account_cache.insert(account_key, sliced_data);
+                (slice_data_cost, now.elapsed().as_nanos())
+            }
+            Err(e) => {
+                error!("{}", e);
+                (slice_data_cost, now.elapsed().as_nanos())
+            }
+        }
     }
 
     async fn init_account_cache(&self) {

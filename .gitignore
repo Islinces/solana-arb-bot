@@ -6,8 +6,7 @@ target/
 .classpath
 .factorypath
 
-./idea
+.idea/
 
 # vs code
 .vscode/
-.idea

@@ -1,19 +1,6 @@
-use std::fs::File;
-use std::str::FromStr;
 use serde::{Deserialize, Deserializer};
 use solana_sdk::pubkey::Pubkey;
-use tracing::error;
-
-pub fn get_dex_data(dex_json_path: String) -> Vec<DexJson> {
-    let dex_jsons: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
-        Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
-        Err(e) => {
-            error!("{}", e);
-            vec![]
-        }
-    };
-    dex_jsons
-}
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DexJson {

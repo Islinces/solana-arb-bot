@@ -26,7 +26,6 @@ use yellowstone_grpc_proto::tonic::Status;
 #[derive(Debug)]
 pub struct GrpcSubscribe {
     pub grpc_url: String,
-    pub dex_json_path: String,
     pub single_mode: bool,
     pub specify_pool: Option<String>,
     pub standard_program: bool,
@@ -53,12 +52,12 @@ impl GrpcSubscribe {
                 pump_fun_account_keys.push(json.vault_a);
                 pump_fun_account_keys.push(json.vault_b);
             }
-            if &json.owner == DexType::RaydiumCLmm.get_ref_program_id() {
+            if &json.owner == DexType::RaydiumCLMM.get_ref_program_id() {
                 // TickArrayBitmapExtension
                 raydium_clmm_account_keys.push(
                     Pubkey::find_program_address(
                         &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), json.pool.as_ref()],
-                        DexType::RaydiumCLmm.get_ref_program_id(),
+                        DexType::RaydiumCLMM.get_ref_program_id(),
                     )
                     .0,
                 );
@@ -89,7 +88,7 @@ impl GrpcSubscribe {
                 accounts.insert(
                     pool_id.to_string(),
                     SubscribeRequestFilterAccounts {
-                        owner: vec![DexType::RaydiumCLmm.get_ref_program_id().to_string()],
+                        owner: vec![DexType::RaydiumCLMM.get_ref_program_id().to_string()],
                         filters: vec![
                             // TickArrayState data大小为10240
                             SubscribeRequestFilterAccountsFilter {
