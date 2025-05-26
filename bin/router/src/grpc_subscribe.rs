@@ -10,10 +10,14 @@ use std::time::Duration;
 use tokio_stream::{Stream, StreamExt};
 use tracing::{error, info};
 use yellowstone_grpc_client::GeyserGrpcClient;
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter::Datasize;
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest,
-    SubscribeRequestFilterAccounts, SubscribeRequestFilterTransactions, SubscribeUpdate,
+    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
+    SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter,
+    SubscribeRequestFilterAccountsFilterMemcmp, SubscribeRequestFilterTransactions,
+    SubscribeUpdate,
 };
 use yellowstone_grpc_proto::tonic::service::Interceptor;
 use yellowstone_grpc_proto::tonic::transport::ClientTlsConfig;
@@ -28,45 +32,97 @@ pub struct GrpcSubscribe {
     pub standard_program: bool,
 }
 
+pub const POOL_TICK_ARRAY_BITMAP_SEED: &str = "pool_tick_array_bitmap_extension";
+
 impl GrpcSubscribe {
     async fn single_subscribe_grpc(
         grpc_url: String,
         dex_data: Vec<DexJson>,
     ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
-        let mut account_keys = Vec::with_capacity(dex_data.len());
+        let mut raydium_amm_account_keys = Vec::with_capacity(dex_data.len());
+        let mut pump_fun_account_keys = Vec::with_capacity(dex_data.len());
+        let mut raydium_clmm_account_keys = Vec::with_capacity(dex_data.len());
 
         for json in dex_data.iter() {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
-                account_keys.push(json.pool);
-                account_keys.push(json.vault_a);
-                account_keys.push(json.vault_b);
+                raydium_amm_account_keys.push(json.pool);
+                raydium_amm_account_keys.push(json.vault_a);
+                raydium_amm_account_keys.push(json.vault_b);
             }
             if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
-                account_keys.push(json.vault_a);
-                account_keys.push(json.vault_b);
+                pump_fun_account_keys.push(json.vault_a);
+                pump_fun_account_keys.push(json.vault_b);
+            }
+            if &json.owner == DexType::RaydiumCLmm.get_ref_program_id() {
+                // TickArrayBitmapExtension
+                raydium_clmm_account_keys.push(
+                    Pubkey::find_program_address(
+                        &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), json.pool.as_ref()],
+                        DexType::RaydiumCLmm.get_ref_program_id(),
+                    )
+                    .0,
+                );
+                raydium_clmm_account_keys.push(json.pool);
             }
         }
+        let all_account_keys = raydium_amm_account_keys
+            .iter()
+            .chain(pump_fun_account_keys.iter())
+            .chain(raydium_clmm_account_keys.iter())
+            .map(|key| key.to_string())
+            .collect::<Vec<_>>();
         let mut grpc_client = create_grpc_client(grpc_url).await;
-        if !account_keys.is_empty() {
-            let account_keys = account_keys
-                .iter()
-                .map(|key| key.to_string())
-                .collect::<Vec<_>>();
-            let mut accounts = HashMap::new();
+        let mut accounts = HashMap::new();
+        // 所有池子、金库订阅
+        if !all_account_keys.is_empty() {
             accounts.insert(
                 "accounts".to_string(),
                 SubscribeRequestFilterAccounts {
-                    account: account_keys.clone(),
+                    account: all_account_keys.clone(),
                     ..Default::default()
                 },
             );
+        }
+        // CLMM TickArrayState订阅
+        if !raydium_clmm_account_keys.is_empty() {
+            for pool_id in raydium_clmm_account_keys.iter() {
+                accounts.insert(
+                    pool_id.to_string(),
+                    SubscribeRequestFilterAccounts {
+                        owner: vec![DexType::RaydiumCLmm.get_ref_program_id().to_string()],
+                        filters: vec![
+                            // TickArrayState data大小为10240
+                            SubscribeRequestFilterAccountsFilter {
+                                filter: Some(Datasize(10240)),
+                            },
+                            // 订阅关注的池子的TickArrayState
+                            SubscribeRequestFilterAccountsFilter {
+                                filter: Some(
+                                    Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
+                                        offset: 8,
+                                        data: Some(
+                                            subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                                pool_id.to_bytes().to_vec(),
+                                            ),
+                                        ),
+                                    }),
+                                ),
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+        // 交易订阅
+        if !accounts.is_empty() {
             let mut transactions = HashMap::new();
             transactions.insert(
                 "transactions".to_string(),
                 SubscribeRequestFilterTransactions {
                     vote: Some(false),
                     failed: Some(false),
-                    account_include: account_keys,
+                    account_include: all_account_keys,
                     ..Default::default()
                 },
             );
@@ -103,11 +159,10 @@ impl GrpcSubscribe {
                             if specify_pool.as_ref().is_none()
                                 || specify_pool.as_ref().unwrap() == &account_key.to_string()
                             {
+                                let timestamp = time.format("%Y-%m-%d %H:%M:%S%.9f").to_string();
                                 info!(
-                                    "基准程序单订阅, tx : {:?}, account : {:?}, timestamp : {:?}",
-                                    tx,
-                                    account_key,
-                                    time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
+                                    "基准程序单订阅, tx : {:?}, account : {}, 推送时间 : {:?}",
+                                    tx, account_key, timestamp,
                                 );
                             }
                         } else if let Some(UpdateOneof::Transaction(transaction)) =
@@ -181,7 +236,7 @@ async fn create_grpc_client(grpc_url: String) -> GeyserGrpcClient<impl Intercept
     }
     builder
         .max_decoding_message_size(100 * 1024 * 1024) // 100MB
-        .connect_timeout(Duration::from_secs(2))
+        .connect_timeout(Duration::from_secs(10))
         .buffer_size(64 * 1024) // 64KB buffer
         .http2_adaptive_window(true)
         .http2_keep_alive_interval(Duration::from_secs(15))

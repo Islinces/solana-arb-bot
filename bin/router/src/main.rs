@@ -14,6 +14,7 @@ use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tracing::error;
 use tracing_appender::non_blocking;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::layer::SubscriberExt;
@@ -55,6 +56,13 @@ pub struct Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // let file_appender = RollingFileAppender::builder()
+    //     .filename_prefix("app")
+    //     .filename_suffix("log")
+    //     .rotation(Rotation::DAILY)
+    //     .build("./logs")
+    //     .expect("构建file_appender失败");
+    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
     let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
     tracing_subscriber::registry()
         .with(
@@ -66,12 +74,6 @@ async fn main() -> anyhow::Result<()> {
         .with(EnvFilter::new("info"))
         .init();
     let command = Command::parse();
-    // let start_mode = command.start_mode.clone().unwrap_or("custom".to_string());
-    // if start_mode.as_str() == "engine" {
-    //     start_with_engine(command).await;
-    // } else {
-    //
-    // }
     start_with_custom(command).await;
     Ok(())
 }
