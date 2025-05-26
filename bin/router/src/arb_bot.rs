@@ -1,15 +1,16 @@
 use crate::arb::Arb;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::GrpcSubscribe;
-use crate::interface::init_dex_data;
+use crate::interface::init_start_data;
 use crate::state::GrpcMessage;
 use clap::Parser;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tracing::error;
-
 
 #[derive(Parser, Debug)]
 pub struct Command {
@@ -19,6 +20,8 @@ pub struct Command {
     dex_json_path: String,
     #[arg(long)]
     grpc_url: Option<String>,
+    #[arg(long)]
+    rpc_url: Option<String>,
     // #[arg(long)]
     // start_mode: Option<String>,
     #[arg(long)]
@@ -38,6 +41,9 @@ pub async fn start_with_custom() {
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
+    let rpc_url = command
+        .rpc_url
+        .unwrap_or("https://solana-rpc.publicnode.com".to_string());
     let dex_json_path = command.dex_json_path;
     let processor_size = command.processor_size.unwrap_or(1);
     let arb_size = command.arb_size.unwrap_or(1);
@@ -52,7 +58,8 @@ pub async fn start_with_custom() {
         .specify_pool
         .clone()
         .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap()));
-    let dex_data = init_dex_data(dex_json_path).unwrap();
+    let rpc_client = Arc::new(RpcClient::new(rpc_url));
+    let dex_data = init_start_data(dex_json_path, rpc_client).await.unwrap();
     // grpc消息消费通道
     let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
     // Account本地缓存更新后广播通道
