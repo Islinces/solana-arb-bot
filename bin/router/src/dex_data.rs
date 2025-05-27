@@ -8,6 +8,10 @@ pub struct DexJson {
     pub pool: Pubkey,
     #[serde(deserialize_with = "deserialize_pubkey")]
     pub owner: Pubkey,
+    #[serde(deserialize_with = "deserialize_pubkey", rename = "mintA")]
+    pub mint_a: Pubkey,
+    #[serde(deserialize_with = "deserialize_pubkey", rename = "mintB")]
+    pub mint_b: Pubkey,
     #[serde(deserialize_with = "deserialize_pubkey", rename = "vaultA")]
     pub vault_a: Pubkey,
     #[serde(deserialize_with = "deserialize_pubkey", rename = "vaultB")]

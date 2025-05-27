@@ -21,8 +21,8 @@ use tracing::{error, info};
 use yellowstone_grpc_proto::prost::Message;
 use crate::dex::raydium_clmm::tick_array::TickArrayState;
 
-static ACCOUNT_DYNAMIC_CACHE: OnceCell<DynamicCache> = OnceCell::const_new();
-static ACCOUNT_STATIC_CACHE: OnceCell<RwLock<StaticCache>> = OnceCell::const_new();
+static DYNAMIC_ACCOUNT_CACHE: OnceCell<DynamicCache> = OnceCell::const_new();
+static STATIC_ACCOUNT_CACHE: OnceCell<RwLock<StaticCache>> = OnceCell::const_new();
 static ALT_CACHE: OnceCell<RwLock<AltCache>> = OnceCell::const_new();
 
 #[derive(Debug)]
@@ -73,8 +73,8 @@ pub async fn init_snaphot(
         return Err(anyhow::anyhow!("dex_json文件无匹配数据"));
     }
     let mut effective_dex_data = Vec::with_capacity(dex_data_group.len());
-    ACCOUNT_DYNAMIC_CACHE.set(DynamicCache::new(10_000))?;
-    ACCOUNT_STATIC_CACHE.set(RwLock::new(StaticCache::new()))?;
+    DYNAMIC_ACCOUNT_CACHE.set(DynamicCache::new(10_000))?;
+    STATIC_ACCOUNT_CACHE.set(RwLock::new(StaticCache::new()))?;
     ALT_CACHE.set(RwLock::new(AltCache::new()))?;
     for (dex_type, dex_data) in dex_data_group {
         // 有效alt
@@ -285,7 +285,7 @@ async fn init_raydium_clmm_cache(
                 continue;
             }
             Some(amm_config) => {
-                ACCOUNT_STATIC_CACHE
+                STATIC_ACCOUNT_CACHE
                     .get()
                     .unwrap()
                     .write()
@@ -310,7 +310,7 @@ async fn init_raydium_clmm_cache(
                 continue;
             }
             Some(bitmap_extension) => {
-                ACCOUNT_DYNAMIC_CACHE
+                DYNAMIC_ACCOUNT_CACHE
                     .get()
                     .unwrap()
                     .0
@@ -324,7 +324,7 @@ async fn init_raydium_clmm_cache(
         let tick_array_bitmap_extension = Some(TickArrayBitmapExtension::from_slice_data(
             None,
             Some(
-                ACCOUNT_DYNAMIC_CACHE
+                DYNAMIC_ACCOUNT_CACHE
                     .get()
                     .unwrap()
                     .0
@@ -373,7 +373,7 @@ async fn init_raydium_clmm_cache(
     .collect::<Vec<_>>();
     // 缓存tick array state
     for (key, data) in all_tick_array_state_account_data.into_iter() {
-        ACCOUNT_DYNAMIC_CACHE.get().unwrap().0.insert(key, data);
+        DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(key, data);
     }
 
     // 缓存pool
@@ -385,12 +385,12 @@ async fn init_raydium_clmm_cache(
         let json = dex_data.get(index).unwrap();
         let pool = json.pool;
         let alt = json.address_lookup_table_address;
-        ACCOUNT_DYNAMIC_CACHE
+        DYNAMIC_ACCOUNT_CACHE
             .get()
             .unwrap()
             .0
             .insert(pool, dynamic_data.unwrap());
-        ACCOUNT_STATIC_CACHE
+        STATIC_ACCOUNT_CACHE
             .get()
             .unwrap()
             .write()
@@ -489,11 +489,11 @@ async fn init_pump_fun_cache(
                     dex_data.remove(index);
                 } else {
                     // 订阅的数据，变化的
-                    ACCOUNT_DYNAMIC_CACHE.get().unwrap().0.insert(
+                    DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(
                         json.vault_a.clone(),
                         vault_data.first().unwrap().clone().0.unwrap(),
                     );
-                    ACCOUNT_DYNAMIC_CACHE.get().unwrap().0.insert(
+                    DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(
                         json.vault_b.clone(),
                         vault_data.last().unwrap().0.clone().unwrap(),
                     );
@@ -543,7 +543,7 @@ async fn init_pump_fun_cache(
                     combine_data.extend(global_config_account_data);
                     combine_data.extend(coin_creator_vault_ata.to_bytes());
                     combine_data.extend(coin_creator_vault_authority.to_bytes());
-                    ACCOUNT_STATIC_CACHE
+                    STATIC_ACCOUNT_CACHE
                         .get()
                         .unwrap()
                         .write()
@@ -611,23 +611,23 @@ async fn init_raydium_amm_cache(
                     dex_data.remove(index);
                 } else {
                     // 订阅的数据，变化的
-                    ACCOUNT_DYNAMIC_CACHE
+                    DYNAMIC_ACCOUNT_CACHE
                         .get()
                         .unwrap()
                         .0
                         .insert(json.pool.clone(), pool_dynamic_data);
                     let x = vault_data.first().unwrap().clone();
-                    ACCOUNT_DYNAMIC_CACHE
+                    DYNAMIC_ACCOUNT_CACHE
                         .get()
                         .unwrap()
                         .0
                         .insert(json.vault_a.clone(), x.0.unwrap());
-                    ACCOUNT_DYNAMIC_CACHE.get().unwrap().0.insert(
+                    DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(
                         json.vault_b.clone(),
                         vault_data.last().unwrap().0.clone().unwrap(),
                     );
                     // 为订阅的数据，不变的
-                    ACCOUNT_STATIC_CACHE
+                    STATIC_ACCOUNT_CACHE
                         .get()
                         .unwrap()
                         .write()

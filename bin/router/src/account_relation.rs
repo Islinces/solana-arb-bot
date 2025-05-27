@@ -5,6 +5,7 @@ use crate::interface::{AccountType, DexType};
 use ahash::AHashMap;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
+use anyhow::anyhow;
 use tokio::sync::OnceCell;
 
 static ACCOUNT_RELATION_CACHE: OnceCell<Arc<AccountRelation>> = OnceCell::const_new();
@@ -46,10 +47,10 @@ impl AccountRelation {
     }
 }
 
-pub(crate) fn init(dex_data: &[DexJson]) {
+pub(crate) fn init(dex_data: &[DexJson]) -> anyhow::Result<()> {
     ACCOUNT_RELATION_CACHE
-        .set(Arc::new(AccountRelation::new(dex_data).unwrap()))
-        .unwrap();
+        .set(Arc::new(AccountRelation::new(dex_data)?))
+        .map_or(Err(anyhow!("初始化AccountRelation失败")), |_|Ok(()))
 }
 
 #[inline]
