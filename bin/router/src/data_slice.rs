@@ -78,6 +78,9 @@ pub fn slice_data_for_static(
             AccountType::MintVault => Err(anyhow!("")),
             _ => Err(anyhow!("")),
         },
+        DexType::MeteoraDLMM => {
+            unreachable!()
+        }
     }
 }
 
@@ -136,6 +139,9 @@ pub fn slice_data_for_dynamic(
             )),
             _ => Err(anyhow!("")),
         },
+        DexType::MeteoraDLMM => {
+            unreachable!()
+        }
     }
 }
 
@@ -436,5 +442,8 @@ pub fn get_slice_size(
             }
             _ => Err(anyhow!("DexType和AccountType不匹配")),
         },
+        DexType::MeteoraDLMM => {
+            unimplemented!()
+        }
     }
 }

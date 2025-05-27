@@ -16,7 +16,7 @@ pub enum DexType {
     RaydiumAMM,
     RaydiumCLMM,
     PumpFunAMM,
-    // MeteoraDLMM,
+    MeteoraDLMM,
 }
 
 #[derive(Debug, Clone)]
@@ -30,7 +30,6 @@ pub enum AccountType {
     TickArrayBitmapExtension,
     // pumpfun
     PumpFunGlobalConfig,
-
 }
 
 impl Display for DexType {
@@ -39,6 +38,7 @@ impl Display for DexType {
             DexType::RaydiumAMM => "RaydiumAMM",
             DexType::RaydiumCLMM => "RaydiumCLmm",
             DexType::PumpFunAMM => "PumpFunAMM",
+            DexType::MeteoraDLMM => unimplemented!(),
         })
     }
 }
@@ -49,6 +49,7 @@ impl DexType {
             DexType::RaydiumAMM => &RAYDIUM_AMM_PROGRAM_ID,
             DexType::RaydiumCLMM => &RAYDIUM_CLMM_PROGRAM_ID,
             DexType::PumpFunAMM => &PUMP_FUN_AMM_PROGRAM_ID,
+            DexType::MeteoraDLMM => unimplemented!(),
         }
     }
 }
@@ -61,6 +62,8 @@ pub fn get_dex_type_with_program_id(program_id: &Pubkey) -> Option<DexType> {
         Some(DexType::RaydiumAMM)
     } else if program_id == &PUMP_FUN_AMM_PROGRAM_ID {
         Some(DexType::PumpFunAMM)
+    } else if program_id == &METEORA_DLMM_PROGRAM_ID {
+        None
     } else {
         None
     }

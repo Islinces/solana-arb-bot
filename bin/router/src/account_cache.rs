@@ -1,5 +1,6 @@
 use crate::data_slice::{slice_data_for_dynamic, slice_data_for_static};
 use crate::dex::raydium_clmm::pool::PoolState;
+use crate::dex::raydium_clmm::tick_array::TickArrayState;
 use crate::dex::raydium_clmm::tickarray_bitmap_extension::TickArrayBitmapExtension;
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex_data::DexJson;
@@ -19,7 +20,6 @@ use tokio::sync::{OnceCell, RwLock};
 use tokio::task::JoinSet;
 use tracing::{error, info};
 use yellowstone_grpc_proto::prost::Message;
-use crate::dex::raydium_clmm::tick_array::TickArrayState;
 
 static DYNAMIC_ACCOUNT_CACHE: OnceCell<DynamicCache> = OnceCell::const_new();
 static STATIC_ACCOUNT_CACHE: OnceCell<RwLock<StaticCache>> = OnceCell::const_new();
@@ -125,6 +125,9 @@ pub async fn init_snaphot(
                     alt_map,
                 )
                 .await
+            }
+            DexType::MeteoraDLMM => {
+                unimplemented!()
             }
         };
         effective_dex_data.extend(remaining_dex_data);
@@ -417,13 +420,7 @@ async fn init_pump_fun_cache(
     alt_map: AHashMap<Pubkey, AddressLookupTableAccount>,
 ) -> Vec<DexJson> {
     let global_config_account_data = get_account_data_with_data_slice(
-        vec![
-            Pubkey::find_program_address(
-                &[b"global_config"],
-                DexType::PumpFunAMM.get_ref_program_id(),
-            )
-            .0,
-        ],
+        vec![crate::dex::pump_fun::global_config_key()],
         DexType::PumpFunAMM,
         AccountType::PumpFunGlobalConfig,
         rpc_client.clone(),
@@ -541,8 +538,8 @@ async fn init_pump_fun_cache(
                     );
                     combine_data.extend(pool_static_data);
                     combine_data.extend(global_config_account_data);
-                    combine_data.extend(coin_creator_vault_ata.to_bytes());
                     combine_data.extend(coin_creator_vault_authority.to_bytes());
+                    combine_data.extend(coin_creator_vault_ata.to_bytes());
                     STATIC_ACCOUNT_CACHE
                         .get()
                         .unwrap()
@@ -616,12 +613,10 @@ async fn init_raydium_amm_cache(
                         .unwrap()
                         .0
                         .insert(json.pool.clone(), pool_dynamic_data);
-                    let x = vault_data.first().unwrap().clone();
-                    DYNAMIC_ACCOUNT_CACHE
-                        .get()
-                        .unwrap()
-                        .0
-                        .insert(json.vault_a.clone(), x.0.unwrap());
+                    DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(
+                        json.vault_a.clone(),
+                        vault_data.first().unwrap().clone().0.unwrap(),
+                    );
                     DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(
                         json.vault_b.clone(),
                         vault_data.last().unwrap().0.clone().unwrap(),
