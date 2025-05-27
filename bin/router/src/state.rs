@@ -3,12 +3,12 @@ use crate::grpc_subscribe::POOL_TICK_ARRAY_BITMAP_SEED;
 use crate::interface;
 use crate::interface::{AccountType, DexType};
 use ahash::RandomState;
+use borsh::BorshDeserialize;
 use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Formatter};
 use std::ops::Sub;
-use borsh::BorshDeserialize;
 use yellowstone_grpc_proto::geyser::{SubscribeUpdateAccount, SubscribeUpdateTransactionInfo};
 use yellowstone_grpc_proto::prelude::{TokenBalance, Transaction, TransactionStatusMeta};
 
@@ -82,7 +82,7 @@ impl BalanceChangeInfo {
                     None
                 } else {
                     let vault_account = &account_keys[account_index];
-                    match interface::is_follow_vault(vault_account) {
+                    match crate::account_relation::is_follow_vault(vault_account) {
                         Some((pool_id, dex_type)) => Some(Self {
                             dex_type,
                             pool_id,
@@ -107,80 +107,6 @@ impl Debug for BalanceChangeInfo {
         formatter.field("vault_account", &self.vault_account.to_string());
         formatter.field("change_value", &self.change_value.to_string());
         formatter.finish()
-    }
-}
-
-#[derive(Debug)]
-pub struct DexMetadata {
-    pool: DashMap<Pubkey, DexType, RandomState>,
-    vault: DashMap<Pubkey, (Pubkey, DexType), RandomState>,
-    tick_array_bit_map: DashMap<Pubkey, Pubkey, RandomState>,
-}
-
-impl DexMetadata {
-    pub fn new(dex_data: &[DexJson]) -> anyhow::Result<Self> {
-        let pool: DashMap<Pubkey, DexType, RandomState> =
-            DashMap::with_capacity_and_hasher(dex_data.len(), RandomState::new());
-        let vault: DashMap<Pubkey, (Pubkey, DexType), RandomState> =
-            DashMap::with_capacity_and_hasher(dex_data.len(), RandomState::new());
-        let tick_array_bit_map: DashMap<Pubkey, Pubkey, RandomState> =
-            DashMap::with_capacity_and_hasher(dex_data.len(), RandomState::new());
-        for json in dex_data.iter() {
-            if let Some(dex_type) = interface::get_dex_type_with_program_id(&json.owner) {
-                pool.insert(json.pool, dex_type.clone());
-                vault.insert(json.vault_a, (json.pool, dex_type.clone()));
-                vault.insert(json.vault_b, (json.pool, dex_type.clone()));
-                if DexType::RaydiumCLMM == dex_type {
-                    tick_array_bit_map.insert(
-                        Pubkey::find_program_address(
-                            &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), json.pool.as_ref()],
-                            DexType::RaydiumCLMM.get_ref_program_id(),
-                        )
-                        .0,
-                        json.pool,
-                    );
-                }
-            }
-        }
-        Ok(Self {
-            pool,
-            vault,
-            tick_array_bit_map,
-        })
-    }
-
-    pub fn get_dex_type_and_pool_id_for_vault(
-        &self,
-        vault_account: &Pubkey,
-    ) -> Option<(Pubkey, DexType)> {
-        Some(self.vault.get(vault_account)?.value().clone())
-    }
-
-    pub fn get_dex_type_and_account_type(
-        &self,
-        owner: &Pubkey,
-        account_key: &Pubkey,
-    ) -> Option<(DexType, AccountType)> {
-        if owner == &spl_token::ID {
-            Some((
-                self.vault.get(account_key)?.value().1.clone(),
-                AccountType::MintVault,
-            ))
-        } else if owner == DexType::RaydiumAMM.get_ref_program_id() {
-            Some((DexType::RaydiumAMM, AccountType::Pool))
-        } else if owner == DexType::PumpFunAMM.get_ref_program_id() {
-            Some((DexType::PumpFunAMM, AccountType::Pool))
-        } else if owner == DexType::RaydiumCLMM.get_ref_program_id() {
-            if self.pool.contains_key(account_key) {
-                Some((DexType::RaydiumCLMM, AccountType::Pool))
-            } else if self.tick_array_bit_map.contains_key(account_key) {
-                Some((DexType::RaydiumCLMM, AccountType::TickArrayBitmapExtension))
-            } else {
-                Some((DexType::RaydiumCLMM, AccountType::TickArrayState))
-            }
-        } else {
-            None
-        }
     }
 }
 
@@ -225,7 +151,7 @@ impl RaydiumClmmPool {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy,Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Tick {
     pub tick: i32,
     pub liquidity_net: i128,
@@ -262,7 +188,7 @@ impl RaydiumClmmTickArray {
             ticks[i] = Tick::new(chunk.try_into().unwrap());
         }
         Self {
-            pool_id: Pubkey::try_from_slice( data[0..32].as_ref()).unwrap(),
+            pool_id: Pubkey::try_from_slice(data[0..32].as_ref()).unwrap(),
             start_tick_index: i32::from_le_bytes(data[32..36].try_into().unwrap()),
             ticks,
             initialized_tick_count: u8::from_le_bytes(data[2196..2197].try_into().unwrap()),

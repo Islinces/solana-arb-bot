@@ -1,11 +1,13 @@
 use crate::arb::Arb;
+use crate::dex_data::DexJson;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::GrpcSubscribe;
-use crate::interface::init_start_data;
 use crate::state::GrpcMessage;
+use anyhow::anyhow;
 use clap::Parser;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
+use std::fs::File;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -22,8 +24,6 @@ pub struct Command {
     grpc_url: Option<String>,
     #[arg(long)]
     rpc_url: Option<String>,
-    // #[arg(long)]
-    // start_mode: Option<String>,
     #[arg(long)]
     specify_pool: Option<String>,
     #[arg(long)]
@@ -59,6 +59,10 @@ pub async fn start_with_custom() {
         .clone()
         .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap()));
     let rpc_client = Arc::new(RpcClient::new(rpc_url));
+    // 1.初始化各个Account的切片规则
+    // 2.初始化snapshot，返回有效的DexJson(所有数据都合法的)
+    // 3.TODO 构建边
+    // 4.初始化池子与DexType关系、金库与池子&DexType的关系，用于解析GRPC推送数据使用
     let dex_data = init_start_data(dex_json_path, rpc_client).await.unwrap();
     // grpc消息消费通道
     let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
@@ -93,5 +97,31 @@ pub async fn start_with_custom() {
         if let Err(err) = event {
             error!("task terminated unexpectedly: {err:#}");
         }
+    }
+}
+
+pub async fn init_start_data(
+    dex_json_path: String,
+    rpc_client: Arc<RpcClient>,
+) -> anyhow::Result<Vec<DexJson>> {
+    let dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
+        Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
+        Err(e) => {
+            error!("{}", e);
+            vec![]
+        }
+    };
+    if dex_data.is_empty() {
+        Err(anyhow!("json文件无数据"))
+    } else {
+        // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
+        crate::data_slice::init_data_slice_config().await;
+        // 初始化snapshot，返回有效的DexJson
+        let dex_data = crate::cache::init_snaphot(dex_data, rpc_client).await?;
+        // 初始化account之间的关系，用于解析GRPC推送数据
+        crate::account_relation::init(dex_data.as_slice());
+        // 构建边
+
+        Ok(dex_data)
     }
 }

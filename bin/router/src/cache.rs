@@ -1,12 +1,13 @@
-use crate::data_slice::{
-    slice_data_with_dex_type_and_account_type_for_dynamic,
-    slice_data_with_dex_type_and_account_type_for_static,
-};
+use crate::data_slice::{slice_data_for_dynamic, slice_data_for_static};
+use crate::dex::raydium_clmm::pool::PoolState;
+use crate::dex::raydium_clmm::tickarray_bitmap_extension::TickArrayBitmapExtension;
+use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex_data::DexJson;
 use crate::interface::{get_dex_type_with_program_id, AccountType, DexType, ATA_PROGRAM_ID};
-use ahash::{AHashMap, RandomState};
+use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
 use dashmap::DashMap;
+use futures_util::task::SpawnExt;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
@@ -16,17 +17,44 @@ use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use tokio::sync::{OnceCell, RwLock};
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, info};
+use yellowstone_grpc_proto::prost::Message;
+use crate::dex::raydium_clmm::tick_array::TickArrayState;
 
 static ACCOUNT_DYNAMIC_CACHE: OnceCell<DynamicCache> = OnceCell::const_new();
 static ACCOUNT_STATIC_CACHE: OnceCell<RwLock<StaticCache>> = OnceCell::const_new();
 static ALT_CACHE: OnceCell<RwLock<AltCache>> = OnceCell::const_new();
 
+#[derive(Debug)]
 pub struct DynamicCache(DashMap<Pubkey, Vec<u8>, RandomState>);
+#[derive(Debug)]
 pub struct StaticCache(AHashMap<Pubkey, Vec<u8>>);
+#[derive(Debug)]
 pub struct AltCache(AHashMap<Pubkey, Vec<AddressLookupTableAccount>>);
 
-pub async fn init_cache(
+impl DynamicCache {
+    pub(crate) fn new(capacity: usize) -> Self {
+        Self(DashMap::with_capacity_and_hasher_and_shard_amount(
+            capacity,
+            RandomState::default(),
+            128,
+        ))
+    }
+}
+
+impl StaticCache {
+    pub(crate) fn new() -> Self {
+        Self(AHashMap::with_capacity(1_000))
+    }
+}
+
+impl AltCache {
+    pub(crate) fn new() -> Self {
+        Self(AHashMap::with_capacity(1_000))
+    }
+}
+
+pub async fn init_snaphot(
     dex_data: Vec<DexJson>,
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
@@ -45,7 +73,11 @@ pub async fn init_cache(
         return Err(anyhow::anyhow!("dex_json文件无匹配数据"));
     }
     let mut effective_dex_data = Vec::with_capacity(dex_data_group.len());
+    ACCOUNT_DYNAMIC_CACHE.set(DynamicCache::new(10_000))?;
+    ACCOUNT_STATIC_CACHE.set(RwLock::new(StaticCache::new()))?;
+    ALT_CACHE.set(RwLock::new(AltCache::new()))?;
     for (dex_type, dex_data) in dex_data_group {
+        // 有效alt
         let alt_map = load_lookup_table_accounts(
             rpc_client.clone(),
             dex_data
@@ -62,6 +94,7 @@ pub async fn init_cache(
             vault_accounts.push(json.vault_a);
             vault_accounts.push(json.vault_b);
         }
+        // 剩余有效的dex data，用于订阅使用
         let remaining_dex_data = match dex_type {
             DexType::RaydiumAMM => {
                 init_raydium_amm_cache(
@@ -74,7 +107,14 @@ pub async fn init_cache(
                 .await
             }
             DexType::RaydiumCLMM => {
-                init_raydium_clmm_cache(dex_data, rpc_client.clone(), alt_map).await
+                init_raydium_clmm_cache(
+                    dex_data,
+                    rpc_client.clone(),
+                    pool_accounts,
+                    vault_accounts,
+                    alt_map,
+                )
+                .await
             }
             DexType::PumpFunAMM => {
                 init_pump_fun_cache(
@@ -97,11 +137,276 @@ pub async fn init_cache(
 }
 
 async fn init_raydium_clmm_cache(
-    mut _dex_data: Vec<DexJson>,
-    _rpc_client: Arc<RpcClient>,
-    _alt_map: AHashMap<Pubkey, AddressLookupTableAccount>,
+    mut dex_data: Vec<DexJson>,
+    rpc_client: Arc<RpcClient>,
+    pool_accounts: Vec<Pubkey>,
+    _vault_accounts: Vec<Pubkey>,
+    alt_map: AHashMap<Pubkey, AddressLookupTableAccount>,
 ) -> Vec<DexJson> {
-    todo!()
+    let dex_type = DexType::RaydiumCLMM;
+    // 池子
+    let mut all_pool_account_data = get_account_data_with_data_slice(
+        pool_accounts,
+        dex_type.clone(),
+        AccountType::Pool,
+        rpc_client.clone(),
+    )
+    .await
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+    // 初始化失败的池子index
+    // 无alt的池子index
+    let mut invalid_pool_index = all_pool_account_data
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (dynamic_data, static_data))| {
+            // 初始化失败
+            if dynamic_data.as_ref().is_none() || static_data.as_ref().is_none() {
+                Some(index)
+            }
+            // 无alt
+            else if !alt_map.contains_key(
+                dex_data
+                    .get(index)
+                    .unwrap()
+                    .address_lookup_table_address
+                    .as_ref()
+                    .unwrap(),
+            ) {
+                Some(index)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    if invalid_pool_index.len() == all_pool_account_data.len() {
+        return vec![];
+    }
+    // 循环有效的池子，获取amm_config，bitmap_extension，tick_array_ticks(初始化左右各10个)
+    let mut all_amm_config_accounts = AHashSet::with_capacity(50);
+    let mut all_bitmap_extension_accounts = Vec::with_capacity(all_pool_account_data.len());
+    for (index, (_pool_dynamic_data, pool_static_data)) in all_pool_account_data.iter().enumerate()
+    {
+        // 跳过初始化失败的池子
+        if invalid_pool_index.contains(&index) {
+            continue;
+        }
+        let json = dex_data.get(index).unwrap();
+        // amm_config
+        let amm_config_key = Pubkey::try_from(&pool_static_data.as_ref().unwrap()[0..32]).unwrap();
+        all_amm_config_accounts.insert(amm_config_key);
+        // bitmap_extension
+        let bitmap_extension_key = Pubkey::find_program_address(
+            &[
+                "pool_tick_array_bitmap_extension".as_bytes(),
+                json.pool.as_ref(),
+            ],
+            dex_type.get_ref_program_id(),
+        )
+        .0;
+        all_bitmap_extension_accounts.push(bitmap_extension_key);
+    }
+    // 查询amm config
+    let all_amm_config_accounts = all_amm_config_accounts.into_iter().collect::<Vec<_>>();
+    let all_amm_config_account_data = get_account_data_with_data_slice(
+        all_amm_config_accounts.clone(),
+        dex_type.clone(),
+        AccountType::AmmConfig,
+        rpc_client.clone(),
+    )
+    .await
+    .into_iter()
+    .flatten()
+    .map(|v| v.1)
+    .zip(all_amm_config_accounts.into_iter())
+    .filter_map(|(data, key)| {
+        if data.as_ref().is_none_or(|v| {
+            v.len()
+                != crate::data_slice::get_slice_size(
+                    dex_type.clone(),
+                    AccountType::AmmConfig,
+                    false,
+                )
+                .unwrap()
+                .unwrap()
+        }) {
+            None
+        } else {
+            Some((key, data.unwrap()))
+        }
+    })
+    .collect::<AHashMap<Pubkey, Vec<u8>>>();
+
+    // 查询bitmap extension
+    let mut all_bitmap_extension_account_data = get_account_data_with_data_slice(
+        all_bitmap_extension_accounts.clone(),
+        dex_type.clone(),
+        AccountType::TickArrayBitmapExtension,
+        rpc_client.clone(),
+    )
+    .await
+    .into_iter()
+    .flatten()
+    .map(|v| v.0)
+    .zip(all_bitmap_extension_accounts.into_iter())
+    .filter_map(|(data, key)| {
+        if data.as_ref().is_none_or(|v| {
+            v.len()
+                != crate::data_slice::get_slice_size(
+                    dex_type.clone(),
+                    AccountType::TickArrayBitmapExtension,
+                    true,
+                )
+                .unwrap()
+                .unwrap()
+        }) {
+            None
+        } else {
+            Some((key, data.unwrap()))
+        }
+    })
+    .collect::<AHashMap<Pubkey, Vec<u8>>>();
+
+    // 过滤出来amm config无效的池子
+    // 缓存有效的amm config
+    // 过滤出来bitmap extension无效的池子
+    // 缓存有效的bitmap extension
+    let mut all_tick_array_state_accounts =
+        AHashSet::with_capacity(all_pool_account_data.len() * 20);
+    for (index, (pool_dynamic_data, pool_static_data)) in
+        all_pool_account_data.iter_mut().enumerate()
+    {
+        // amm config
+        let amm_config_key = Pubkey::try_from(&pool_static_data.as_ref().unwrap()[0..32]).unwrap();
+        match all_amm_config_account_data.get(&amm_config_key) {
+            None => {
+                invalid_pool_index.push(index);
+                continue;
+            }
+            Some(amm_config) => {
+                ACCOUNT_STATIC_CACHE
+                    .get()
+                    .unwrap()
+                    .write()
+                    .await
+                    .0
+                    .insert(amm_config_key, amm_config.clone());
+            }
+        }
+        let pool_id = dex_data.get(index).unwrap().pool;
+        // bitmap extension
+        let bitmap_extension_key = Pubkey::find_program_address(
+            &[
+                "pool_tick_array_bitmap_extension".as_bytes(),
+                pool_id.as_ref(),
+            ],
+            dex_type.get_ref_program_id(),
+        )
+        .0;
+        match all_bitmap_extension_account_data.remove(&bitmap_extension_key) {
+            None => {
+                invalid_pool_index.push(index);
+                continue;
+            }
+            Some(bitmap_extension) => {
+                ACCOUNT_DYNAMIC_CACHE
+                    .get()
+                    .unwrap()
+                    .0
+                    .insert(bitmap_extension_key, bitmap_extension);
+            }
+        }
+        let pool_state = PoolState::from_slice_data(
+            pool_static_data.as_ref().unwrap(),
+            pool_dynamic_data.as_ref().unwrap(),
+        );
+        let tick_array_bitmap_extension = Some(TickArrayBitmapExtension::from_slice_data(
+            None,
+            Some(
+                ACCOUNT_DYNAMIC_CACHE
+                    .get()
+                    .unwrap()
+                    .0
+                    .get(&bitmap_extension_key)
+                    .unwrap()
+                    .value(),
+            ),
+        ));
+        // 前后各10个tick array
+        all_tick_array_state_accounts.extend(load_cur_and_next_specify_count_tick_array_key(
+            10,
+            &pool_id,
+            &pool_state,
+            &tick_array_bitmap_extension,
+            true,
+        ));
+        all_tick_array_state_accounts.extend(load_cur_and_next_specify_count_tick_array_key(
+            10,
+            &pool_id,
+            &pool_state,
+            &tick_array_bitmap_extension,
+            false,
+        ));
+    }
+    // 查询tick array state
+    let all_tick_array_state_accounts = all_tick_array_state_accounts
+        .into_iter()
+        .collect::<Vec<_>>();
+    let all_tick_array_state_account_data = get_account_data_with_data_slice(
+        all_tick_array_state_accounts.clone(),
+        dex_type.clone(),
+        AccountType::TickArrayState,
+        rpc_client.clone(),
+    )
+    .await
+    .into_iter()
+    .flatten()
+    .zip(all_tick_array_state_accounts.into_iter())
+    .filter_map(|((dynamic_data, _), key)| {
+        if dynamic_data.as_ref().is_none() {
+            None
+        } else {
+            Some((key, dynamic_data.unwrap()))
+        }
+    })
+    .collect::<Vec<_>>();
+    // 缓存tick array state
+    for (key, data) in all_tick_array_state_account_data.into_iter() {
+        ACCOUNT_DYNAMIC_CACHE.get().unwrap().0.insert(key, data);
+    }
+
+    // 缓存pool
+    for (index, (dynamic_data, static_data)) in all_pool_account_data.into_iter().enumerate() {
+        if invalid_pool_index.contains(&index) {
+            dex_data.remove(index);
+            continue;
+        }
+        let json = dex_data.get(index).unwrap();
+        let pool = json.pool;
+        let alt = json.address_lookup_table_address;
+        ACCOUNT_DYNAMIC_CACHE
+            .get()
+            .unwrap()
+            .0
+            .insert(pool, dynamic_data.unwrap());
+        ACCOUNT_STATIC_CACHE
+            .get()
+            .unwrap()
+            .write()
+            .await
+            .0
+            .insert(pool, static_data.unwrap());
+        let alt_account = alt_map.get(alt.as_ref().unwrap()).unwrap();
+        ALT_CACHE
+            .get()
+            .unwrap()
+            .write()
+            .await
+            .0
+            .insert(alt.unwrap(), vec![alt_account.clone()]);
+    }
+    dex_data
 }
 
 async fn init_pump_fun_cache(
@@ -210,7 +515,7 @@ async fn init_pump_fun_cache(
                         pool_static_data.len() + global_config_account_data.len() + 32 * 2,
                     );
                     // 先提前生成coin_creator_vault_authority和coin_creator_vault_ata
-                    let quote_mint = Pubkey::try_from(&pool_static_data[32..32 * 2]).unwrap();
+                    let quote_mint = Pubkey::try_from(&pool_static_data[32..32 + 32]).unwrap();
                     let coin_creator = Pubkey::try_from(&pool_static_data[32 * 4..32 * 5]).unwrap();
                     let token_program = if quote_mint == spl_token::native_mint::ID {
                         spl_token::ID
@@ -353,16 +658,19 @@ async fn get_account_data_with_data_slice(
     account_type: AccountType,
     rpc_client: Arc<RpcClient>,
 ) -> Vec<Vec<(Option<Vec<u8>>, Option<Vec<u8>>)>> {
+    if accounts.is_empty() {
+        return vec![];
+    }
     let mut join_set = JoinSet::new();
-    for vault_account_chunks in accounts.chunks(100) {
+    for account_chunks in accounts.chunks(100) {
         let rpc_client = rpc_client.clone();
         let dex_type = dex_type.clone();
         let account_type = account_type.clone();
-        let vault_account_chunks = vault_account_chunks.to_vec();
+        let account_chunks = account_chunks.to_vec();
         join_set.spawn(async move {
             base_get_account_with_data_slice(
                 rpc_client,
-                vault_account_chunks.as_slice(),
+                account_chunks.as_slice(),
                 dex_type,
                 account_type,
             )
@@ -431,13 +739,13 @@ async fn base_get_account_with_data_slice(
         .into_iter()
         .map(|account| {
             account.map_or((None, None), |acc| {
-                let dynamic_data = slice_data_with_dex_type_and_account_type_for_dynamic(
+                let dynamic_data = slice_data_for_dynamic(
                     dex_type.clone(),
                     account_type.clone(),
                     acc.data.as_slice(),
                 )
                 .map_or(None, |v| Some(v));
-                let static_data = slice_data_with_dex_type_and_account_type_for_static(
+                let static_data = slice_data_for_static(
                     dex_type.clone(),
                     account_type.clone(),
                     acc.data.as_slice(),

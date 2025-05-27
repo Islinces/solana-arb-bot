@@ -1,29 +1,42 @@
-use crate::interface::{AccountType, DexType, DEX_METADATA};
+use crate::interface::{AccountType, DexType};
 use anyhow::anyhow;
+use futures_util::future::ok;
 use solana_sdk::pubkey::Pubkey;
 use std::ptr;
 use tokio::sync::OnceCell;
 
 // ========================= 账户订阅的数据切片 =========================
-pub static RAYDIUM_AMM_POOL_DYNAMIC_SLICE: OnceCell<([(usize, usize); 2], usize)> =
+// amm pool
+static DYNAMIC_RAYDIUM_AMM_POOL_SLICE: OnceCell<([(usize, usize); 2], usize)> =
     OnceCell::const_new();
-pub static RAYDIUM_CLMM_POOL_DYNAMIC_SLICE: OnceCell<([(usize, usize); 4], usize)> =
+// clmm pool
+static DYNAMIC_RAYDIUM_CLMM_POOL_SLICE: OnceCell<([(usize, usize); 4], usize)> =
     OnceCell::const_new();
-pub static RAYDIUM_CLMM_TICK_ARRAY_STATE_DYNAMIC_SLICE: OnceCell<(Vec<(usize, usize)>, usize)> =
+// clmm bitmap extension
+static DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE: OnceCell<([(usize, usize); 1], usize)> =
     OnceCell::const_new();
-pub static MINT_VAULT_DYNAMIC_SLICE: OnceCell<([(usize, usize); 1], usize)> = OnceCell::const_new();
+// clmm tick array
+static DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE: OnceCell<(Vec<(usize, usize)>, usize)> =
+    OnceCell::const_new();
+// mint vault
+static DYNAMIC_MINT_VAULT_SLICE: OnceCell<([(usize, usize); 1], usize)> = OnceCell::const_new();
 // ========================= 账户未订阅的数据切片 =========================
-// raydium amm 池子
-pub static RAYDIUM_AMM_POOL_DATA_STATIC_SLICE: OnceCell<([(usize, usize); 6], usize)> =
+// amm pool
+static STATIC_RAYDIUM_AMM_POOL_SLICE: OnceCell<([(usize, usize); 6], usize)> =
     OnceCell::const_new();
-// pump fun 池子
-pub static PUMP_FUN_POOL_STATIC_SLICE: OnceCell<([(usize, usize); 5], usize)> =
-    OnceCell::const_new();
+// pump fun pool
+static STATIC_PUMP_FUN_POOL_SLICE: OnceCell<([(usize, usize); 5], usize)> = OnceCell::const_new();
 // pump fun global config
-pub static PUMP_FUN_GLOBAL_CONFIG_STATIC_SLICE: OnceCell<([(usize, usize); 2], usize)> =
+static STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE: OnceCell<([(usize, usize); 2], usize)> =
+    OnceCell::const_new();
+// clmm pool
+static STATIC_RAYDIUM_CLMM_POOL_SLICE: OnceCell<([(usize, usize); 7], usize)> =
+    OnceCell::const_new();
+// clmm amm config
+static STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE: OnceCell<([(usize, usize); 1], usize)> =
     OnceCell::const_new();
 
-pub fn slice_data_with_dex_type_and_account_type_for_static(
+pub fn slice_data_for_static(
     dex_type: DexType,
     account_type: AccountType,
     data: &[u8],
@@ -32,26 +45,35 @@ pub fn slice_data_with_dex_type_and_account_type_for_static(
         DexType::RaydiumAMM => match account_type {
             AccountType::Pool => Ok(retain_intervals_unsafe(
                 data,
-                &RAYDIUM_AMM_POOL_DATA_STATIC_SLICE.get().unwrap().0,
-                RAYDIUM_AMM_POOL_DATA_STATIC_SLICE.get().unwrap().1,
+                &STATIC_RAYDIUM_AMM_POOL_SLICE.get().unwrap().0,
+                STATIC_RAYDIUM_AMM_POOL_SLICE.get().unwrap().1,
             )),
             AccountType::MintVault => Err(anyhow!("")),
             _ => Err(anyhow!("")),
         },
         DexType::RaydiumCLMM => match account_type {
-            AccountType::Pool => todo!(),
+            AccountType::Pool => Ok(retain_intervals_unsafe(
+                data,
+                &STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
+                STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
+            )),
+            AccountType::AmmConfig => Ok(retain_intervals_unsafe(
+                data,
+                &STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().0,
+                STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().1,
+            )),
             _ => Err(anyhow!("")),
         },
         DexType::PumpFunAMM => match account_type {
             AccountType::Pool => Ok(retain_intervals_unsafe(
                 data,
-                &PUMP_FUN_POOL_STATIC_SLICE.get().unwrap().0,
-                PUMP_FUN_POOL_STATIC_SLICE.get().unwrap().1,
+                &STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().0,
+                STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().1,
             )),
             AccountType::PumpFunGlobalConfig => Ok(retain_intervals_unsafe(
                 data,
-                &PUMP_FUN_GLOBAL_CONFIG_STATIC_SLICE.get().unwrap().0,
-                PUMP_FUN_GLOBAL_CONFIG_STATIC_SLICE.get().unwrap().1,
+                &STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().0,
+                STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().1,
             )),
             AccountType::MintVault => Err(anyhow!("")),
             _ => Err(anyhow!("")),
@@ -60,7 +82,7 @@ pub fn slice_data_with_dex_type_and_account_type_for_static(
 }
 
 #[inline]
-pub fn slice_data_with_dex_type_and_account_type_for_dynamic(
+pub fn slice_data_for_dynamic(
     dex_type: DexType,
     account_type: AccountType,
     data: &[u8],
@@ -69,40 +91,48 @@ pub fn slice_data_with_dex_type_and_account_type_for_dynamic(
         DexType::RaydiumAMM => match account_type {
             AccountType::Pool => Ok(retain_intervals_unsafe(
                 data,
-                &RAYDIUM_AMM_POOL_DYNAMIC_SLICE.get().unwrap().0,
-                RAYDIUM_AMM_POOL_DYNAMIC_SLICE.get().unwrap().1,
+                &DYNAMIC_RAYDIUM_AMM_POOL_SLICE.get().unwrap().0,
+                DYNAMIC_RAYDIUM_AMM_POOL_SLICE.get().unwrap().1,
             )),
             AccountType::MintVault => Ok(retain_intervals_unsafe(
                 data,
-                &MINT_VAULT_DYNAMIC_SLICE.get().unwrap().0,
-                MINT_VAULT_DYNAMIC_SLICE.get().unwrap().1,
+                &DYNAMIC_MINT_VAULT_SLICE.get().unwrap().0,
+                DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1,
             )),
             _ => Err(anyhow!("")),
         },
         DexType::RaydiumCLMM => match account_type {
             AccountType::Pool => Ok(retain_intervals_unsafe(
                 data,
-                &RAYDIUM_CLMM_POOL_DYNAMIC_SLICE.get().unwrap().0,
-                RAYDIUM_CLMM_POOL_DYNAMIC_SLICE.get().unwrap().1,
+                &DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
+                DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
             )),
             AccountType::TickArrayState => Ok(retain_intervals_unsafe(
                 data,
-                &RAYDIUM_CLMM_TICK_ARRAY_STATE_DYNAMIC_SLICE
+                &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
                     .get()
                     .unwrap()
                     .0
                     .as_slice(),
-                RAYDIUM_CLMM_TICK_ARRAY_STATE_DYNAMIC_SLICE.get().unwrap().1,
+                DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
             )),
             // 不做切片
-            AccountType::TickArrayBitmapExtension => Ok(data.to_vec()),
+            AccountType::TickArrayBitmapExtension => Ok(retain_intervals_unsafe(
+                data,
+                &DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
+                    .get()
+                    .unwrap()
+                    .0
+                    .as_slice(),
+                DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
+            )),
             _ => Err(anyhow!("")),
         },
         DexType::PumpFunAMM => match account_type {
             AccountType::MintVault => Ok(retain_intervals_unsafe(
                 data,
-                &MINT_VAULT_DYNAMIC_SLICE.get().unwrap().0,
-                MINT_VAULT_DYNAMIC_SLICE.get().unwrap().1,
+                &DYNAMIC_MINT_VAULT_SLICE.get().unwrap().0,
+                DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1,
             )),
             _ => Err(anyhow!("")),
         },
@@ -111,15 +141,9 @@ pub fn slice_data_with_dex_type_and_account_type_for_dynamic(
 
 #[inline]
 pub fn slice_data(account_key: &Pubkey, owner: &Pubkey, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-    match DEX_METADATA
-        .get()
-        .unwrap()
-        .get_dex_type_and_account_type(owner, account_key)
-    {
+    match crate::account_relation::get_dex_type_and_account_type(owner, account_key) {
         None => Err(anyhow!("")),
-        Some((dex_type, account_type)) => {
-            slice_data_with_dex_type_and_account_type_for_dynamic(dex_type, account_type, data)
-        }
+        Some((dex_type, account_type)) => slice_data_for_dynamic(dex_type, account_type, data),
     }
 }
 
@@ -146,14 +170,14 @@ fn retain_intervals_unsafe(src: &[u8], intervals: &[(usize, usize)], total_len: 
     result
 }
 
-pub fn init_data_slice_config() {
-    init_raydium_amm_pool_data_slice();
-    init_raydium_clmm_data_slice();
-    init_pump_fun_data_slice();
+pub async fn init_data_slice_config() {
+    init_raydium_amm_pool_data_slice().await;
+    init_raydium_clmm_data_slice().await;
+    init_pump_fun_data_slice().await;
 }
 
-fn init_raydium_amm_pool_data_slice() {
-    RAYDIUM_AMM_POOL_DYNAMIC_SLICE
+async fn init_raydium_amm_pool_data_slice() {
+    DYNAMIC_RAYDIUM_AMM_POOL_SLICE
         .set({
             (
                 [
@@ -166,9 +190,9 @@ fn init_raydium_amm_pool_data_slice() {
             )
         })
         .unwrap();
-    init_mint_vault_data_slice();
-    RAYDIUM_AMM_POOL_DATA_STATIC_SLICE
-        .set({
+    init_mint_vault_data_slice().await;
+    STATIC_RAYDIUM_AMM_POOL_SLICE
+        .get_or_init(|| async {
             (
                 [
                     // swap_fee_numerator
@@ -187,12 +211,12 @@ fn init_raydium_amm_pool_data_slice() {
                 8 + 8 + 32 + 32 + 32 + 32,
             )
         })
-        .unwrap();
+        .await;
 }
 
-fn init_pump_fun_data_slice() {
-    init_mint_vault_data_slice();
-    PUMP_FUN_POOL_STATIC_SLICE
+async fn init_pump_fun_data_slice() {
+    init_mint_vault_data_slice().await;
+    STATIC_PUMP_FUN_POOL_SLICE
         .set({
             (
                 [
@@ -211,8 +235,8 @@ fn init_pump_fun_data_slice() {
             )
         })
         .unwrap();
-    PUMP_FUN_GLOBAL_CONFIG_STATIC_SLICE
-        .set({
+    STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE
+        .get_or_init(|| async {
             (
                 [
                     // lp_fee_basis_points
@@ -223,11 +247,11 @@ fn init_pump_fun_data_slice() {
                 8 * 2,
             )
         })
-        .unwrap()
+        .await;
 }
 
-fn init_raydium_clmm_data_slice() {
-    RAYDIUM_CLMM_POOL_DYNAMIC_SLICE
+async fn init_raydium_clmm_data_slice() {
+    DYNAMIC_RAYDIUM_CLMM_POOL_SLICE
         .set({
             (
                 [
@@ -244,8 +268,11 @@ fn init_raydium_clmm_data_slice() {
             )
         })
         .unwrap();
-    RAYDIUM_CLMM_TICK_ARRAY_STATE_DYNAMIC_SLICE
-        .set({
+    DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
+        .set({ ([(8, 1832)], 1832 - 8) })
+        .unwrap();
+    DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
+        .get_or_init(|| async {
             let mut data_slice: Vec<(usize, usize)> = Vec::new();
             let mut total_len = 0;
             // pool_id
@@ -285,10 +312,129 @@ fn init_raydium_clmm_data_slice() {
             total_len += 1;
             (data_slice, total_len)
         })
-        .unwrap();
+        .await;
+    STATIC_RAYDIUM_CLMM_POOL_SLICE
+        .get_or_init(|| async {
+            {
+                (
+                    [
+                        // amm_config
+                        (9, 9 + 32),
+                        // token_mint_0
+                        (73, 73 + 32),
+                        // token_mint_1
+                        (105, 105 + 32),
+                        // token_vault_0
+                        (137, 137 + 32),
+                        // token_vault_1
+                        (169, 169 + 32),
+                        // observation_key
+                        (201, 201 + 32),
+                        // tick_spacing
+                        (235, 235 + 2),
+                    ],
+                    32 * 6 + 2,
+                )
+            }
+        })
+        .await;
+    STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE
+        .get_or_init(|| async {
+            (
+                [
+                    // trade_fee_rate
+                    (47, 47 + 4),
+                ],
+                4,
+            )
+        })
+        .await;
 }
 
-fn init_mint_vault_data_slice() {
+async fn init_mint_vault_data_slice() {
     // amount
-    MINT_VAULT_DYNAMIC_SLICE.set(([(64, 64 + 8)], 8)).unwrap()
+    DYNAMIC_MINT_VAULT_SLICE
+        .get_or_init(|| async { ([(64, 64 + 8)], 8) })
+        .await;
+}
+
+pub fn get_slice_size(
+    dex_type: DexType,
+    account_type: AccountType,
+    dynamic_flag: bool,
+) -> anyhow::Result<Option<usize>> {
+    match dex_type {
+        DexType::RaydiumAMM => match account_type {
+            AccountType::Pool => Ok(Some(if dynamic_flag {
+                DYNAMIC_RAYDIUM_AMM_POOL_SLICE.get().unwrap().1
+            } else {
+                STATIC_RAYDIUM_AMM_POOL_SLICE.get().unwrap().1
+            })),
+            AccountType::MintVault => {
+                if dynamic_flag {
+                    Ok(Some(DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
+        DexType::RaydiumCLMM => match account_type {
+            AccountType::Pool => Ok(Some(if dynamic_flag {
+                DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1
+            } else {
+                STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1
+            })),
+            AccountType::AmmConfig => {
+                if dynamic_flag {
+                    Ok(None)
+                } else {
+                    Ok(Some(STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().1))
+                }
+            }
+            AccountType::TickArrayState => {
+                if dynamic_flag {
+                    Ok(Some(
+                        DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
+                    ))
+                } else {
+                    Ok(None)
+                }
+            }
+            AccountType::TickArrayBitmapExtension => {
+                if dynamic_flag {
+                    Ok(Some(
+                        DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
+                    ))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
+        DexType::PumpFunAMM => match account_type {
+            AccountType::Pool => {
+                if dynamic_flag {
+                    Ok(None)
+                } else {
+                    Ok(Some(STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().1))
+                }
+            }
+            AccountType::MintVault => {
+                if dynamic_flag {
+                    Ok(Some(DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1))
+                } else {
+                    Ok(None)
+                }
+            }
+            AccountType::PumpFunGlobalConfig => {
+                if dynamic_flag {
+                    Ok(None)
+                } else {
+                    Ok(Some(STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().1))
+                }
+            }
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
+    }
 }
