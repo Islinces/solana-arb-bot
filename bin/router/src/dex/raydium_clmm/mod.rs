@@ -1,3 +1,6 @@
+use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
+
 mod big_num;
 mod full_math;
 mod liquidity_math;
@@ -8,6 +11,8 @@ mod tick_math;
 mod unsafe_math;
 pub mod utils;
 pub mod quote;
+
+pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 pub(crate) const Q64: u128 = (u64::MAX as u128) + 1; // 2^64
 pub(crate) const RESOLUTION: u8 = 64;

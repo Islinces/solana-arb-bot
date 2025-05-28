@@ -757,3 +757,7 @@ pub fn get_account_data<T: FromCache>(pool_id: &Pubkey) -> Option<T> {
     let dynamic_data = DYNAMIC_ACCOUNT_CACHE.get()?;
     T::from_cache(pool_id, static_data, dynamic_data)
 }
+
+pub fn get_alt(pool_id: &Pubkey) -> Option<Vec<AddressLookupTableAccount>> {
+    ALT_CACHE.get()?.read().get(pool_id)
+}

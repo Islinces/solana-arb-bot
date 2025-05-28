@@ -13,8 +13,8 @@ pub fn find_best_hop_path(
     pool_id: &Pubkey,
     amount_in_mint: &Pubkey,
     amount_in: u64,
-    min_prifit: u64,
-) -> Option<(Arc<TwoHopPath>, u64, u64, u64)> {
+    min_profit: u64,
+) -> Option<QuoteResult> {
     let pool_index = find_pool_position(pool_id)?;
     let hop_paths = crate::graph::get_graph_with_pool_index(&pool_index)?;
     let amount_in_mint_index = find_mint_position(&amount_in_mint)?;
@@ -34,21 +34,16 @@ pub fn find_best_hop_path(
                 .iter()
                 .filter_map(|hop_path| {
                     quote(&hop_path.second, first_amount_out).and_then(|second_amount_out| {
-                        if second_amount_out - min_prifit >= amount_in
+                        if second_amount_out - min_profit >= amount_in
                             && second_amount_out > first_amount_out
                         {
-                            Some((
-                                hop_path.clone(),
-                                first_amount_out,
-                                second_amount_out,
-                                second_amount_out - first_amount_out,
-                            ))
+                            Some((hop_path.clone(), second_amount_out - first_amount_out))
                         } else {
                             None
                         }
                     })
                 })
-                .max_by_key(|x| x.3),
+                .max_by_key(|x| x.1),
         }
     });
 
@@ -58,30 +53,35 @@ pub fn find_best_hop_path(
         .filter_map(|hop_path| {
             quote(&hop_path.first, amount_in).and_then(|first_amount_out| {
                 quote(&hop_path.second, first_amount_out).and_then(|second_amount_out| {
-                    if second_amount_out - min_prifit >= amount_in
+                    if second_amount_out - min_profit >= amount_in
                         && second_amount_out > first_amount_out
                     {
-                        Some((
-                            hop_path,
-                            first_amount_out,
-                            second_amount_out,
-                            second_amount_out - first_amount_out,
-                        ))
+                        Some((hop_path, second_amount_out - first_amount_out))
                     } else {
                         None
                     }
                 })
             })
         })
-        .max_by_key(|x| x.3);
+        .max_by_key(|x| x.1);
     match (positive_best_hop_path, reverse_best_hop_path) {
-        (Some(positive), Some(reverse)) => Some(if positive.3 >= reverse.3 {
-            positive
+        (Some((p_path, p_profit)), Some((r_path, r_profit))) => Some(if p_profit >= r_profit {
+            QuoteResult::new(p_path, amount_in_mint.clone(), amount_in, p_profit)
         } else {
-            reverse
+            QuoteResult::new(r_path, amount_in_mint.clone(), amount_in, r_profit)
         }),
-        (Some(positive), None) => Some(positive),
-        (None, Some(reverse)) => Some(reverse),
+        (Some((p_path, p_profit)), None) => Some(QuoteResult::new(
+            p_path,
+            amount_in_mint.clone(),
+            amount_in,
+            p_profit,
+        )),
+        (None, Some((r_path, r_profit))) => Some(QuoteResult::new(
+            r_path,
+            amount_in_mint.clone(),
+            amount_in,
+            r_profit,
+        )),
         _ => None,
     }
 }
@@ -112,6 +112,25 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
         }
         DexType::MeteoraDLMM => {
             unimplemented!()
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct QuoteResult {
+    pub hop_path: Arc<TwoHopPath>,
+    pub amount_in: u64,
+    pub amount_in_mint: Pubkey,
+    pub profit: u64,
+}
+
+impl QuoteResult {
+    fn new(hop_path: Arc<TwoHopPath>, amount_in_mint: Pubkey, amount_in: u64, profit: u64) -> Self {
+        Self {
+            hop_path,
+            amount_in_mint,
+            amount_in,
+            profit,
         }
     }
 }

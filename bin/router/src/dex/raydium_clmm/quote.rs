@@ -31,9 +31,7 @@ pub fn quote(
 }
 
 fn get_amm_config(amm_config_key: &Pubkey) -> Option<AmmConfig> {
-    let option = crate::account_cache::get_account_data::<AmmConfig>(amm_config_key);
-    info!("{:#?}", option);
-    option
+    crate::account_cache::get_account_data::<AmmConfig>(amm_config_key)
 }
 
 fn get_bitmap_extension(pool_id: &Pubkey) -> Option<TickArrayBitmapExtension> {

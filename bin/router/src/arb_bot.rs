@@ -1,5 +1,7 @@
 use crate::arb::Arb;
 use crate::dex_data::DexJson;
+use crate::executor::jito::JitoExecutor;
+use crate::executor::Executor;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::GrpcSubscribe;
 use crate::state::GrpcMessage;
@@ -20,43 +22,63 @@ pub struct Command {
     grpc_subscribe_type: String,
     #[arg(long, required = true)]
     dex_json_path: String,
-    #[arg(long)]
-    follow_mints: Option<Vec<String>>,
+    #[arg(long, required = true)]
+    keypair_path: String,
     #[arg(long)]
     grpc_url: Option<String>,
     #[arg(long)]
     rpc_url: Option<String>,
     #[arg(long)]
-    specify_pool: Option<String>,
+    pub jito_region: Option<String>,
+    #[arg(long)]
+    pub jito_uuid: Option<String>,
+    #[arg(long)]
+    follow_mints: Option<Vec<String>>,
+    #[arg(long)]
+    pub arb_bot_name: Option<String>,
+    #[arg(long)]
+    arb_size: Option<usize>,
+    #[arg(long)]
+    arb_channel_capacity: Option<usize>,
+    #[arg(long)]
+    arb_min_profit: Option<u64>,
+    #[arg(long)]
+    pub tip_bps_numerator: Option<u64>,
+    #[arg(long)]
+    pub tip_bps_denominator: Option<u64>,
     #[arg(long)]
     standard_program: Option<bool>,
     #[arg(long)]
     processor_size: Option<usize>,
     #[arg(long)]
-    arb_size: Option<usize>,
-    #[arg(long)]
-    arb_channel_capacity: Option<usize>,
+    specify_pool: Option<String>,
 }
 
-pub async fn start_with_custom() {
+pub async fn start_with_custom() -> anyhow::Result<()> {
     let command = Command::parse();
-    let follow_mints = command
-        .follow_mints
-        .map_or(vec![spl_token::native_mint::ID], |mints| {
-            mints
-                .into_iter()
-                .map(|v| Pubkey::from_str(&v).unwrap())
-                .collect()
-        });
+    let follow_mints =
+        command
+            .follow_mints
+            .clone()
+            .map_or(vec![spl_token::native_mint::ID], |mints| {
+                mints
+                    .into_iter()
+                    .map(|v| Pubkey::from_str(&v).unwrap())
+                    .collect()
+            });
     let grpc_url = command
         .grpc_url
+        .clone()
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
     let rpc_url = command
         .rpc_url
+        .clone()
         .unwrap_or("https://solana-rpc.publicnode.com".to_string());
-    let dex_json_path = command.dex_json_path;
+    let dex_json_path = command.dex_json_path.clone();
+    let keypair_path = command.keypair_path.clone();
     let processor_size = command.processor_size.unwrap_or(1);
     let arb_size = command.arb_size.unwrap_or(1);
+    let arb_min_profit = command.arb_min_profit.unwrap_or(100_000);
     // Account本地缓存更新后广播通道容量
     let arb_channel_capacity = command.arb_channel_capacity.unwrap_or(10_000);
     let single_mode = if command.grpc_subscribe_type == "single" {
@@ -64,26 +86,21 @@ pub async fn start_with_custom() {
     } else {
         false
     };
-    let specify_pool = command
-        .specify_pool
-        .clone()
-        .map_or(None, |v| Some(Pubkey::from_str(&v).unwrap()));
+    let executor = JitoExecutor::initialize(&command)?;
     let rpc_client = Arc::new(RpcClient::new(rpc_url));
+    // 0.初始化钱包，ata账户，blockhash
     // 1.初始化各个Account的切片规则
     // 2.初始化snapshot，返回有效的DexJson(所有数据都合法的)
     // 3.初始化池子与DexType关系、金库与池子&DexType的关系，用于解析GRPC推送数据使用
     // 4.构建边
-    let dex_data = init_start_data(dex_json_path, follow_mints.as_slice(), rpc_client)
-        .await
-        .unwrap();
-    // let option1 = crate::quoter::find_best_hop_path(
-    //     &Pubkey::from_str("6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c").unwrap(),
-    //     &spl_token::native_mint::ID,
-    //     10_u64.pow(9),
-    //     0,
-    // );
-    // info!("{:#?}", option1);
-    // // grpc消息消费通道
+    let dex_data = init_start_data(
+        keypair_path,
+        dex_json_path,
+        follow_mints.as_slice(),
+        rpc_client,
+    )
+    .await?;
+    // grpc消息消费通道
     let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
     // Account本地缓存更新后广播通道
     let (cached_message_sender, _) = broadcast::channel(arb_channel_capacity);
@@ -99,7 +116,7 @@ pub async fn start_with_custom() {
         )
         .await;
     // 接收更新缓存的Account信息，判断是否需要触发route
-    Arb::new(arb_size, specify_pool)
+    Arb::new(arb_size, arb_min_profit, executor)
         .start(&mut join_set, &cached_message_sender)
         .await;
     join_set.spawn(async move {
@@ -117,13 +134,19 @@ pub async fn start_with_custom() {
             error!("task terminated unexpectedly: {err:#}");
         }
     }
+    Ok(())
 }
 
 pub async fn init_start_data(
+    keypair_path: String,
     dex_json_path: String,
     follow_mints: &[Pubkey],
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
+    // 初始化钱包
+    // 初始化钱包关联的ATA账户余额
+    // 初始化blockhash
+    crate::metadata::init_metadata(keypair_path, rpc_client.clone()).await?;
     let mut dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
         Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
         Err(e) => {

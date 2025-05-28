@@ -1,8 +1,11 @@
+use crate::dex::InstructionItem;
 use crate::dex_data::DexJson;
 use crate::interface::DexType;
+use crate::MINT_PROGRAM;
 use ahash::AHashMap;
 use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
+use spl_associated_token_account::get_associated_token_address_with_program_id;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
@@ -60,6 +63,24 @@ impl EdgeIdentifier {
             .get(self.pool)
             .map_or(None, |pool| Some(pool))
     }
+
+    pub fn to_instruction(&self) -> Option<InstructionItem> {
+        match self.dex_type {
+            DexType::RaydiumAMM => crate::dex::raydium_amm::instruction::to_instruction(
+                self.pool_id()?.clone(),
+                self.swap_direction,
+            ),
+            DexType::RaydiumCLMM => {
+                unimplemented!()
+            }
+            DexType::PumpFunAMM => {
+                unimplemented!()
+            }
+            DexType::MeteoraDLMM => {
+                unimplemented!()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +129,28 @@ impl TwoHopPath {
     #[inline]
     pub fn is_positive(&self, pool_index: &usize) -> bool {
         &self.first.pool == pool_index
+    }
+
+    pub fn to_instructions(&self) -> Option<Vec<InstructionItem>> {
+        Some(vec![
+            self.first.to_instruction()?,
+            self.second.to_instruction()?,
+        ])
+    }
+
+    pub fn get_relate_mint_ata(&self, wallet: &Pubkey) -> Vec<(Pubkey, Pubkey)> {
+        let mint_0 = find_mint_by_index(self.first.mint_0).unwrap();
+        let mint_1 = find_mint_by_index(self.first.mint_1).unwrap();
+        vec![
+            (
+                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM),
+                mint_0,
+            ),
+            (
+                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM),
+                mint_1,
+            ),
+        ]
     }
 }
 
@@ -188,11 +231,15 @@ fn init_two_hop_graph(
 }
 
 pub fn find_pool_position(pool_id: &Pubkey) -> Option<usize> {
-    POOL_INDEX.get().unwrap().iter().position(|v| v == pool_id)
+    POOL_INDEX.get()?.iter().position(|v| v == pool_id)
 }
 
 pub fn find_mint_position(mint: &Pubkey) -> Option<usize> {
-    MINT_INDEX.get().unwrap().iter().position(|v| v == mint)
+    MINT_INDEX.get()?.iter().position(|v| v == mint)
+}
+
+pub fn find_mint_by_index(index: usize) -> Option<Pubkey> {
+    MINT_INDEX.get()?.get(index).cloned()
 }
 
 pub fn get_graph_with_pool_id(pool_id: &Pubkey) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {

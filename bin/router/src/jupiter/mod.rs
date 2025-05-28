@@ -1,0 +1,86 @@
+use crate::dex::InstructionItem;
+use crate::interface::DexType;
+use crate::jupiter::jupiter_route::RouteBuilder;
+use crate::jupiter::route_plan_step::RoutePlanStep;
+use crate::jupiter::swap::Swap;
+use crate::jupiter::swap::Swap::{Raydium, RaydiumClmm};
+use crate::metadata::{get_keypair, get_native_mint_ata};
+use ahash::AHashSet;
+use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signer::Signer;
+
+mod accounts_type;
+mod jupiter_route;
+mod remaining_accounts_info;
+mod remaining_accounts_slice;
+mod route_plan_step;
+mod side;
+pub mod swap;
+
+/// `jupiter` program ID.
+const JUPITER_ID: Pubkey = pubkey!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4");
+const JUPITER_EVENT_AUTHORITY: Pubkey = pubkey!("D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf");
+
+pub fn build_jupiter_swap_ix(
+    amount_in_mint: Pubkey,
+    amount_in: u64,
+    tip: u64,
+    instructions: Vec<InstructionItem>,
+) -> Option<(Instruction, Vec<AddressLookupTableAccount>)> {
+    let mut route_builder = RouteBuilder::new();
+    let mut remaining_accounts = Vec::with_capacity(100);
+    let mut route_plan = Vec::with_capacity(2);
+    let mut alts = Vec::with_capacity(2);
+    for (index, instructionItem) in instructions.into_iter().enumerate() {
+        let swap = get_jupiter_swap_type(&instructionItem.dex_type, instructionItem.swap_direction);
+        remaining_accounts.push(AccountMeta::new_readonly(
+            instructionItem.dex_type.get_ref_program_id().clone(),
+            false,
+        ));
+        remaining_accounts.extend(instructionItem.account_meta);
+        if swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm {
+            remaining_accounts.push(AccountMeta::new_readonly(JUPITER_ID, false));
+        }
+        alts.extend(instructionItem.alts);
+        route_plan.push(RoutePlanStep {
+            swap,
+            percent: 100,
+            input_index: if index == 0 { 0 } else { 1 },
+            output_index: if index == 0 { 1 } else { 0 },
+        })
+    }
+    let native_mint_ata = get_native_mint_ata().as_ref().clone();
+    route_builder
+        .user_transfer_authority(get_keypair().pubkey())
+        .user_source_token_account(native_mint_ata)
+        .user_destination_token_account(native_mint_ata)
+        .destination_mint(amount_in_mint)
+        .program(JUPITER_ID)
+        .in_amount(amount_in)
+        .quoted_out_amount(amount_in + tip + 10_000)
+        .slippage_bps(0)
+        .platform_fee_bps(0)
+        .route_plan(route_plan)
+        .add_remaining_accounts(remaining_accounts.as_slice());
+    Some((route_builder.instruction(), alts))
+}
+
+fn get_jupiter_swap_type(dex_type: &DexType, swap_direction: bool) -> Swap {
+    match dex_type {
+        DexType::RaydiumAMM => Raydium,
+        DexType::RaydiumCLMM => RaydiumClmm,
+        DexType::PumpFunAMM => {
+            if swap_direction {
+                Swap::PumpdotfunAmmSell
+            } else {
+                Swap::PumpdotfunAmmBuy
+            }
+        }
+        DexType::MeteoraDLMM => {
+            unimplemented!()
+        }
+    }
+}
