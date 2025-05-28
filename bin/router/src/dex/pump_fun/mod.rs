@@ -1,5 +1,6 @@
 pub mod quote;
 pub mod state;
+pub mod data_slice;
 
 use rand::Rng;
 use solana_sdk::pubkey;

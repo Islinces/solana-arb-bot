@@ -166,7 +166,7 @@ pub async fn init_start_data(
             ));
         }
         // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
-        crate::data_slice::init_data_slice_config().await;
+        crate::data_slice::init_data_slice_config();
         // 初始化snapshot，返回有效的DexJson
         let dex_data = crate::account_cache::init_snaphot(dex_data, rpc_client).await?;
         // 初始化account之间的关系，用于解析GRPC推送数据
