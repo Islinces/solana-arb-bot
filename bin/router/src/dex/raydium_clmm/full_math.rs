@@ -1,14 +1,12 @@
 use crate::dex::raydium_clmm::big_num::{U128, U256, U512};
 
 pub trait MulDiv<RHS = Self> {
-    /// Output type for the methods of this trait.
     type Output;
 
     fn mul_div_floor(self, num: RHS, denom: RHS) -> Option<Self::Output>;
 
     fn mul_div_ceil(self, num: RHS, denom: RHS) -> Option<Self::Output>;
 
-    /// Return u64 not out of bounds
     fn to_underflow_u64(self) -> u64;
 }
 
@@ -22,8 +20,6 @@ impl Upcast256 for U128 {
 }
 
 pub trait Downcast256 {
-    /// Unsafe cast to U128
-    /// Bits beyond the 128th position are lost
     fn as_u128(self) -> U128;
 }
 impl Downcast256 for U256 {
@@ -42,8 +38,6 @@ impl Upcast512 for U256 {
 }
 
 pub trait Downcast512 {
-    /// Unsafe cast to U256
-    /// Bits beyond the 256th position are lost
     fn as_u256(self) -> U256;
 }
 impl Downcast512 for U512 {

@@ -4026,6 +4026,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "num_cpus",
+ "parking_lot",
  "rand 0.9.1",
  "rand_core 0.6.4",
  "rayon",

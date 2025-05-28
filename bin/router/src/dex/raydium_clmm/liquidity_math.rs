@@ -1,17 +1,10 @@
-use anyhow::{anyhow, Result};
-use crate::{require_gt, require_gte};
 use crate::dex::raydium_clmm::big_num::{U128, U256};
-use crate::dex::raydium_clmm::{fixed_point_64, tick_math};
 use crate::dex::raydium_clmm::full_math::MulDiv;
+use crate::dex::raydium_clmm::{tick_math, Q64, RESOLUTION};
 use crate::dex::raydium_clmm::unsafe_math::UnsafeMathTrait;
+use crate::{require_gt, require_gte};
+use anyhow::{anyhow, Result};
 
-/// Add a signed liquidity delta to liquidity and revert if it overflows or underflows
-///
-/// # Arguments
-///
-/// * `x` - The liquidity (L) before change
-/// * `y` - The delta (ΔL) by which liquidity should be changed
-///
 pub fn add_delta(x: u128, y: i128) -> Result<u128> {
     let z: u128;
     if y < 0 {
@@ -19,7 +12,11 @@ pub fn add_delta(x: u128, y: i128) -> Result<u128> {
         require_gt!(x, z, "Liquidity sub delta L must be smaller than before");
     } else {
         z = x + u128::try_from(y)?;
-        require_gte!(z, x, "Liquidity add delta L must be greater, or equal to before");
+        require_gte!(
+            z,
+            x,
+            "Liquidity add delta L must be greater, or equal to before"
+        );
     }
 
     Ok(z)
@@ -40,7 +37,7 @@ pub fn get_liquidity_from_amount_0(
     let intermediate = U128::from(sqrt_ratio_a_x64)
         .mul_div_floor(
             U128::from(sqrt_ratio_b_x64),
-            U128::from(fixed_point_64::Q64),
+            U128::from(Q64),
         )
         .unwrap();
     // Δx（√P_lower*(√P_upper/2^64)/(√P_upper - √P_lower)）
@@ -67,7 +64,7 @@ pub fn get_liquidity_from_amount_1(
 
     U128::from(amount_1)
         .mul_div_floor(
-            U128::from(fixed_point_64::Q64),
+            U128::from(Q64),
             U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
         )
         .unwrap()
@@ -173,7 +170,7 @@ pub fn get_delta_amount_0_unsigned(
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
     };
 
-    let numerator_1 = U256::from(liquidity) << fixed_point_64::RESOLUTION;
+    let numerator_1 = U256::from(liquidity) << RESOLUTION;
     let numerator_2 = U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64);
 
     assert!(sqrt_ratio_a_x64 > 0);
@@ -213,15 +210,15 @@ pub fn get_delta_amount_1_unsigned(
     let result = if round_up {
         U256::from(liquidity).mul_div_ceil(
             U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
-            U256::from(fixed_point_64::Q64),
+            U256::from(Q64),
         )
     } else {
         U256::from(liquidity).mul_div_floor(
             U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
-            U256::from(fixed_point_64::Q64),
+            U256::from(Q64),
         )
     }
-        .unwrap();
+    .unwrap();
     if result > U256::from(u64::MAX) {
         return Err(anyhow!("Max token overflow"));
     }
@@ -289,27 +286,27 @@ pub fn get_delta_amounts_signed(
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
         )
-            .unwrap();
+        .unwrap();
     } else if tick_current < tick_upper {
         amount_0 = get_delta_amount_0_signed(
             sqrt_price_x64_current,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
         )
-            .unwrap();
+        .unwrap();
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             sqrt_price_x64_current,
             liquidity_delta,
         )
-            .unwrap();
+        .unwrap();
     } else {
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
         )
-            .unwrap();
+        .unwrap();
     }
     Ok((amount_0, amount_1))
 }

@@ -1,4 +1,3 @@
-use crate::dex::raydium_clmm::pool::POOL_TICK_ARRAY_BITMAP_SEED;
 use crate::dex_data::DexJson;
 use crate::interface;
 use crate::interface::{AccountType, DexType};
@@ -7,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use anyhow::anyhow;
 use tokio::sync::OnceCell;
+use crate::dex::raydium_clmm::state::POOL_TICK_ARRAY_BITMAP_SEED;
 
 static ACCOUNT_RELATION_CACHE: OnceCell<Arc<AccountRelation>> = OnceCell::const_new();
 

@@ -1,7 +1,7 @@
 use crate::dex::raydium_clmm::big_num::U256;
-use crate::dex::raydium_clmm::fixed_point_64;
 use crate::dex::raydium_clmm::full_math::MulDiv;
 use crate::dex::raydium_clmm::unsafe_math::UnsafeMathTrait;
+use crate::dex::raydium_clmm::RESOLUTION;
 
 pub fn get_next_sqrt_price_from_amount_0_rounding_up(
     sqrt_price_x64: u128,
@@ -12,7 +12,7 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
     if amount == 0 {
         return sqrt_price_x64;
     };
-    let numerator_1 = (U256::from(liquidity)) << fixed_point_64::RESOLUTION;
+    let numerator_1 = (U256::from(liquidity)) << RESOLUTION;
 
     if add {
         if let Some(product) = U256::from(amount).checked_mul(U256::from(sqrt_price_x64)) {
@@ -31,7 +31,7 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
                 .checked_add(U256::from(amount))
                 .unwrap(),
         )
-            .as_u128()
+        .as_u128()
     } else {
         let product = U256::from(
             U256::from(amount)
@@ -67,11 +67,11 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
     add: bool,
 ) -> u128 {
     if add {
-        let quotient = U256::from(u128::from(amount) << fixed_point_64::RESOLUTION) / liquidity;
+        let quotient = U256::from(u128::from(amount) << RESOLUTION) / liquidity;
         sqrt_price_x64.checked_add(quotient.as_u128()).unwrap()
     } else {
         let quotient = U256::div_rounding_up(
-            U256::from(u128::from(amount) << fixed_point_64::RESOLUTION),
+            U256::from(u128::from(amount) << RESOLUTION),
             U256::from(liquidity),
         );
         sqrt_price_x64.checked_sub(quotient.as_u128()).unwrap()

@@ -12,7 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 pub struct Command {
@@ -20,6 +20,8 @@ pub struct Command {
     grpc_subscribe_type: String,
     #[arg(long, required = true)]
     dex_json_path: String,
+    #[arg(long)]
+    follow_mints: Option<Vec<String>>,
     #[arg(long)]
     grpc_url: Option<String>,
     #[arg(long)]
@@ -38,6 +40,14 @@ pub struct Command {
 
 pub async fn start_with_custom() {
     let command = Command::parse();
+    let follow_mints = command
+        .follow_mints
+        .map_or(vec![spl_token::native_mint::ID], |mints| {
+            mints
+                .into_iter()
+                .map(|v| Pubkey::from_str(&v).unwrap())
+                .collect()
+        });
     let grpc_url = command
         .grpc_url
         .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
@@ -61,10 +71,19 @@ pub async fn start_with_custom() {
     let rpc_client = Arc::new(RpcClient::new(rpc_url));
     // 1.初始化各个Account的切片规则
     // 2.初始化snapshot，返回有效的DexJson(所有数据都合法的)
-    // 3.TODO 构建边
-    // 4.初始化池子与DexType关系、金库与池子&DexType的关系，用于解析GRPC推送数据使用
-    let dex_data = init_start_data(dex_json_path, rpc_client).await.unwrap();
-    // grpc消息消费通道
+    // 3.初始化池子与DexType关系、金库与池子&DexType的关系，用于解析GRPC推送数据使用
+    // 4.构建边
+    let dex_data = init_start_data(dex_json_path, follow_mints.as_slice(), rpc_client)
+        .await
+        .unwrap();
+    // let option1 = crate::quoter::find_best_hop_path(
+    //     &Pubkey::from_str("6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c").unwrap(),
+    //     &spl_token::native_mint::ID,
+    //     10_u64.pow(9),
+    //     0,
+    // );
+    // info!("{:#?}", option1);
+    // // grpc消息消费通道
     let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
     // Account本地缓存更新后广播通道
     let (cached_message_sender, _) = broadcast::channel(arb_channel_capacity);
@@ -102,9 +121,10 @@ pub async fn start_with_custom() {
 
 pub async fn init_start_data(
     dex_json_path: String,
+    follow_mints: &[Pubkey],
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
-    let dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
+    let mut dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
         Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
         Err(e) => {
             error!("{}", e);
@@ -114,6 +134,14 @@ pub async fn init_start_data(
     if dex_data.is_empty() {
         Err(anyhow!("json文件无数据"))
     } else {
+        // 删除不涉及关注的Mint的池子
+        dex_data.retain(|v| follow_mints.contains(&v.mint_a) || follow_mints.contains(&v.mint_b));
+        if dex_data.is_empty() {
+            return Err(anyhow!(
+                "json文件中无涉及程序关注的Mint的池子，程序关注的Mint : {:?}",
+                follow_mints
+            ));
+        }
         // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
         crate::data_slice::init_data_slice_config().await;
         // 初始化snapshot，返回有效的DexJson
@@ -121,7 +149,7 @@ pub async fn init_start_data(
         // 初始化account之间的关系，用于解析GRPC推送数据
         crate::account_relation::init(dex_data.as_slice())?;
         // 构建边
-        crate::edge_graph::init_graph(dex_data.as_slice())?;
+        crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
         Ok(dex_data)
     }
 }

@@ -48,12 +48,24 @@ impl EdgeIdentifier {
             },
         ]
     }
+
+    fn identifier(&self) -> (usize, bool) {
+        (self.pool, self.swap_direction)
+    }
+
+    #[inline]
+    pub fn pool_id(&self) -> Option<&Pubkey> {
+        POOL_INDEX
+            .get()?
+            .get(self.pool)
+            .map_or(None, |pool| Some(pool))
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct TwoHopPath {
-    first: EdgeIdentifier,
-    second: EdgeIdentifier,
+    pub first: Arc<EdgeIdentifier>,
+    pub second: Arc<EdgeIdentifier>,
 }
 
 impl TwoHopPath {
@@ -77,15 +89,33 @@ impl TwoHopPath {
                 None
             } else {
                 Some(Self {
-                    first: first.clone(),
-                    second: second.clone(),
+                    first: Arc::new(first.clone()),
+                    second: Arc::new(second.clone()),
                 })
             }
         }
     }
+
+    #[inline]
+    pub fn swaped_mint(&self) -> &usize {
+        if self.first.swap_direction {
+            &self.first.mint_0
+        } else {
+            &self.first.mint_1
+        }
+    }
+
+    #[inline]
+    pub fn is_positive(&self, pool_index: &usize) -> bool {
+        &self.first.pool == pool_index
+    }
 }
 
-pub(crate) fn init_graph(dex_json: &[DexJson]) -> anyhow::Result<()> {
+pub(crate) fn init_graph(dex_json: &[DexJson], follow_mints: &[Pubkey]) -> anyhow::Result<()> {
+    // 初始化 pool 全局索引
+    POOL_INDEX.set(Arc::new(
+        dex_json.iter().map(|v| v.pool).collect::<Vec<_>>(),
+    ))?;
     // 初始化 mint 全局索引
     MINT_INDEX.set(Arc::new(
         dex_json
@@ -94,10 +124,11 @@ pub(crate) fn init_graph(dex_json: &[DexJson]) -> anyhow::Result<()> {
             .flatten()
             .collect::<Vec<_>>(),
     ))?;
-    // 初始化 pool 全局索引
-    POOL_INDEX.set(Arc::new(
-        dex_json.iter().map(|v| v.pool).collect::<Vec<_>>(),
-    ))?;
+    // 关注的Mint的index
+    let follow_mint_index = follow_mints
+        .iter()
+        .filter_map(|v| find_mint_position(v))
+        .collect::<Vec<_>>();
     // 初始化所有边，用于后边构建图
     let edge_identifiers = dex_json
         .into_iter()
@@ -105,16 +136,27 @@ pub(crate) fn init_graph(dex_json: &[DexJson]) -> anyhow::Result<()> {
         .flatten()
         .collect::<Vec<_>>();
     // 构建图(2 hop)
-    init_two_hop_graph(edge_identifiers)
+    init_two_hop_graph(edge_identifiers, follow_mint_index.as_slice())
 }
 
-fn init_two_hop_graph(edge_identifier: Vec<EdgeIdentifier>) -> anyhow::Result<()> {
+fn init_two_hop_graph(
+    edge_identifier: Vec<EdgeIdentifier>,
+    follow_mints: &[usize],
+) -> anyhow::Result<()> {
     let two_hop_path = edge_identifier
         .iter()
         .map(|first| {
             edge_identifier
                 .iter()
                 .filter_map(|second| TwoHopPath::new(first, second))
+                .filter_map(|hop_path| {
+                    // 忽略掉不关注的Mint关联的路径
+                    if follow_mints.contains(hop_path.swaped_mint()) {
+                        Some(hop_path)
+                    } else {
+                        None
+                    }
+                })
                 .collect::<Vec<_>>()
         })
         .flatten()
@@ -153,10 +195,14 @@ pub fn find_mint_position(mint: &Pubkey) -> Option<usize> {
     MINT_INDEX.get().unwrap().iter().position(|v| v == mint)
 }
 
-pub fn get_graph(pool_id: &Pubkey) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
+pub fn get_graph_with_pool_id(pool_id: &Pubkey) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
+    get_graph_with_pool_index(&find_pool_position(pool_id)?)
+}
+
+pub fn get_graph_with_pool_index(pool_index: &usize) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
     GRAPH
         .get()
         .unwrap()
-        .get(&find_pool_position(pool_id)?)
+        .get(pool_index)
         .map_or(None, |v| Some(v.clone()))
 }

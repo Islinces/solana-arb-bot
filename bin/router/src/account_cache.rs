@@ -1,14 +1,16 @@
 use crate::data_slice::{slice_data_for_dynamic, slice_data_for_static};
-use crate::dex::raydium_clmm::pool::PoolState;
-use crate::dex::raydium_clmm::tick_array::TickArrayState;
-use crate::dex::raydium_clmm::tickarray_bitmap_extension::TickArrayBitmapExtension;
+use crate::dex::raydium_amm::state::AmmInfo;
+use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
+use crate::dex::FromCache;
 use crate::dex_data::DexJson;
 use crate::interface::{get_dex_type_with_program_id, AccountType, DexType, ATA_PROGRAM_ID};
 use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
+use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use futures_util::task::SpawnExt;
+use parking_lot::RwLock;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
@@ -16,7 +18,7 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::OnceCell;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 use yellowstone_grpc_proto::prost::Message;
@@ -40,17 +42,29 @@ impl DynamicCache {
             128,
         ))
     }
+
+    pub fn get(&self, account_key: &Pubkey) -> Option<Ref<Pubkey, Vec<u8>>> {
+        self.0.get(account_key).map_or(None, |v| Some(v))
+    }
 }
 
 impl StaticCache {
     pub(crate) fn new() -> Self {
         Self(AHashMap::with_capacity(1_000))
     }
+
+    pub fn get(&self, account_key: &Pubkey) -> Option<&[u8]> {
+        self.0.get(account_key).map_or(None, |v| Some(v.as_slice()))
+    }
 }
 
 impl AltCache {
     pub(crate) fn new() -> Self {
         Self(AHashMap::with_capacity(1_000))
+    }
+
+    pub fn get(&self, pool_id: &Pubkey) -> Option<Vec<AddressLookupTableAccount>> {
+        self.0.get(pool_id).map_or(None, |v| Some(v.clone()))
     }
 }
 
@@ -200,15 +214,9 @@ async fn init_raydium_clmm_cache(
         let amm_config_key = Pubkey::try_from(&pool_static_data.as_ref().unwrap()[0..32]).unwrap();
         all_amm_config_accounts.insert(amm_config_key);
         // bitmap_extension
-        let bitmap_extension_key = Pubkey::find_program_address(
-            &[
-                "pool_tick_array_bitmap_extension".as_bytes(),
-                json.pool.as_ref(),
-            ],
-            dex_type.get_ref_program_id(),
-        )
-        .0;
-        all_bitmap_extension_accounts.push(bitmap_extension_key);
+        all_bitmap_extension_accounts.push(
+            crate::dex::raydium_clmm::state::pda_bit_map_extension_key(&json.pool),
+        );
     }
     // 查询amm config
     let all_amm_config_accounts = all_amm_config_accounts.into_iter().collect::<Vec<_>>();
@@ -292,7 +300,6 @@ async fn init_raydium_clmm_cache(
                     .get()
                     .unwrap()
                     .write()
-                    .await
                     .0
                     .insert(amm_config_key, amm_config.clone());
             }
@@ -325,16 +332,13 @@ async fn init_raydium_clmm_cache(
             pool_dynamic_data.as_ref().unwrap(),
         );
         let tick_array_bitmap_extension = Some(TickArrayBitmapExtension::from_slice_data(
-            None,
-            Some(
-                DYNAMIC_ACCOUNT_CACHE
-                    .get()
-                    .unwrap()
-                    .0
-                    .get(&bitmap_extension_key)
-                    .unwrap()
-                    .value(),
-            ),
+            DYNAMIC_ACCOUNT_CACHE
+                .get()
+                .unwrap()
+                .0
+                .get(&bitmap_extension_key)
+                .unwrap()
+                .value(),
         ));
         // 前后各10个tick array
         all_tick_array_state_accounts.extend(load_cur_and_next_specify_count_tick_array_key(
@@ -397,7 +401,6 @@ async fn init_raydium_clmm_cache(
             .get()
             .unwrap()
             .write()
-            .await
             .0
             .insert(pool, static_data.unwrap());
         let alt_account = alt_map.get(alt.as_ref().unwrap()).unwrap();
@@ -405,7 +408,6 @@ async fn init_raydium_clmm_cache(
             .get()
             .unwrap()
             .write()
-            .await
             .0
             .insert(alt.unwrap(), vec![alt_account.clone()]);
     }
@@ -420,7 +422,7 @@ async fn init_pump_fun_cache(
     alt_map: AHashMap<Pubkey, AddressLookupTableAccount>,
 ) -> Vec<DexJson> {
     let global_config_account_data = get_account_data_with_data_slice(
-        vec![crate::dex::pump_fun::global_config_key()],
+        vec![crate::dex::pump_fun::state::global_config_key()],
         DexType::PumpFunAMM,
         AccountType::PumpFunGlobalConfig,
         rpc_client.clone(),
@@ -496,7 +498,7 @@ async fn init_pump_fun_cache(
                     );
 
                     // ALT
-                    ALT_CACHE.get().unwrap().write().await.0.insert(
+                    ALT_CACHE.get().unwrap().write().0.insert(
                         json.pool.clone(),
                         vec![alt_map
                             .get(&json.address_lookup_table_address.unwrap())
@@ -544,7 +546,6 @@ async fn init_pump_fun_cache(
                         .get()
                         .unwrap()
                         .write()
-                        .await
                         .0
                         .insert(json.pool.clone(), combine_data);
                 }
@@ -626,11 +627,10 @@ async fn init_raydium_amm_cache(
                         .get()
                         .unwrap()
                         .write()
-                        .await
                         .0
                         .insert(json.pool.clone(), pool_static_data);
                     // ALT
-                    ALT_CACHE.get().unwrap().write().await.0.insert(
+                    ALT_CACHE.get().unwrap().write().0.insert(
                         json.pool.clone(),
                         vec![alt_map
                             .get(&json.address_lookup_table_address.unwrap())
@@ -750,4 +750,10 @@ async fn base_get_account_with_data_slice(
             })
         })
         .collect::<Vec<_>>()
+}
+
+pub fn get_account_data<T: FromCache>(pool_id: &Pubkey) -> Option<T> {
+    let static_data = STATIC_ACCOUNT_CACHE.get()?.read();
+    let dynamic_data = DYNAMIC_ACCOUNT_CACHE.get()?;
+    T::from_cache(pool_id, static_data, dynamic_data)
 }

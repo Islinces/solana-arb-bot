@@ -5,7 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::ptr;
 use tokio::sync::OnceCell;
 
-// ========================= 账户订阅的数据切片 =========================
+// ========================= dynamic data 账户订阅的数据切片 =========================
 // amm pool
 static DYNAMIC_RAYDIUM_AMM_POOL_SLICE: OnceCell<([(usize, usize); 2], usize)> =
     OnceCell::const_new();
@@ -20,7 +20,7 @@ static DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE: OnceCell<(Vec<(usize, usize)
     OnceCell::const_new();
 // mint vault
 static DYNAMIC_MINT_VAULT_SLICE: OnceCell<([(usize, usize); 1], usize)> = OnceCell::const_new();
-// ========================= 账户未订阅的数据切片 =========================
+// ========================= static data 账户未订阅的数据切片 =========================
 // amm pool
 static STATIC_RAYDIUM_AMM_POOL_SLICE: OnceCell<([(usize, usize); 6], usize)> =
     OnceCell::const_new();
