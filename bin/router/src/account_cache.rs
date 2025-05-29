@@ -18,7 +18,7 @@ use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, info};
 
 static DYNAMIC_ACCOUNT_CACHE: OnceCell<DynamicCache> = OnceCell::const_new();
 static STATIC_ACCOUNT_CACHE: OnceCell<RwLock<StaticCache>> = OnceCell::const_new();
@@ -65,10 +65,11 @@ impl AltCache {
     }
 }
 
-pub async fn init_snaphot(
+pub async fn init_snapshot(
     dex_data: Vec<DexJson>,
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
+    info!("初始化Snapshot...");
     let mut dex_data_group: AHashMap<DexType, Vec<DexJson>> = AHashMap::with_capacity(4);
     for json in dex_data {
         if let Some(dex_type) = get_dex_type_with_program_id(&json.owner) {
@@ -88,6 +89,7 @@ pub async fn init_snaphot(
     STATIC_ACCOUNT_CACHE.set(RwLock::new(StaticCache::new()))?;
     ALT_CACHE.set(RwLock::new(AltCache::new()))?;
     for (dex_type, dex_data) in dex_data_group {
+        info!("【{}】开始初始化Snapshot...", dex_type);
         // 有效alt
         let alt_map = load_lookup_table_accounts(
             rpc_client.clone(),
@@ -141,8 +143,14 @@ pub async fn init_snaphot(
                 unimplemented!()
             }
         };
+        info!(
+            "【{}】初始化Snapshot完毕, 初始化池子数量 : {}",
+            dex_type,
+            remaining_dex_data.len()
+        );
         effective_dex_data.extend(remaining_dex_data);
     }
+    info!("初始化Snapshot结束");
     if effective_dex_data.is_empty() {
         Err(anyhow!("所有DexJson均加载失败"))
     } else {

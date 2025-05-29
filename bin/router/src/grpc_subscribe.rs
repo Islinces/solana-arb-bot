@@ -134,6 +134,20 @@ impl GrpcSubscribe {
             let (_, stream) = grpc_client
                 .subscribe_with_request(Some(subscribe_request))
                 .await?;
+            tokio::spawn(async move {
+                let mut ping = tokio::time::interval(Duration::from_secs(5));
+                ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                ping.tick().await;
+                loop {
+                    tokio::select! {
+                        _ = ping.tick() => {
+                            if let Err(e)=grpc_client.ping(1).await{
+                                error!("GRPC PING 失败，{}",e);
+                            }
+                        },
+                    }
+                }
+            });
             return Ok(stream);
         }
         Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
@@ -185,7 +199,7 @@ impl GrpcSubscribe {
                 }
             }
         } else {
-            info!("GRPC 非基准程序单订阅成功");
+            info!("GRPC 非基准程序单订阅成功, 等待GRPC推送数据");
             while let Some(message) = stream.next().await {
                 match message {
                     Ok(data) => {

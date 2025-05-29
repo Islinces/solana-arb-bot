@@ -58,15 +58,12 @@ impl Executor for JitoExecutor {
         let bot_name = command.arb_bot_name.clone();
         let jito_region = command.jito_region.clone();
         let jito_uuid = command.jito_uuid.clone();
-        let tip_bps_numerator = command.tip_bps_numerator.unwrap_or(70);
-        let tip_bps_denominator = command.tip_bps_denominator.unwrap_or(100);
-        let jito_host = if jito_region.as_ref().is_none_or(|v| v == "mainnet") {
+        let tip_bps_numerator = command.tip_bps_numerator;
+        let tip_bps_denominator = command.tip_bps_denominator;
+        let jito_host = if jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
         } else {
-            format!(
-                "https://{}.mainnet.block-engine.jito.wtf",
-                jito_region.unwrap()
-            )
+            format!("https://{}.mainnet.block-engine.jito.wtf", jito_region)
         };
         let jito_url = if jito_uuid.is_none() {
             format!("{}/api/v1/bundles", jito_host)
@@ -103,7 +100,7 @@ impl Executor for JitoExecutor {
                     .map(|item| bincode::serialize(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
-                info!("bundles : {:#?}", bundles);
+                // info!("bundles : {:#?}", bundles);
                 let transactions = json!(bundles);
                 let params = json!([
                     transactions,

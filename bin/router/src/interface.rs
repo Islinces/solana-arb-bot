@@ -62,6 +62,6 @@ pub fn get_dex_type_with_program_id(program_id: &Pubkey) -> Option<DexType> {
     //     unimplemented!()
     // }
     else {
-        unimplemented!()
+        None
     }
 }

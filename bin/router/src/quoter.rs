@@ -8,7 +8,6 @@ use crate::interface::DexType;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
-use tracing::info;
 
 pub fn find_best_hop_path(
     pool_id: &Pubkey,
@@ -35,9 +34,7 @@ pub fn find_best_hop_path(
                 .iter()
                 .filter_map(|hop_path| {
                     quote(&hop_path.second, first_amount_out).and_then(|second_amount_out| {
-                        if second_amount_out - min_profit >= amount_in
-                            && second_amount_out > first_amount_out
-                        {
+                        if has_profit(amount_in, second_amount_out, min_profit) {
                             Some((hop_path.clone(), second_amount_out - first_amount_out))
                         } else {
                             None
@@ -54,9 +51,7 @@ pub fn find_best_hop_path(
         .filter_map(|hop_path| {
             quote(&hop_path.first, amount_in).and_then(|first_amount_out| {
                 quote(&hop_path.second, first_amount_out).and_then(|second_amount_out| {
-                    if second_amount_out - min_profit >= amount_in
-                        && second_amount_out > first_amount_out
-                    {
+                    if has_profit(amount_in, second_amount_out, min_profit) {
                         Some((hop_path, second_amount_out - first_amount_out))
                     } else {
                         None
@@ -93,12 +88,12 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
     match dex_type {
         DexType::RaydiumAMM => {
             let amm_info = get_account_data::<AmmInfo>(pool_id)?;
-            info!("RaydiumAMM \n{:#?}", amm_info);
+            // info!("RaydiumAMM \n{:#?}", amm_info);
             crate::dex::raydium_amm::quote::quote(amount_in, edge.swap_direction, &amm_info)
         }
         DexType::RaydiumCLMM => {
             let pool_state = get_account_data::<PoolState>(pool_id)?;
-            info!("RaydiumCLMM \n{:#?}", pool_state);
+            // info!("RaydiumCLMM \n{:#?}", pool_state);
             crate::dex::raydium_clmm::quote::quote(
                 amount_in,
                 edge.swap_direction,
@@ -108,13 +103,18 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
         }
         DexType::PumpFunAMM => {
             let pool = get_account_data::<Pool>(pool_id)?;
-            info!("PumpFunAMM \n{:#?}", pool);
+            // info!("PumpFunAMM \n{:#?}", pool);
             crate::dex::pump_fun::quote::quote(amount_in, edge.swap_direction, &pool)
         }
         DexType::MeteoraDLMM => {
             unimplemented!()
         }
     }
+}
+
+#[inline]
+fn has_profit(amount_in: u64, amount_out: u64, min_profit: u64) -> bool {
+    amount_out >= amount_in + min_profit
 }
 
 #[derive(Debug)]

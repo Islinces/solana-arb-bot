@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 pub struct Command {
@@ -24,63 +24,53 @@ pub struct Command {
     dex_json_path: String,
     #[arg(long, required = true)]
     keypair_path: String,
-    #[arg(long)]
-    grpc_url: Option<String>,
-    #[arg(long)]
-    rpc_url: Option<String>,
-    #[arg(long)]
-    pub jito_region: Option<String>,
+    #[arg(long, default_value = "https://solana-yellowstone-grpc.publicnode.com")]
+    grpc_url: String,
+    #[arg(long, default_value = "https://solana-rpc.publicnode.com")]
+    rpc_url: String,
+    #[arg(long, default_value = "mainnet")]
+    pub jito_region: String,
     #[arg(long)]
     pub jito_uuid: Option<String>,
-    #[arg(long)]
-    follow_mints: Option<Vec<String>>,
+    #[arg(long, default_values = ["So11111111111111111111111111111111111111112"])]
+    follow_mints: Vec<String>,
     #[arg(long)]
     pub arb_bot_name: Option<String>,
-    #[arg(long)]
-    arb_size: Option<usize>,
-    #[arg(long)]
-    arb_channel_capacity: Option<usize>,
-    #[arg(long)]
-    arb_min_profit: Option<u64>,
-    #[arg(long)]
-    pub tip_bps_numerator: Option<u64>,
-    #[arg(long)]
-    pub tip_bps_denominator: Option<u64>,
-    #[arg(long)]
-    standard_program: Option<bool>,
-    #[arg(long)]
-    processor_size: Option<usize>,
+    #[arg(long, default_value = "1")]
+    arb_size: usize,
+    #[arg(long, default_value = "10000")]
+    arb_channel_capacity: usize,
+    #[arg(long, default_value = "100000")]
+    arb_min_profit: u64,
+    #[arg(long, default_value = "70")]
+    pub tip_bps_numerator: u64,
+    #[arg(long, default_value = "100")]
+    pub tip_bps_denominator: u64,
+    #[arg(long, default_value = "false")]
+    standard_program: bool,
+    #[arg(long, default_value = "1")]
+    processor_size: usize,
     #[arg(long)]
     specify_pool: Option<String>,
 }
 
 pub async fn start_with_custom() -> anyhow::Result<()> {
     let command = Command::parse();
-    let follow_mints =
-        command
-            .follow_mints
-            .clone()
-            .map_or(vec![spl_token::native_mint::ID], |mints| {
-                mints
-                    .into_iter()
-                    .map(|v| Pubkey::from_str(&v).unwrap())
-                    .collect()
-            });
-    let grpc_url = command
-        .grpc_url
+    let follow_mints = command
+        .follow_mints
         .clone()
-        .unwrap_or("https://solana-yellowstone-grpc.publicnode.com".to_string());
-    let rpc_url = command
-        .rpc_url
-        .clone()
-        .unwrap_or("https://solana-rpc.publicnode.com".to_string());
+        .into_iter()
+        .map(|v| Pubkey::from_str(&v).unwrap())
+        .collect::<Vec<_>>();
+    let grpc_url = command.grpc_url.clone();
+    let rpc_url = command.rpc_url.clone();
     let dex_json_path = command.dex_json_path.clone();
     let keypair_path = command.keypair_path.clone();
-    let processor_size = command.processor_size.unwrap_or(1);
-    let arb_size = command.arb_size.unwrap_or(1);
-    let arb_min_profit = command.arb_min_profit.unwrap_or(100_000);
+    let processor_size = command.processor_size;
+    let arb_size = command.arb_size;
+    let arb_min_profit = command.arb_min_profit;
     // Account本地缓存更新后广播通道容量
-    let arb_channel_capacity = command.arb_channel_capacity.unwrap_or(10_000);
+    let arb_channel_capacity = command.arb_channel_capacity;
     let single_mode = if command.grpc_subscribe_type == "single" {
         true
     } else {
@@ -125,7 +115,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
             grpc_url,
             single_mode,
             specify_pool: command.specify_pool.clone(),
-            standard_program: command.standard_program.unwrap_or(true),
+            standard_program: command.standard_program,
         };
         subscribe.subscribe(dex_data, grpc_message_sender).await
     });
@@ -147,6 +137,21 @@ pub async fn init_start_data(
     // 初始化钱包关联的ATA账户余额
     // 初始化blockhash
     crate::metadata::init_metadata(keypair_path, rpc_client.clone()).await?;
+    // 加载json
+    let dex_data = init_dex_json(dex_json_path, follow_mints)?;
+    // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
+    crate::data_slice::init_data_slice_config();
+    // 初始化snapshot，返回有效的DexJson
+    let dex_data = crate::account_cache::init_snapshot(dex_data, rpc_client).await?;
+    // 初始化account之间的关系，用于解析GRPC推送数据
+    crate::account_relation::init(dex_data.as_slice())?;
+    // 构建边
+    crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
+    Ok(dex_data)
+}
+
+fn init_dex_json(dex_json_path: String, follow_mints: &[Pubkey]) -> anyhow::Result<Vec<DexJson>> {
+    info!("加载DexJson...");
     let mut dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
         Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
         Err(e) => {
@@ -160,19 +165,13 @@ pub async fn init_start_data(
         // 删除不涉及关注的Mint的池子
         dex_data.retain(|v| follow_mints.contains(&v.mint_a) || follow_mints.contains(&v.mint_b));
         if dex_data.is_empty() {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "json文件中无涉及程序关注的Mint的池子，程序关注的Mint : {:?}",
                 follow_mints
-            ));
+            ))
+        } else {
+            info!("涉及关注的Mint的池子数量 : {}", dex_data.len());
+            Ok(dex_data)
         }
-        // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
-        crate::data_slice::init_data_slice_config();
-        // 初始化snapshot，返回有效的DexJson
-        let dex_data = crate::account_cache::init_snaphot(dex_data, rpc_client).await?;
-        // 初始化account之间的关系，用于解析GRPC推送数据
-        crate::account_relation::init(dex_data.as_slice())?;
-        // 构建边
-        crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
-        Ok(dex_data)
     }
 }

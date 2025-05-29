@@ -6,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use anyhow::anyhow;
 use tokio::sync::OnceCell;
+use tracing::info;
 use crate::dex::raydium_clmm::state::POOL_TICK_ARRAY_BITMAP_SEED;
 
 static ACCOUNT_RELATION_CACHE: OnceCell<Arc<AccountRelation>> = OnceCell::const_new();
@@ -19,6 +20,7 @@ pub struct AccountRelation {
 
 impl AccountRelation {
     fn new(dex_data: &[DexJson]) -> anyhow::Result<Self> {
+        info!("初始化AccountRelation...");
         let mut pool = AHashMap::with_capacity(dex_data.len());
         let mut vault = AHashMap::with_capacity(dex_data.len());
         let mut tick_array_extension_bitmap = AHashMap::with_capacity(dex_data.len());
@@ -39,6 +41,7 @@ impl AccountRelation {
                 }
             }
         }
+        info!("初始化AccountRelation结束");
         Ok(Self {
             pool,
             vault,

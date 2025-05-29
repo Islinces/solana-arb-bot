@@ -7,6 +7,7 @@ use spl_associated_token_account::get_associated_token_address_with_program_id;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
+use tracing::info;
 
 /// 后续针对多hop可以改成枚举，针对不同的枚举实现不同的Trigger和Quoter
 static GRAPH: OnceCell<Arc<AHashMap<usize, Arc<Vec<Arc<TwoHopPath>>>>>> = OnceCell::const_new();
@@ -124,6 +125,7 @@ impl TwoHopPath {
 }
 
 pub(crate) fn init_graph(dex_json: &[DexJson], follow_mints: &[Pubkey]) -> anyhow::Result<()> {
+    info!("初始化Graph...");
     // 初始化 pool 全局索引
     POOL_INDEX.set(Arc::new(
         dex_json.iter().map(|v| v.pool).collect::<Vec<_>>(),
@@ -148,7 +150,9 @@ pub(crate) fn init_graph(dex_json: &[DexJson], follow_mints: &[Pubkey]) -> anyho
         .flatten()
         .collect::<Vec<_>>();
     // 构建图(2 hop)
-    init_two_hop_graph(edge_identifiers, follow_mint_index.as_slice())
+    let graph = init_two_hop_graph(edge_identifiers, follow_mint_index.as_slice());
+    info!("初始化Graph结束");
+    graph
 }
 
 fn init_two_hop_graph(

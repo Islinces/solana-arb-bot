@@ -5,7 +5,6 @@ use crate::dex::raydium_clmm::utils;
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
-use tracing::info;
 
 pub fn quote(
     amount_in: u64,
@@ -14,7 +13,7 @@ pub fn quote(
     pool_state: &PoolState,
 ) -> Option<u64> {
     let bitmap_extension = Some(get_bitmap_extension(pool_id)?);
-    info!("{:#?}", bitmap_extension);
+    // info!("{:#?}", bitmap_extension);
     let mut tick_arrays =
         get_tick_arrays(pool_id, pool_state, &bitmap_extension, swap_direction, 3)?;
     utils::get_out_put_amount_and_remaining_accounts(
@@ -62,7 +61,7 @@ fn get_tick_arrays(
         .into_iter()
         .filter_map(|key| {
             let account_data = crate::account_cache::get_account_data::<TickArrayState>(&key);
-            info!("key : {:?}\n{:#?}", key, account_data);
+            // info!("key : {:?}\n{:#?}", key, account_data);
             account_data
         })
         .collect::<VecDeque<_>>();

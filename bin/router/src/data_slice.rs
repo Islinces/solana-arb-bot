@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
 use std::ptr;
 use tokio::sync::OnceCell;
+use tracing::info;
 
 // ========================= dynamic data 账户订阅的数据切片 =========================
 // mint vault
@@ -74,10 +75,12 @@ pub fn retain_intervals_unsafe(
 }
 
 pub fn init_data_slice_config() {
+    info!("开始初始化数据切片规则...");
     init_mint_vault_data_slice();
     init_raydium_amm_data_slice();
     init_raydium_clmm_data_slice();
     init_pump_fun_data_slice();
+    info!("初始化数据切片规则结束");
 }
 
 fn init_mint_vault_data_slice() {
