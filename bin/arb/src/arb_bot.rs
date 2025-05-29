@@ -35,6 +35,8 @@ pub struct Command {
     follow_mints: Vec<Pubkey>,
     #[arg(long)]
     pub arb_bot_name: Option<String>,
+    #[arg(long, required = true)]
+    arb_amount_in: u64,
     #[arg(long, default_value = "1")]
     arb_size: usize,
     #[arg(long, default_value = "So11111111111111111111111111111111111111112")]
@@ -61,14 +63,16 @@ pub struct Command {
 
 pub async fn start_with_custom() -> anyhow::Result<()> {
     let command = Command::parse();
-    let arb_mint = command.arb_mint.clone();
-    let follow_mints = command.follow_mints.clone();
+    info!("{:#?}", command);
     let grpc_url = command.grpc_url.clone();
     let rpc_url = command.rpc_url.clone();
+    let arb_mint = command.arb_mint.clone();
+    let follow_mints = command.follow_mints.clone();
     let dex_json_path = command.dex_json_path.clone();
     let keypair_path = command.keypair_path.clone();
     let processor_size = command.processor_size;
     let arb_size = command.arb_size;
+    let arb_amount_in = command.arb_amount_in;
     let arb_mint_bps_numerator = command.arb_mint_bps_numerator;
     let arb_mint_bps_denominator = command.arb_mint_bps_denominator;
     let arb_min_profit = command.arb_min_profit;
@@ -111,6 +115,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     // 接收更新缓存的Account信息，判断是否需要触发route
     Arb::new(
         arb_size,
+        arb_amount_in,
         arb_min_profit,
         arb_mint,
         arb_mint_bps_numerator,
