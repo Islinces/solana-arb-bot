@@ -75,9 +75,9 @@ fn normal_quote(
                     .filter_map(|hop_path| {
                         quote(&hop_path.second, first_amount_out).and_then(|second_amount_out| {
                             if has_profit(amount_in, second_amount_out, min_profit) {
-                                Some((hop_path.clone(), second_amount_out - amount_in))
+                                Some((hop_path, (second_amount_out - amount_in) as i64))
                             } else {
-                                None
+                                Some((hop_path, second_amount_out as i64 - amount_in as i64))
                             }
                         })
                     })
@@ -91,9 +91,9 @@ fn normal_quote(
             quote(&hop_path.first, amount_in).and_then(|first_amount_out| {
                 quote(&hop_path.second, first_amount_out).and_then(|second_amount_out| {
                     if has_profit(amount_in, second_amount_out, min_profit) {
-                        Some((hop_path, second_amount_out - amount_in))
+                        Some((hop_path, (second_amount_out - amount_in) as i64))
                     } else {
-                        None
+                        Some((hop_path, second_amount_out as i64 - amount_in as i64))
                     }
                 })
             })
@@ -135,7 +135,7 @@ fn ternary_search_quote(
             })
         })
         .max_by_key(|(_, _, profit)| *profit)
-        .map(|(path, best_amount_in, profit)| QuoteResult::new(path, best_amount_in, profit as u64))
+        .map(|(path, best_amount_in, profit)| QuoteResult::new(path, best_amount_in, profit))
 }
 
 fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
@@ -235,11 +235,11 @@ where
 pub struct QuoteResult {
     pub hop_path: Arc<TwoHopPath>,
     pub amount_in: u64,
-    pub profit: u64,
+    pub profit: i64,
 }
 
 impl QuoteResult {
-    fn new(hop_path: Arc<TwoHopPath>, amount_in: u64, profit: u64) -> Self {
+    fn new(hop_path: Arc<TwoHopPath>, amount_in: u64, profit: i64) -> Self {
         Self {
             hop_path,
             amount_in,

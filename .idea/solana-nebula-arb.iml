@@ -2,9 +2,6 @@
 <module type="EMPTY_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <sourceFolder url="file://$MODULE_DIR$/bin/router/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/bin/router/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/bin/router/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/dex-combine/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/dex/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/meteora-dlmm/src" isTestSource="false" />
@@ -15,6 +12,9 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/raydium-amm/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/lib/raydium-clmm/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/raydium-clmm/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/arb/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/arb/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/arb/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

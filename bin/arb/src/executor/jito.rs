@@ -1,7 +1,7 @@
 use crate::arb_bot::Command;
 use crate::executor::Executor;
 use crate::interface::MINT_PROGRAM_ID;
-use crate::metadata::{get_keypair, get_last_blockhash, get_arb_mint_ata, remove_already_ata};
+use crate::metadata::{get_arb_mint_ata, get_keypair, get_last_blockhash, remove_already_ata};
 use crate::quoter::QuoteResult;
 use anyhow::anyhow;
 use base64::engine::general_purpose;
@@ -166,8 +166,7 @@ impl JitoExecutor {
         let keypair = get_keypair();
         let wallet = keypair.pubkey();
         // ======================第一个Transaction====================
-        let tip = quote_result
-            .profit
+        let tip = (quote_result.profit as u64)
             .mul(self.tip_bps_numerator)
             .div(self.tip_bps_denominator);
 

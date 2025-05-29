@@ -62,8 +62,7 @@ impl Arb {
             join_set.spawn(async move {
                 loop {
                     match receiver.recv().await {
-                        Ok((transaction_msg, grpc_to_processor_cost, processor_send_instant)) => {
-                            let processor_to_arb_cost = processor_send_instant.elapsed();
+                        Ok((transaction_msg, _grpc_to_processor_cost, processor_send_instant)) => {
                             let tx = transaction_msg.transaction.unwrap();
                             let meta = transaction_msg.meta.unwrap();
                             let account_keys = tx
@@ -83,8 +82,6 @@ impl Arb {
                                     BalanceChangeInfo::new(&pre, &post, &account_keys)
                                 })
                                 .collect::<Vec<_>>();
-                            let get_change_balance_cost =
-                                processor_send_instant.elapsed() - processor_to_arb_cost;
                             if !changed_balances.is_empty() {
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
@@ -100,52 +97,38 @@ impl Arb {
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{:?}", quote_result);
-                                    // 有获利路径后生成指令，发送指令
-                                    let msg = executor
-                                        .execute(quote_result)
-                                        .await
-                                        .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
-                                    (
-                                        Some(trigger_quote_cost),
-                                        Some(trigger_instant.elapsed() - trigger_quote_cost),
-                                        Some(quote_info),
-                                        Some(msg),
-                                    )
+                                    if quote_result.profit <= 0 {
+                                        (Some(trigger_quote_cost), None, Some(quote_info), None)
+                                    } else {
+                                        // 有获利路径后生成指令，发送指令
+                                        let msg =
+                                            executor.execute(quote_result).await.unwrap_or_else(
+                                                |e| format!("发送交易失败，原因：{}", e),
+                                            );
+                                        (
+                                            Some(trigger_quote_cost),
+                                            Some(trigger_instant.elapsed() - trigger_quote_cost),
+                                            Some(quote_info),
+                                            Some(msg),
+                                        )
+                                    }
                                 } else {
                                     (Some(trigger_instant.elapsed()), None, None, None)
                                 };
-                                let quote_cost = trigger_cost.0.unwrap_or(Duration::from_secs(0));
-                                let execute_cost = trigger_cost.1.unwrap_or(Duration::from_secs(0));
+                                let all_cost = transaction_msg.instant.elapsed().as_micros();
+                                let quote_cost =
+                                    trigger_cost.0.unwrap_or(Duration::from_secs(0)).as_micros();
+                                let execute_cost =
+                                    trigger_cost.1.unwrap_or(Duration::from_secs(0)).as_micros();
                                 let quote_info = trigger_cost.2.unwrap_or("".to_string());
                                 let execute_msg = trigger_cost.3.unwrap_or("".to_string());
                                 info!(
-                                    "Arb_{index} ==> \n🤝Transaction, 总耗时 : {:?}μs\n\
-                                        交易 : {:?}, GRPC推送时间 : {:?}\n\
-                                        GRPC到Processor通道耗时 : {:?}μs, \
-                                        Processor到Arb通道耗时 : {:?}μs, \
-                                        获取变化的Balances耗时 : {:?}ns, \
-                                        计算路由耗时 : {:?}μs, \
-                                        发送交易耗时 : {:?}μs,\n\
-                                        交易路径 : {:?}\n\
-                                        执行结果 : {:?}",
-                                    (grpc_to_processor_cost
-                                        + processor_to_arb_cost
-                                        + get_change_balance_cost
-                                        + quote_cost
-                                        + execute_cost)
-                                        .as_micros(),
-                                    transaction_msg.signature.as_slice().to_base58(),
-                                    transaction_msg
-                                        .received_timestamp
-                                        .format("%Y-%m-%d %H:%M:%S%.9f")
-                                        .to_string(),
-                                    grpc_to_processor_cost.as_micros(),
-                                    processor_to_arb_cost.as_micros(),
-                                    get_change_balance_cost.as_nanos(),
-                                    quote_cost.as_micros(),
-                                    execute_cost.as_micros(),
-                                    quote_info,
-                                    execute_msg,
+                                    "Arb_{index} ==> 🤝耗时 : {:>3}μs\n\
+                                        路由 : {:>3}μs, \
+                                        发送 : {:>3}μs,\n\
+                                        交易路径 : {}\n\
+                                        执行结果 : {}",
+                                    all_cost, quote_cost, execute_cost, quote_info, execute_msg,
                                 );
                             }
                         }
