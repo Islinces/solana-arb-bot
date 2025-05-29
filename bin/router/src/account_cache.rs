@@ -1,4 +1,4 @@
-use crate::data_slice::{slice_data_for_dynamic, slice_data_for_static};
+use crate::data_slice::{slice_data, SliceType};
 use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::FromCache;
@@ -234,7 +234,7 @@ async fn init_raydium_clmm_cache(
                 != crate::data_slice::get_slice_size(
                     dex_type.clone(),
                     AccountType::AmmConfig,
-                    false,
+                    SliceType::Unsubscribed,
                 )
                 .unwrap()
                 .unwrap()
@@ -264,7 +264,7 @@ async fn init_raydium_clmm_cache(
                 != crate::data_slice::get_slice_size(
                     dex_type.clone(),
                     AccountType::TickArrayBitmapExtension,
-                    true,
+                    SliceType::Subscribed,
                 )
                 .unwrap()
                 .unwrap()
@@ -737,16 +737,18 @@ async fn base_get_account_with_data_slice(
         .into_iter()
         .map(|account| {
             account.map_or((None, None), |acc| {
-                let dynamic_data = slice_data_for_dynamic(
+                let dynamic_data = slice_data(
                     dex_type.clone(),
                     account_type.clone(),
                     acc.data.as_slice(),
+                    SliceType::Subscribed,
                 )
                 .map_or(None, |v| Some(v));
-                let static_data = slice_data_for_static(
+                let static_data = slice_data(
                     dex_type.clone(),
                     account_type.clone(),
                     acc.data.as_slice(),
+                    SliceType::Unsubscribed,
                 )
                 .map_or(None, |v| Some(v));
                 (dynamic_data, static_data)

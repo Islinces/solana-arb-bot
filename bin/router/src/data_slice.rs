@@ -11,20 +11,21 @@ use tokio::sync::OnceCell;
 // mint vault
 pub static DYNAMIC_MINT_VAULT_SLICE: OnceCell<([(usize, usize); 1], usize)> = OnceCell::const_new();
 
-pub fn slice_data_for_static(
+pub fn slice_data(
     dex_type: DexType,
     account_type: AccountType,
     data: &[u8],
+    slice_type: SliceType,
 ) -> anyhow::Result<Vec<u8>> {
     match dex_type {
         DexType::RaydiumAMM => {
-            crate::dex::raydium_amm::data_slice::slice_data_for_static(account_type, data)
+            crate::dex::raydium_amm::data_slice::slice_data(account_type, data, slice_type)
         }
         DexType::RaydiumCLMM => {
-            crate::dex::raydium_clmm::data_slice::slice_data_for_static(account_type, data)
+            crate::dex::raydium_clmm::data_slice::slice_data(account_type, data, slice_type)
         }
         DexType::PumpFunAMM => {
-            crate::dex::pump_fun::data_slice::slice_data_for_static(account_type, data)
+            crate::dex::pump_fun::data_slice::slice_data(account_type, data, slice_type)
         }
         DexType::MeteoraDLMM => {
             unreachable!()
@@ -32,31 +33,15 @@ pub fn slice_data_for_static(
     }
 }
 
-pub fn slice_data_for_dynamic(
-    dex_type: DexType,
-    account_type: AccountType,
+pub fn slice_data_auto_get_dex_type(
+    account_key: &Pubkey,
+    owner: &Pubkey,
     data: &[u8],
+    slice_type: SliceType,
 ) -> anyhow::Result<Vec<u8>> {
-    match dex_type {
-        DexType::RaydiumAMM => {
-            crate::dex::raydium_amm::data_slice::slice_data_for_dynamic(account_type, data)
-        }
-        DexType::RaydiumCLMM => {
-            crate::dex::raydium_clmm::data_slice::slice_data_for_dynamic(account_type, data)
-        }
-        DexType::PumpFunAMM => {
-            crate::dex::pump_fun::data_slice::slice_data_for_dynamic(account_type, data)
-        }
-        DexType::MeteoraDLMM => {
-            unreachable!()
-        }
-    }
-}
-
-pub fn slice_data(account_key: &Pubkey, owner: &Pubkey, data: &[u8]) -> anyhow::Result<Vec<u8>> {
     match crate::account_relation::get_dex_type_and_account_type(owner, account_key) {
         None => Err(anyhow!("")),
-        Some((dex_type, account_type)) => slice_data_for_dynamic(dex_type, account_type, data),
+        Some((dex_type, account_type)) => slice_data(dex_type, account_type, data, slice_type),
     }
 }
 
@@ -97,28 +82,31 @@ pub fn init_data_slice_config() {
 
 fn init_mint_vault_data_slice() {
     // amount
-    DYNAMIC_MINT_VAULT_SLICE
-        .set(([(64, 64 + 8)], 8))
-        .unwrap();
+    DYNAMIC_MINT_VAULT_SLICE.set(([(64, 64 + 8)], 8)).unwrap();
 }
 
 pub fn get_slice_size(
     dex_type: DexType,
     account_type: AccountType,
-    dynamic_flag: bool,
+    slice_type: SliceType,
 ) -> anyhow::Result<Option<usize>> {
     match dex_type {
         DexType::RaydiumAMM => {
-            crate::dex::raydium_amm::data_slice::get_slice_size(account_type, dynamic_flag)
+            crate::dex::raydium_amm::data_slice::get_slice_size(account_type, slice_type)
         }
         DexType::RaydiumCLMM => {
-            crate::dex::raydium_clmm::data_slice::get_slice_size(account_type, dynamic_flag)
+            crate::dex::raydium_clmm::data_slice::get_slice_size(account_type, slice_type)
         }
         DexType::PumpFunAMM => {
-            crate::dex::pump_fun::data_slice::get_slice_size(account_type, dynamic_flag)
+            crate::dex::pump_fun::data_slice::get_slice_size(account_type, slice_type)
         }
         DexType::MeteoraDLMM => {
             unimplemented!()
         }
     }
+}
+
+pub enum SliceType {
+    Subscribed,
+    Unsubscribed,
 }

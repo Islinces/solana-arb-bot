@@ -1,4 +1,5 @@
 use crate::data_slice;
+use crate::data_slice::SliceType;
 use crate::state::{GrpcMessage, GrpcTransactionMsg};
 use ahash::RandomState;
 use borsh::BorshDeserialize;
@@ -67,10 +68,11 @@ impl MessageProcessor {
 
     fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, mut data: Vec<u8>) -> (u128, u128) {
         let slice_data_instant = Instant::now();
-        let sliced_data = data_slice::slice_data(
+        let sliced_data = data_slice::slice_data_auto_get_dex_type(
             &Pubkey::try_from_slice(account_key.as_slice()).unwrap(),
             &Pubkey::try_from_slice(owner.as_slice()).unwrap(),
             &mut data,
+            SliceType::Subscribed,
         );
         let slice_data_cost = slice_data_instant.elapsed().as_nanos();
         let now = Instant::now();

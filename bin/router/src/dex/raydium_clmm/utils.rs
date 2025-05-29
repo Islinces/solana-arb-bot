@@ -5,7 +5,6 @@ use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::raydium_clmm::{liquidity_math, swap_math, tick_math};
 use crate::interface::DexType;
 use anyhow::Result;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Neg};

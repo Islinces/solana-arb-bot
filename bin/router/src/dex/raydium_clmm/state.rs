@@ -106,7 +106,7 @@ impl PoolState {
             let liquidity = read_u128(&dynamic_data[0..16]);
             let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
             let tick_current = read_i32(&dynamic_data[32..36]);
-            let mut tick_array_bitmap = ptr::read_unaligned(
+            let tick_array_bitmap = ptr::read_unaligned(
                 dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
             );
             // let mut tick_array_bitmap = [0; 16];

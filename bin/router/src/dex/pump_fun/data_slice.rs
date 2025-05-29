@@ -1,4 +1,4 @@
-use crate::data_slice::{retain_intervals_unsafe, DYNAMIC_MINT_VAULT_SLICE};
+use crate::data_slice::{retain_intervals_unsafe, SliceType, DYNAMIC_MINT_VAULT_SLICE};
 use crate::interface::AccountType;
 use anyhow::anyhow;
 use tokio::sync::OnceCell;
@@ -10,61 +10,56 @@ static STATIC_PUMP_FUN_POOL_SLICE: OnceCell<([(usize, usize); 5], usize)> = Once
 static STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE: OnceCell<([(usize, usize); 2], usize)> =
     OnceCell::const_new();
 
-pub fn slice_data_for_static(account_type: AccountType, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-    match account_type {
-        AccountType::Pool => Ok(retain_intervals_unsafe(
-            data,
-            &STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().0,
-            STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().1,
-        )),
-        AccountType::PumpFunGlobalConfig => Ok(retain_intervals_unsafe(
-            data,
-            &STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().0,
-            STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().1,
-        )),
-        AccountType::MintVault => Err(anyhow!("")),
-        _ => Err(anyhow!("")),
-    }
-}
-
-pub fn slice_data_for_dynamic(account_type: AccountType, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-    match account_type {
-        AccountType::MintVault => Ok(retain_intervals_unsafe(
-            data,
-            &DYNAMIC_MINT_VAULT_SLICE.get().unwrap().0,
-            DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1,
-        )),
-        _ => Err(anyhow!("")),
+pub fn slice_data(
+    account_type: AccountType,
+    data: &[u8],
+    slice_type: SliceType,
+) -> anyhow::Result<Vec<u8>> {
+    match slice_type {
+        SliceType::Subscribed => match account_type {
+            AccountType::MintVault => Ok(retain_intervals_unsafe(
+                data,
+                &DYNAMIC_MINT_VAULT_SLICE.get().unwrap().0,
+                DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1,
+            )),
+            _ => Err(anyhow!("")),
+        },
+        SliceType::Unsubscribed => match account_type {
+            AccountType::Pool => Ok(retain_intervals_unsafe(
+                data,
+                &STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().0,
+                STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().1,
+            )),
+            AccountType::PumpFunGlobalConfig => Ok(retain_intervals_unsafe(
+                data,
+                &STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().0,
+                STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().1,
+            )),
+            AccountType::MintVault => Err(anyhow!("")),
+            _ => Err(anyhow!("")),
+        },
     }
 }
 
 pub fn get_slice_size(
     account_type: AccountType,
-    dynamic_flag: bool,
+    slice_type: SliceType,
 ) -> anyhow::Result<Option<usize>> {
-    match account_type {
-        AccountType::Pool => {
-            if dynamic_flag {
-                Ok(None)
-            } else {
-                Ok(Some(STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().1))
-            }
-        }
-        AccountType::MintVault => {
-            if dynamic_flag {
-                Ok(Some(DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1))
-            } else {
-                Ok(None)
-            }
-        }
-        AccountType::PumpFunGlobalConfig => {
-            if dynamic_flag {
-                Ok(None)
-            } else {
+    match slice_type {
+        SliceType::Subscribed => match account_type {
+            AccountType::Pool => Ok(None),
+            AccountType::MintVault => Ok(Some(DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1)),
+            AccountType::PumpFunGlobalConfig => Ok(None),
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
+        SliceType::Unsubscribed => match account_type {
+            AccountType::Pool => Ok(Some(STATIC_PUMP_FUN_POOL_SLICE.get().unwrap().1)),
+            AccountType::MintVault => Ok(None),
+            AccountType::PumpFunGlobalConfig => {
                 Ok(Some(STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE.get().unwrap().1))
             }
-        }
-        _ => Err(anyhow!("DexType和AccountType不匹配")),
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
     }
 }
 

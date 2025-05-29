@@ -1,4 +1,4 @@
-use crate::data_slice::retain_intervals_unsafe;
+use crate::data_slice::{retain_intervals_unsafe, SliceType};
 use crate::interface::AccountType;
 use anyhow::anyhow;
 use tokio::sync::OnceCell;
@@ -21,87 +21,79 @@ static STATIC_RAYDIUM_CLMM_POOL_SLICE: OnceCell<([(usize, usize); 7], usize)> =
 static STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE: OnceCell<([(usize, usize); 1], usize)> =
     OnceCell::const_new();
 
-pub fn slice_data_for_static(account_type: AccountType, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-    match account_type {
-        AccountType::Pool => Ok(retain_intervals_unsafe(
-            data,
-            &STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
-            STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
-        )),
-        AccountType::AmmConfig => Ok(retain_intervals_unsafe(
-            data,
-            &STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().0,
-            STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().1,
-        )),
-        _ => Err(anyhow!("")),
-    }
-}
-
-pub fn slice_data_for_dynamic(account_type: AccountType, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-    match account_type {
-        AccountType::Pool => Ok(retain_intervals_unsafe(
-            data,
-            &DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
-            DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
-        )),
-        AccountType::TickArrayState => Ok(retain_intervals_unsafe(
-            data,
-            &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
-                .get()
-                .unwrap()
-                .0
-                .as_slice(),
-            DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
-        )),
-        AccountType::TickArrayBitmapExtension => Ok(retain_intervals_unsafe(
-            data,
-            &DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
-                .get()
-                .unwrap()
-                .0
-                .as_slice(),
-            DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
-        )),
-        _ => Err(anyhow!("")),
+pub fn slice_data(
+    account_type: AccountType,
+    data: &[u8],
+    slice_type: SliceType,
+) -> anyhow::Result<Vec<u8>> {
+    match slice_type {
+        SliceType::Subscribed => match account_type {
+            AccountType::Pool => Ok(retain_intervals_unsafe(
+                data,
+                &DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
+                DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
+            )),
+            AccountType::TickArrayState => Ok(retain_intervals_unsafe(
+                data,
+                &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
+                    .get()
+                    .unwrap()
+                    .0
+                    .as_slice(),
+                DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
+            )),
+            AccountType::TickArrayBitmapExtension => Ok(retain_intervals_unsafe(
+                data,
+                &DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
+                    .get()
+                    .unwrap()
+                    .0
+                    .as_slice(),
+                DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
+            )),
+            _ => Err(anyhow!("")),
+        },
+        SliceType::Unsubscribed => match account_type {
+            AccountType::Pool => Ok(retain_intervals_unsafe(
+                data,
+                &STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
+                STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
+            )),
+            AccountType::AmmConfig => Ok(retain_intervals_unsafe(
+                data,
+                &STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().0,
+                STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().1,
+            )),
+            _ => Err(anyhow!("")),
+        },
     }
 }
 
 pub fn get_slice_size(
     account_type: AccountType,
-    dynamic_flag: bool,
+    slice_type: SliceType,
 ) -> anyhow::Result<Option<usize>> {
-    match account_type {
-        AccountType::Pool => Ok(Some(if dynamic_flag {
-            DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1
-        } else {
-            STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1
-        })),
-        AccountType::AmmConfig => {
-            if dynamic_flag {
-                Ok(None)
-            } else {
+    match slice_type {
+        SliceType::Subscribed => match account_type {
+            AccountType::Pool => Ok(Some(DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1)),
+            AccountType::AmmConfig => Ok(None),
+            AccountType::TickArrayState => Ok(Some(
+                DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
+            )),
+            AccountType::TickArrayBitmapExtension => Ok(Some(
+                DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
+            )),
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
+        SliceType::Unsubscribed => match account_type {
+            AccountType::Pool => Ok(Some(STATIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1)),
+            AccountType::AmmConfig => {
                 Ok(Some(STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().1))
             }
-        }
-        AccountType::TickArrayState => {
-            if dynamic_flag {
-                Ok(Some(
-                    DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
-                ))
-            } else {
-                Ok(None)
-            }
-        }
-        AccountType::TickArrayBitmapExtension => {
-            if dynamic_flag {
-                Ok(Some(
-                    DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
-                ))
-            } else {
-                Ok(None)
-            }
-        }
-        _ => Err(anyhow!("DexType和AccountType不匹配")),
+            AccountType::TickArrayState => Ok(None),
+            AccountType::TickArrayBitmapExtension => Ok(None),
+            _ => Err(anyhow!("DexType和AccountType不匹配")),
+        },
     }
 }
 
