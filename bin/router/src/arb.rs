@@ -2,8 +2,6 @@ use crate::executor::Executor;
 use crate::quoter::QuoteResult;
 use crate::state::{BalanceChangeInfo, GrpcTransactionMsg};
 use base58::ToBase58;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use std::time::Duration;
@@ -70,7 +68,7 @@ impl Arb {
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
                                 if let Some(quote_result) =
-                                    Self::trigger_quote(arb_min_profit, changed_balances)
+                                    Self::trigger_quote(arb_min_profit, changed_balances).await
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{:?}", quote_result);
@@ -140,21 +138,34 @@ impl Arb {
         }
     }
 
-    fn trigger_quote(arb_min_profit: u64, balances: Vec<BalanceChangeInfo>) -> Option<QuoteResult> {
+    async fn trigger_quote(
+        arb_min_profit: u64,
+        balances: Vec<BalanceChangeInfo>,
+    ) -> Option<QuoteResult> {
         // TODO 配置
         let amount_in_mint = spl_token::native_mint::ID;
-        balances
-            // 多个pool并行quote
-            .into_par_iter()
-            .filter_map(|balance_change_info| {
-                crate::quoter::find_best_hop_path(
-                    &balance_change_info.pool_id,
-                    &amount_in_mint,
-                    // TODO
-                    10000,
-                    arb_min_profit,
-                )
-            })
-            .max_by_key(|quote_result| quote_result.profit)
+        crate::quoter::find_best_hop_path(
+            balances.first().unwrap().pool_id,
+            amount_in_mint,
+            // TODO
+            10000,
+            arb_min_profit,
+        )
+        .await
+
+        // // TODO 所有的？
+        // balances
+        //     // 多个pool并行quote
+        //     .into_par_iter()
+        //     .filter_map(|balance_info| {
+        //         crate::quoter::find_best_hop_path(
+        //             &balance_info.pool_id,
+        //             &amount_in_mint,
+        //             // TODO
+        //             10000,
+        //             arb_min_profit,
+        //         )
+        //     })
+        //     .max_by_key(|quote_result| quote_result.profit)
     }
 }

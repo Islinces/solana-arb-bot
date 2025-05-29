@@ -95,12 +95,30 @@ impl TwoHopPath {
     }
 
     #[inline]
-    pub fn swaped_mint(&self) -> &usize {
+    pub fn swaped_mint_index(&self) -> &usize {
         if self.first.swap_direction {
             &self.first.mint_0
         } else {
             &self.first.mint_1
         }
+    }
+
+    #[inline]
+    pub fn swaped_mint(&self) -> Option<Pubkey> {
+        find_mint_by_index(if self.first.swap_direction {
+            self.first.mint_0
+        } else {
+            self.first.mint_1
+        })
+    }
+
+    #[inline]
+    pub fn use_ternary_search(&self, pool_index: usize) -> bool {
+        use DexType::{PumpFunAMM, RaydiumAMM};
+
+        self.first.pool == pool_index
+            && matches!(self.first.dex_type, PumpFunAMM | RaydiumAMM)
+            && matches!(self.second.dex_type, PumpFunAMM | RaydiumAMM)
     }
 
     #[inline]
@@ -167,7 +185,7 @@ fn init_two_hop_graph(
                 .filter_map(|second| TwoHopPath::new(first, second))
                 .filter_map(|hop_path| {
                     // 忽略掉不关注的Mint关联的路径
-                    if follow_mints.contains(hop_path.swaped_mint()) {
+                    if follow_mints.contains(hop_path.swaped_mint_index()) {
                         Some(hop_path)
                     } else {
                         None
@@ -215,14 +233,10 @@ pub fn find_mint_by_index(index: usize) -> Option<Pubkey> {
     MINT_INDEX.get()?.get(index).cloned()
 }
 
-pub fn _get_graph_with_pool_id(pool_id: &Pubkey) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
-    get_graph_with_pool_index(&find_pool_position(pool_id)?)
-}
-
-pub fn get_graph_with_pool_index(pool_index: &usize) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
+pub fn get_graph_with_pool_index(pool_index: usize) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
     GRAPH
         .get()
         .unwrap()
-        .get(pool_index)
+        .get(&pool_index)
         .map_or(None, |v| Some(v.clone()))
 }

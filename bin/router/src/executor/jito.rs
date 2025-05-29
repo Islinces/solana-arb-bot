@@ -181,7 +181,7 @@ impl JitoExecutor {
 
         let jupiter_swap_result = crate::jupiter::build_jupiter_swap_ix(
             quote_result.to_instructions().unwrap(),
-            quote_result.amount_in_mint,
+            quote_result.swaped_mint().unwrap(),
             quote_result.amount_in,
             tip,
         );

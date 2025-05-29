@@ -92,7 +92,6 @@ impl MessageProcessor {
     }
 
     async fn init_account_cache(&self) {
-        // TODO : 初始化缓存
         ACCOUNT_CACHE
             .get_or_init(|| async {
                 DashMap::with_capacity_and_hasher_and_shard_amount(10_000, RandomState::new(), 128)
