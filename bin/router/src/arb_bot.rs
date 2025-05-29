@@ -79,7 +79,6 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     } else {
         false
     };
-    let executor = JitoExecutor::initialize(&command)?;
     let rpc_client = Arc::new(RpcClient::new(rpc_url));
     // 0.初始化钱包，ata账户，blockhash
     // 1.初始化各个Account的切片规则
@@ -116,7 +115,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         arb_mint,
         arb_mint_bps_numerator,
         arb_mint_bps_denominator,
-        executor,
+        JitoExecutor::initialize(&command)?,
     )
     .start(&mut join_set, &cached_message_sender)
     .await;
