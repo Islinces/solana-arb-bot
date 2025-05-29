@@ -33,11 +33,17 @@ pub struct Command {
     #[arg(long)]
     pub jito_uuid: Option<String>,
     #[arg(long, default_values = ["So11111111111111111111111111111111111111112"])]
-    follow_mints: Vec<String>,
+    follow_mints: Vec<Pubkey>,
     #[arg(long)]
     pub arb_bot_name: Option<String>,
     #[arg(long, default_value = "1")]
     arb_size: usize,
+    #[arg(long, default_value = "So11111111111111111111111111111111111111112")]
+    arb_mint: Pubkey,
+    #[arg(long, default_value = "70")]
+    arb_mint_bps_numerator: u64,
+    #[arg(long, default_value = "100")]
+    arb_mint_bps_denominator: u64,
     #[arg(long, default_value = "10000")]
     arb_channel_capacity: usize,
     #[arg(long, default_value = "100000")]
@@ -56,18 +62,16 @@ pub struct Command {
 
 pub async fn start_with_custom() -> anyhow::Result<()> {
     let command = Command::parse();
-    let follow_mints = command
-        .follow_mints
-        .clone()
-        .into_iter()
-        .map(|v| Pubkey::from_str(&v).unwrap())
-        .collect::<Vec<_>>();
+    let arb_mint = command.arb_mint.clone();
+    let follow_mints = command.follow_mints.clone();
     let grpc_url = command.grpc_url.clone();
     let rpc_url = command.rpc_url.clone();
     let dex_json_path = command.dex_json_path.clone();
     let keypair_path = command.keypair_path.clone();
     let processor_size = command.processor_size;
     let arb_size = command.arb_size;
+    let arb_mint_bps_numerator = command.arb_mint_bps_numerator;
+    let arb_mint_bps_denominator = command.arb_mint_bps_denominator;
     let arb_min_profit = command.arb_min_profit;
     // Account本地缓存更新后广播通道容量
     let arb_channel_capacity = command.arb_channel_capacity;
@@ -86,6 +90,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     let dex_data = init_start_data(
         keypair_path,
         dex_json_path,
+        &arb_mint,
         follow_mints.as_slice(),
         rpc_client,
     )
@@ -106,9 +111,16 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         )
         .await;
     // 接收更新缓存的Account信息，判断是否需要触发route
-    Arb::new(arb_size, arb_min_profit, executor)
-        .start(&mut join_set, &cached_message_sender)
-        .await;
+    Arb::new(
+        arb_size,
+        arb_min_profit,
+        arb_mint,
+        arb_mint_bps_numerator,
+        arb_mint_bps_denominator,
+        executor,
+    )
+    .start(&mut join_set, &cached_message_sender)
+    .await;
     join_set.spawn(async move {
         // 订阅GRPC
         let subscribe = GrpcSubscribe {
@@ -130,13 +142,14 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
 pub async fn init_start_data(
     keypair_path: String,
     dex_json_path: String,
+    arb_mint: &Pubkey,
     follow_mints: &[Pubkey],
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
     // 初始化钱包
     // 初始化钱包关联的ATA账户余额
     // 初始化blockhash
-    crate::metadata::init_metadata(keypair_path, rpc_client.clone()).await?;
+    crate::metadata::init_metadata(keypair_path, arb_mint, rpc_client.clone()).await?;
     // 加载json
     let dex_data = init_dex_json(dex_json_path, follow_mints)?;
     // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)

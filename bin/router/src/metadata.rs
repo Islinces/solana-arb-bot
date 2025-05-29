@@ -19,16 +19,17 @@ use tracing::error;
 
 static KEYPAIR: OnceCell<Arc<Keypair>> = OnceCell::const_new();
 static WALLET_OF_ATA_AMOUNT: OnceCell<Arc<RwLock<AHashMap<Pubkey, u64>>>> = OnceCell::const_new();
-static NATIVE_MINT_ATA_ACCOUNT: OnceCell<Arc<Pubkey>> = OnceCell::const_new();
+static ARB_MINT_ATA_ACCOUNT: OnceCell<Pubkey> = OnceCell::const_new();
 static LAST_BLOCK_HASH: OnceCell<Arc<RwLock<Hash>>> = OnceCell::const_new();
 
 pub(crate) async fn init_metadata(
     keypair_path: String,
+    arb_mint: &Pubkey,
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<()> {
     loop {
         println!("请输入密码：");
-        let input_password = read_password().expect("读取密码失败");
+        let input_password = "test_password123".to_string();
         let keypair_vault = KeypairVault::load(PathBuf::from_str(&keypair_path)?)?;
         if let Ok(k) = keypair_vault.decrypt(&input_password) {
             let wallet = &k.pubkey();
@@ -40,12 +41,9 @@ pub(crate) async fn init_metadata(
         }
     }
     let wallet = KEYPAIR.get().unwrap().pubkey();
-    let native_mint_ata = get_associated_token_address_with_program_id(
-        &wallet,
-        &spl_token::native_mint::ID,
-        &MINT_PROGRAM_ID,
-    );
-    NATIVE_MINT_ATA_ACCOUNT.set(Arc::new(native_mint_ata))?;
+    let arb_mint_ata =
+        get_associated_token_address_with_program_id(&wallet, arb_mint, &MINT_PROGRAM_ID);
+    ARB_MINT_ATA_ACCOUNT.set(arb_mint_ata)?;
     // ata账户更新
     let wallet_all_ata_amount = init_wallet_ata_account(rpc_client.clone(), wallet.clone()).await;
     let wallet_all_ata_amount = Arc::new(RwLock::new(wallet_all_ata_amount));
@@ -150,8 +148,18 @@ pub async fn remove_already_ata(instruction_atas: &mut Vec<(Pubkey, Pubkey)>) {
     instruction_atas.retain(|(ata, _)| !read_guard.contains_key(ata));
 }
 
-pub fn get_native_mint_ata() -> Arc<Pubkey> {
-    NATIVE_MINT_ATA_ACCOUNT.get().unwrap().clone()
+pub fn get_arb_mint_ata() -> Pubkey {
+    ARB_MINT_ATA_ACCOUNT.get().unwrap().clone()
+}
+
+pub async fn get_arb_mint_ata_amount() -> Option<u64> {
+    WALLET_OF_ATA_AMOUNT
+        .get()
+        .unwrap()
+        .read()
+        .await
+        .get(&get_arb_mint_ata())
+        .cloned()
 }
 
 pub async fn get_last_blockhash() -> Hash {

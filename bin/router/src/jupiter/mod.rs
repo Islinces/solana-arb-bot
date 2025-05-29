@@ -4,7 +4,7 @@ use crate::jupiter::jupiter_route::RouteBuilder;
 use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;
 use crate::jupiter::swap::Swap::{Raydium, RaydiumClmm};
-use crate::metadata::{get_keypair, get_native_mint_ata};
+use crate::metadata::{get_arb_mint_ata, get_keypair};
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey;
@@ -34,7 +34,8 @@ pub fn build_jupiter_swap_ix(
     let mut route_plan = Vec::with_capacity(2);
     let mut alts = Vec::with_capacity(2);
     for (index, instruction_item) in instructions.into_iter().enumerate() {
-        let swap = get_jupiter_swap_type(&instruction_item.dex_type, instruction_item.swap_direction);
+        let swap =
+            get_jupiter_swap_type(&instruction_item.dex_type, instruction_item.swap_direction);
         remaining_accounts.push(AccountMeta::new_readonly(
             instruction_item.dex_type.get_ref_program_id().clone(),
             false,
@@ -51,11 +52,11 @@ pub fn build_jupiter_swap_ix(
             output_index: if index == 0 { 1 } else { 0 },
         })
     }
-    let native_mint_ata = get_native_mint_ata().as_ref().clone();
+    let arb_mint_ata = get_arb_mint_ata();
     route_builder
         .user_transfer_authority(get_keypair().pubkey())
-        .user_source_token_account(native_mint_ata)
-        .user_destination_token_account(native_mint_ata)
+        .user_source_token_account(arb_mint_ata)
+        .user_destination_token_account(arb_mint_ata)
         .destination_mint(amount_in_mint)
         .destination_token_account(Some(JUPITER_ID))
         .platform_fee_account(Some(JUPITER_ID))

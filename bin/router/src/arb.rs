@@ -1,8 +1,10 @@
 use crate::executor::Executor;
+use crate::metadata::get_arb_mint_ata_amount;
 use crate::quoter::QuoteResult;
 use crate::state::{BalanceChangeInfo, GrpcTransactionMsg};
 use base58::ToBase58;
 use solana_sdk::pubkey::Pubkey;
+use std::ops::{Div, Mul};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
@@ -14,14 +16,27 @@ use tracing::{error, info, warn};
 pub struct Arb {
     arb_size: usize,
     arb_min_profit: u64,
+    arb_mint: Arc<Pubkey>,
+    arb_mint_bps_numerator: u64,
+    arb_mint_bps_denominator: u64,
     executor: Arc<dyn Executor>,
 }
 
 impl Arb {
-    pub fn new(arb_size: usize, arb_min_profit: u64, executor: Arc<dyn Executor>) -> Self {
+    pub fn new(
+        arb_size: usize,
+        arb_min_profit: u64,
+        arb_mint: Pubkey,
+        arb_mint_bps_numerator: u64,
+        arb_mint_bps_denominator: u64,
+        executor: Arc<dyn Executor>,
+    ) -> Self {
         Self {
             arb_size,
             arb_min_profit,
+            arb_mint: Arc::new(arb_mint),
+            arb_mint_bps_numerator,
+            arb_mint_bps_denominator,
             executor,
         }
     }
@@ -36,6 +51,7 @@ impl Arb {
         for index in 0..arb_size {
             let executor = self.executor.clone();
             let arb_min_profit = self.arb_min_profit.clone();
+            let arb_mint = self.arb_mint.clone();
             let mut receiver = message_cached_sender.subscribe();
             join_set.spawn(async move {
                 loop {
@@ -67,18 +83,20 @@ impl Arb {
                             let trigger_cost = if any_changed {
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
-                                if let Some(quote_result) =
-                                    Self::trigger_quote(arb_min_profit, changed_balances).await
+                                if let Some(quote_result) = Self::trigger_quote(
+                                    arb_min_profit,
+                                    arb_mint.clone(),
+                                    changed_balances,
+                                )
+                                .await
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{:?}", quote_result);
                                     // 有获利路径后生成指令，发送指令
-                                    let msg = match executor.execute(quote_result).await {
-                                        Ok(msg) => msg,
-                                        Err(e) => {
-                                            format!("发送交易失败，原因：{}", e)
-                                        }
-                                    };
+                                    let msg = executor
+                                        .execute(quote_result)
+                                        .await
+                                        .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
                                     (
                                         Some(trigger_quote_cost),
                                         Some(trigger_instant.elapsed() - trigger_quote_cost),
@@ -140,15 +158,21 @@ impl Arb {
 
     async fn trigger_quote(
         arb_min_profit: u64,
+        arb_mint: Arc<Pubkey>,
+        arb_mint_bps_numerator: u64,
+        arb_mint_bps_denominator: u64,
         balances: Vec<BalanceChangeInfo>,
     ) -> Option<QuoteResult> {
-        // TODO 配置
-        let amount_in_mint = spl_token::native_mint::ID;
+        let arb_max_amount_in = get_arb_mint_ata_amount()
+            .await?
+            .mul(arb_mint_bps_numerator)
+            .div(arb_mint_bps_denominator);
         crate::quoter::find_best_hop_path(
             balances.first().unwrap().pool_id,
-            amount_in_mint,
+            arb_mint,
             // TODO
-            10000,
+            10_u64.pow(9),
+            arb_max_amount_in,
             arb_min_profit,
         )
         .await

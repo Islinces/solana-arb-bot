@@ -1,11 +1,10 @@
 use crate::account_cache::get_account_data;
+use crate::arb::Arb;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::PoolState;
 use crate::dex::InstructionItem;
-use crate::graph::{
-    find_mint_position, find_pool_position, EdgeIdentifier, TwoHopPath,
-};
+use crate::graph::{find_mint_position, find_pool_position, EdgeIdentifier, TwoHopPath};
 use crate::interface::DexType;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
@@ -15,8 +14,9 @@ use tokio::task::JoinSet;
 
 pub async fn find_best_hop_path(
     pool_id: Pubkey,
-    amount_in_mint: Pubkey,
+    arb_mint: Arc<Pubkey>,
     amount_in: u64,
+    max_amount_in: u64,
     min_profit: u64,
 ) -> Option<QuoteResult> {
     let pool_index = find_pool_position(&pool_id)?;
@@ -28,18 +28,19 @@ pub async fn find_best_hop_path(
     if use_ternary_search_hop_path.is_empty() && normal_hop_path.is_empty() {
         return None;
     }
+    let amount_in_mint_index = find_mint_position(arb_mint.as_ref())?;
     let mut join_set = JoinSet::new();
     join_set.spawn(async move {
         normal_quote(
             normal_hop_path,
             pool_index,
-            amount_in_mint,
+            amount_in_mint_index,
             amount_in,
             min_profit,
         )
     });
     join_set.spawn(async move {
-        ternary_search_quote(use_ternary_search_hop_path, amount_in, min_profit)
+        ternary_search_quote(use_ternary_search_hop_path, max_amount_in, min_profit)
     });
     join_set
         .join_all()
@@ -52,11 +53,10 @@ pub async fn find_best_hop_path(
 fn normal_quote(
     hop_paths: Vec<Arc<TwoHopPath>>,
     pool_index: usize,
-    amount_in_mint: Pubkey,
+    amount_in_mint_index: usize,
     amount_in: u64,
     min_profit: u64,
 ) -> Option<QuoteResult> {
-    let amount_in_mint_index = find_mint_position(&amount_in_mint)?;
     let (positive_hop_path, reverse_hop_path): (Vec<_>, Vec<_>) = hop_paths
         .iter()
         .filter(|hop| hop.swaped_mint_index() == &amount_in_mint_index)

@@ -1,7 +1,7 @@
 use crate::arb_bot::Command;
 use crate::executor::Executor;
 use crate::interface::MINT_PROGRAM_ID;
-use crate::metadata::{get_keypair, get_last_blockhash, get_native_mint_ata, remove_already_ata};
+use crate::metadata::{get_keypair, get_last_blockhash, get_arb_mint_ata, remove_already_ata};
 use crate::quoter::QuoteResult;
 use anyhow::anyhow;
 use base64::engine::general_purpose;
@@ -223,12 +223,12 @@ impl JitoExecutor {
             &spl_token::native_mint::id(),
             &MINT_PROGRAM_ID,
         ));
-        let source_ata = get_native_mint_ata();
+        let source_ata = get_arb_mint_ata();
 
         // 转移WSQL到ATA账户中
         first_instructions.push(transfer(
             &MINT_PROGRAM_ID,
-            source_ata.as_ref(),
+            &source_ata,
             &dst_ata,
             &wallet,
             &[],
