@@ -2,12 +2,12 @@ use std::path::Path;
 use std::{env, fs};
 
 fn main() {
-    copy_file("keypair_vault.bin");
+    copy_file("keypair.bin");
     copy_file("dex_data.json");
-    // // 源文件：同级目录下的 keypair_vault.bin
-    // let src = Path::new("keypair_vault.bin");
+    // // 源文件：同级目录下的 keypair.bin
+    // let src = Path::new("keypair.bin");
     // if !src.exists() {
-    //     panic!("keypair_vault.bin 文件不存在！");
+    //     panic!("keypair.bin 文件不存在！");
     // }
     //
     // // 获取构建输出目录（根据 Cargo 自动确定）
@@ -29,7 +29,7 @@ fn main() {
     // fs::create_dir_all(&target_dir).expect("无法创建目标目录");
     //
     // // 将文件复制到构建输出目录
-    // let dest = target_dir.join("keypair_vault.bin");
+    // let dest = target_dir.join("keypair.bin");
     // fs::copy(src, &dest).expect("无法复制文件");
     //
     // println!("文件已复制到：{}", dest.display());
@@ -37,7 +37,7 @@ fn main() {
 }
 
 fn copy_file(path: &str) {
-    // 源文件：同级目录下的 keypair_vault.bin
+    // 源文件：同级目录下的 keypair.bin
     let src = Path::new(path);
     if !src.exists() {
         panic!("{:?} 文件不存在！", path);
@@ -64,5 +64,5 @@ fn copy_file(path: &str) {
     let dest = target_dir.join(path);
     fs::copy(src, &dest).expect("无法复制文件");
     println!("文件已复制到：{}", dest.display());
-    // println!("cargo:rerun-if-changed=keypair_vault.bin");
+    // println!("cargo:rerun-if-changed=keypair.bin");
 }

@@ -132,15 +132,13 @@ impl KeypairVault {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use std::str::FromStr;
     use solana_sdk::signature::Keypair;
     use tempfile::tempdir;
 
     #[test]
     fn test_keypair_vault() -> anyhow::Result<()> {
         let temp_dir = tempdir().unwrap();
-        let vault_path = temp_dir.path().join("keypair_vault.bin");
+        let vault_path = temp_dir.path().join("keypair.bin");
         // // Create a test keypair
         let original_keypair = Keypair::new();
         let password = "test_password123";
@@ -150,7 +148,7 @@ mod tests {
 
 
 
-        // let vault_path=PathBuf::from_str("./src/keypair/keypair_vault.bin").unwrap();
+        // let vault_path=PathBuf::from_str("./src/keypair/keypair.bin").unwrap();
         // // Load and decrypt vault
         // let loaded_vault = KeypairVault::load(&vault_path)?;
         // let decrypted_keypair = loaded_vault.decrypt(password)?;
