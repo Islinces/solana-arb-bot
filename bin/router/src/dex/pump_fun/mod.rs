@@ -2,6 +2,7 @@ pub mod data_slice;
 pub mod instruction;
 pub mod quote;
 pub mod state;
+pub mod cache_init;
 
 use rand::Rng;
 use solana_sdk::pubkey;
