@@ -52,6 +52,8 @@ impl Arb {
             let executor = self.executor.clone();
             let arb_min_profit = self.arb_min_profit.clone();
             let arb_mint = self.arb_mint.clone();
+            let arb_mint_bps_numerator = self.arb_mint_bps_numerator.clone();
+            let arb_mint_bps_denominator = self.arb_mint_bps_denominator.clone();
             let mut receiver = message_cached_sender.subscribe();
             join_set.spawn(async move {
                 loop {
@@ -86,6 +88,8 @@ impl Arb {
                                 if let Some(quote_result) = Self::trigger_quote(
                                     arb_min_profit,
                                     arb_mint.clone(),
+                                    arb_mint_bps_numerator,
+                                    arb_mint_bps_denominator,
                                     changed_balances,
                                 )
                                 .await

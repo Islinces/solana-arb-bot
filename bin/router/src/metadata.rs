@@ -29,7 +29,7 @@ pub(crate) async fn init_metadata(
 ) -> anyhow::Result<()> {
     loop {
         println!("请输入密码：");
-        let input_password = "test_password123".to_string();
+        let input_password = read_password().expect("读取密码失败");
         let keypair_vault = KeypairVault::load(PathBuf::from_str(&keypair_path)?)?;
         if let Ok(k) = keypair_vault.decrypt(&input_password) {
             let wallet = &k.pubkey();
@@ -45,8 +45,9 @@ pub(crate) async fn init_metadata(
         get_associated_token_address_with_program_id(&wallet, arb_mint, &MINT_PROGRAM_ID);
     ARB_MINT_ATA_ACCOUNT.set(arb_mint_ata)?;
     // ata账户更新
-    let wallet_all_ata_amount = init_wallet_ata_account(rpc_client.clone(), wallet.clone()).await;
-    let wallet_all_ata_amount = Arc::new(RwLock::new(wallet_all_ata_amount));
+    let wallet_all_ata_amount = Arc::new(RwLock::new(
+        init_wallet_ata_account(rpc_client.clone(), wallet.clone()).await,
+    ));
     let wallet_all_ata_amount_cache = wallet_all_ata_amount.clone();
     WALLET_OF_ATA_AMOUNT.set(wallet_all_ata_amount)?;
     let ata_refresher_rpc_client = rpc_client.clone();
