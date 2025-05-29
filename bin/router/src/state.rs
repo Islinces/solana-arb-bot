@@ -3,6 +3,7 @@ use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Formatter};
 use std::ops::Sub;
+use std::time::Instant;
 use yellowstone_grpc_proto::geyser::{SubscribeUpdateAccount, SubscribeUpdateTransactionInfo};
 use yellowstone_grpc_proto::prelude::{TokenBalance, Transaction, TransactionStatusMeta};
 
@@ -44,6 +45,7 @@ pub struct GrpcTransactionMsg {
     pub meta: Option<TransactionStatusMeta>,
     pub _index: u64,
     pub received_timestamp: DateTime<Local>,
+    pub instant: Instant,
 }
 
 impl From<SubscribeUpdateTransactionInfo> for GrpcTransactionMsg {
@@ -55,6 +57,7 @@ impl From<SubscribeUpdateTransactionInfo> for GrpcTransactionMsg {
             meta: transaction.meta,
             _index: transaction.index,
             received_timestamp: time,
+            instant: Instant::now(),
         }
     }
 }

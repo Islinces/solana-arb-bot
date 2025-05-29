@@ -3,10 +3,10 @@ use crate::data_slice::SliceType;
 use crate::state::{GrpcMessage, GrpcTransactionMsg};
 use ahash::RandomState;
 use borsh::BorshDeserialize;
-use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use flume::Receiver;
 use solana_sdk::pubkey::Pubkey;
+use std::time::Duration;
 use tokio::sync::{broadcast, OnceCell};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -27,7 +27,7 @@ impl MessageProcessor {
         &mut self,
         join_set: &mut JoinSet<()>,
         grpc_message_receiver: &Receiver<GrpcMessage>,
-        cached_message_sender: &broadcast::Sender<(GrpcTransactionMsg, DateTime<Local>)>,
+        cached_message_sender: &broadcast::Sender<(GrpcTransactionMsg, Duration, Instant)>,
     ) {
         // 初始化账户本地缓存
         self.init_account_cache().await;
@@ -37,28 +37,29 @@ impl MessageProcessor {
             join_set.spawn(async move {
                 loop {
                     match grpc_message_receiver.recv_async().await {
-                        Ok(grpc_message) => {
-                            let incoming_processor_timestamp = Local::now();
-                            match grpc_message {
-                                GrpcMessage::Account(account_msg) => {
-                                    let _ = Self::update_cache(
-                                        account_msg.owner_key,
-                                        account_msg.account_key,
-                                        account_msg.data,
-                                    );
-                                }
-                                GrpcMessage::Transaction(transaction_msg) => {
-                                    match cached_message_sender
-                                        .send((transaction_msg, incoming_processor_timestamp))
-                                    {
-                                        Ok(_) => {}
-                                        Err(e) => {
-                                            error!("发送Transaction到Arb失败，原因：{}", e);
-                                        }
+                        Ok(grpc_message) => match grpc_message {
+                            GrpcMessage::Account(account_msg) => {
+                                let _ = Self::update_cache(
+                                    account_msg.owner_key,
+                                    account_msg.account_key,
+                                    account_msg.data,
+                                );
+                            }
+                            GrpcMessage::Transaction(transaction_msg) => {
+                                let grpc_to_processor_cost =
+                                    transaction_msg.instant.elapsed();
+                                match cached_message_sender.send((
+                                    transaction_msg,
+                                    grpc_to_processor_cost,
+                                    Instant::now(),
+                                )) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("发送Transaction到Arb失败，原因：{}", e);
                                     }
                                 }
                             }
-                        }
+                        },
                         Err(_) => {}
                     };
                 }

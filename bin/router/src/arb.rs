@@ -1,16 +1,17 @@
 use crate::executor::Executor;
 use crate::quoter::QuoteResult;
 use crate::state::{BalanceChangeInfo, GrpcTransactionMsg};
-use chrono::{DateTime, Local};
+use base58::ToBase58;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Sender;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 pub struct Arb {
     arb_size: usize,
@@ -30,20 +31,19 @@ impl Arb {
     pub async fn start(
         &self,
         join_set: &mut JoinSet<()>,
-        message_cached_sender: &Sender<(GrpcTransactionMsg, DateTime<Local>)>,
+        message_cached_sender: &Sender<(GrpcTransactionMsg, Duration, Instant)>,
     ) {
         let arb_size = self.arb_size as u64;
 
-        for _ in 0..arb_size {
+        for index in 0..arb_size {
             let executor = self.executor.clone();
             let arb_min_profit = self.arb_min_profit.clone();
             let mut receiver = message_cached_sender.subscribe();
             join_set.spawn(async move {
                 loop {
                     match receiver.recv().await {
-                        Ok((transaction_msg, send_timestamp)) => {
-                            let incoming_arb_timestamp = Local::now();
-                            let instant = Instant::now();
+                        Ok((transaction_msg, grpc_to_processor_cost, processor_send_instant)) => {
+                            let processor_to_arb_cost = processor_send_instant.elapsed();
                             let tx = transaction_msg.transaction.unwrap();
                             let meta = transaction_msg.meta.unwrap();
                             let account_keys = tx
@@ -63,57 +63,69 @@ impl Arb {
                                     BalanceChangeInfo::new(&pre, &post, &account_keys)
                                 })
                                 .collect::<Vec<_>>();
-                            let _get_change_balance_cost = instant.elapsed().as_nanos();
-
-                            let _grpc_to_processor_channel_cost =
-                                (send_timestamp - transaction_msg.received_timestamp)
-                                    .num_microseconds()
-                                    .unwrap() as u128;
-                            let _processor_to_arb_channel_cost =
-                                (incoming_arb_timestamp - send_timestamp)
-                                    .num_microseconds()
-                                    .unwrap() as u128;
-                            if !changed_balances.is_empty() {
+                            let get_change_balance_cost =
+                                processor_send_instant.elapsed() - processor_to_arb_cost;
+                            let any_changed = !changed_balances.is_empty();
+                            let trigger_cost = if any_changed {
                                 // 触发路由计算
-                                match Self::trigger_quote(arb_min_profit, changed_balances) {
-                                    None => {}
-                                    Some(quote_result) => {
-                                        // 有获利路径后生成指令，发送指令
-                                        match executor.execute(quote_result).await {
-                                            Ok(_) => {}
-                                            Err(e) => {
-                                                error!("发送交易失败，原因：{}", e);
-                                            }
+                                let trigger_instant = Instant::now();
+                                if let Some(quote_result) =
+                                    Self::trigger_quote(arb_min_profit, changed_balances)
+                                {
+                                    let trigger_quote_cost = trigger_instant.elapsed();
+                                    let quote_info = format!("{:?}", quote_result);
+                                    // 有获利路径后生成指令，发送指令
+                                    let msg = match executor.execute(quote_result).await {
+                                        Ok(msg) => msg,
+                                        Err(e) => {
+                                            format!("发送交易失败，原因：{}", e)
                                         }
-                                    }
+                                    };
+                                    (
+                                        Some(trigger_quote_cost),
+                                        Some(trigger_instant.elapsed() - trigger_quote_cost),
+                                        Some(quote_info),
+                                        Some(msg),
+                                    )
+                                } else {
+                                    (Some(trigger_instant.elapsed()), None, None, None)
                                 }
-                            }
-                            // if specify_pool
-                            //     .is_none_or(|v| changed_balances.iter().any(|t| &t.pool_id == &v))
-                            // {
-                            //     info!(
-                            //         "Arb_{index} ==> \n🤝Transaction, 总耗时 : {:?}μs\n\
-                            //             交易 : {:?}, GRPC推送时间 : {:?}\n\
-                            //             GRPC到Processor通道耗时 : {:?}μs, \
-                            //             Processor到Arb通道耗时 : {:?}μs, \
-                            //             获取变化的Balances耗时 : {:?}ns\n\
-                            //             Balance是否发生变化 : {:?}\n\
-                            //             Balances : {:#?}",
-                            //         grpc_to_processor_channel_cost
-                            //             + processor_to_arb_channel_cost
-                            //             + (get_change_balance_cost.div_ceil(1000)),
-                            //         transaction_msg.signature.as_slice().to_base58(),
-                            //         transaction_msg
-                            //             .received_timestamp
-                            //             .format("%Y-%m-%d %H:%M:%S%.9f")
-                            //             .to_string(),
-                            //         grpc_to_processor_channel_cost,
-                            //         processor_to_arb_channel_cost,
-                            //         get_change_balance_cost,
-                            //         any_balance_change,
-                            //         changed_balances,
-                            //     );
-                            // }
+                            } else {
+                                (None, None, None, None)
+                            };
+                            let quote_cost = trigger_cost.0.unwrap_or(Duration::from_secs(0));
+                            let execute_cost = trigger_cost.1.unwrap_or(Duration::from_secs(0));
+                            let quote_info = trigger_cost.2.unwrap_or("".to_string());
+                            let execute_msg = trigger_cost.3.unwrap_or("".to_string());
+                            info!(
+                                "Arb_{index} ==> \n🤝Transaction, 总耗时 : {:?}μs\n\
+                                        交易 : {:?}, GRPC推送时间 : {:?}\n\
+                                        GRPC到Processor通道耗时 : {:?}μs, \
+                                        Processor到Arb通道耗时 : {:?}μs, \
+                                        获取变化的Balances耗时 : {:?}ns, \
+                                        计算路由耗时 : {:?}μs, \
+                                        发送交易耗时 : {:?}μs,\n\
+                                        交易路径 : {:?}\n\
+                                        执行结果 : {:?}",
+                                (grpc_to_processor_cost
+                                    + processor_to_arb_cost
+                                    + get_change_balance_cost
+                                    + quote_cost
+                                    + execute_cost)
+                                    .as_micros(),
+                                transaction_msg.signature.as_slice().to_base58(),
+                                transaction_msg
+                                    .received_timestamp
+                                    .format("%Y-%m-%d %H:%M:%S%.9f")
+                                    .to_string(),
+                                grpc_to_processor_cost.as_micros(),
+                                processor_to_arb_cost.as_micros(),
+                                get_change_balance_cost.as_nanos(),
+                                quote_cost.as_micros(),
+                                execute_cost.as_micros(),
+                                quote_info,
+                                execute_msg,
+                            );
                         }
                         Err(RecvError::Closed) => {
                             error!("action channel closed!");

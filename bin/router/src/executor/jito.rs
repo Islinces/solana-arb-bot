@@ -91,16 +91,16 @@ impl Executor for JitoExecutor {
         }))
     }
 
-    async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<()> {
+    async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<String> {
         match self.create_jito_bundle(quote_result).await {
-            Ok((bundle, _instruction_cost)) => {
+            Ok((bundle, instruction_cost)) => {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
                     .into_iter()
                     .map(|item| bincode::serialize(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
-                // info!("bundles : {:#?}", bundles);
+                info!("bundles : {:#?}", bundles.first());
                 let transactions = json!(bundles);
                 let params = json!([
                     transactions,
@@ -114,8 +114,6 @@ impl Executor for JitoExecutor {
                     "method":"sendBundle",
                     "params": params
                 });
-                // info!("{}", data.to_string());
-                let mut bundle_id;
                 let jito_response = self
                     .client
                     .post(self.jito_url.clone())
@@ -124,10 +122,10 @@ impl Executor for JitoExecutor {
                     .send()
                     .await;
 
-                match jito_response {
+                let bundle_id = match jito_response {
                     Ok(response) => {
                         let v: serde_json::Value = response.json().await?;
-                        bundle_id = if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
+                        if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
                             id.to_owned()
                         } else if let Some(msg) = v
                             .get("error")
@@ -140,24 +138,15 @@ impl Executor for JitoExecutor {
                         }
                     }
                     Err(e) => {
-                        bundle_id = format!("Jito returned error: {}", e);
+                        format!("Jito returned error: {}", e)
                     }
-                }
-                let _send_jito_request_cost = jito_request_start.elapsed();
-
-                // info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}, 计算方向: {}, 计算过程: {}",
-                //     start_time.unwrap().elapsed().as_millis(),
-                //     grpc_cost,
-                //     route_calculate_cost.unwrap(),
-                //     instruction_cost.as_nanos(),
-                //     send_jito_request_cost.as_millis(),
-                //     (amount_in as f64).div(10_i32.pow(9) as f64),
-                //     latest_blockhash.to_string().get(40..).unwrap(),
-                //     bundle_id,
-                //     calc_direction,
-                //     calac_format
-                // );
-                Ok(())
+                };
+                Ok(format!(
+                    "指令 : {:?}, 发送 : {:?}, BundleId : {:? }",
+                    instruction_cost.as_micros(),
+                    jito_request_start.elapsed().as_micros(),
+                    bundle_id
+                ))
             }
             Err(e) => Err(anyhow!("Jito生成bundle失败, {:?}", e)),
         }

@@ -7,6 +7,7 @@ use crate::graph::{find_mint_position, find_pool_position, EdgeIdentifier, TwoHo
 use crate::interface::DexType;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
 pub fn find_best_hop_path(
@@ -160,5 +161,26 @@ impl QuoteResult {
                 unimplemented!()
             }
         }
+    }
+}
+
+impl Display for QuoteResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut formatter = f.debug_struct("QuoteResult");
+        let first = format!(
+            "[{} {:?}]",
+            self.hop_path.first.dex_type.clone(),
+            self.hop_path.first.pool_id().unwrap_or(&Pubkey::default())
+        );
+        let second = format!(
+            "[{} {:?}]",
+            self.hop_path.second.dex_type.clone(),
+            self.hop_path.second.pool_id().unwrap_or(&Pubkey::default())
+        );
+        formatter.field("hop_path", &format!("{} -> {}", first, second));
+        formatter.field("amount_in", &self.amount_in);
+        formatter.field("amount_in_mint", &self.amount_in_mint.to_string());
+        formatter.field("profit", &self.profit);
+        formatter.finish()
     }
 }

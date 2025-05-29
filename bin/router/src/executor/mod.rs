@@ -10,5 +10,5 @@ pub trait Executor: Sync + Send {
     where
         Self: Sized;
 
-    async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<()>;
+    async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<String>;
 }
