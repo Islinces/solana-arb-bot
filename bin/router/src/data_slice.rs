@@ -98,7 +98,7 @@ pub fn init_data_slice_config() {
 fn init_mint_vault_data_slice() {
     // amount
     DYNAMIC_MINT_VAULT_SLICE
-        .set({ ([(64, 64 + 8)], 8) })
+        .set(([(64, 64 + 8)], 8))
         .unwrap();
 }
 

@@ -1,7 +1,6 @@
+use crate::interface::MINT_PROGRAM_ID;
 use crate::keypair::KeypairVault;
-use crate::MINT_PROGRAM;
 use ahash::AHashMap;
-use dashmap::DashMap;
 use rpassword::read_password;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::request::TokenAccountsFilter;
@@ -44,7 +43,7 @@ pub(crate) async fn init_metadata(
     let native_mint_ata = get_associated_token_address_with_program_id(
         &wallet,
         &spl_token::native_mint::ID,
-        &MINT_PROGRAM,
+        &MINT_PROGRAM_ID,
     );
     NATIVE_MINT_ATA_ACCOUNT.set(Arc::new(native_mint_ata))?;
     // ata账户更新
@@ -71,7 +70,12 @@ pub(crate) async fn init_metadata(
     let refresh_interval = Duration::from_millis(500);
     let blockhash_refresh_rpc_client = rpc_client.clone();
     tokio::spawn(async move {
-        blockhash_refresher(blockhash_refresh_rpc_client, blockhash_cache, refresh_interval).await;
+        blockhash_refresher(
+            blockhash_refresh_rpc_client,
+            blockhash_cache,
+            refresh_interval,
+        )
+        .await;
     });
     Ok(())
 }
@@ -100,7 +104,7 @@ async fn init_wallet_ata_account(
     wallet: Pubkey,
 ) -> AHashMap<Pubkey, u64> {
     rpc_client
-        .get_token_accounts_by_owner(&wallet, TokenAccountsFilter::ProgramId(MINT_PROGRAM))
+        .get_token_accounts_by_owner(&wallet, TokenAccountsFilter::ProgramId(MINT_PROGRAM_ID))
         .await
         .unwrap()
         .iter()
@@ -116,11 +120,11 @@ async fn wallet_ata_refresher(
 ) {
     loop {
         match rpc_client
-            .get_token_accounts_by_owner(&wallet, TokenAccountsFilter::ProgramId(MINT_PROGRAM))
+            .get_token_accounts_by_owner(&wallet, TokenAccountsFilter::ProgramId(MINT_PROGRAM_ID))
             .await
         {
             Ok(ata_accounts) => {
-                let mut current_wallet_ata_amount = ata_accounts
+                let current_wallet_ata_amount = ata_accounts
                     .into_iter()
                     .map(|a| (Pubkey::from_str(&a.pubkey).unwrap(), a.account.lamports))
                     .collect::<HashMap<_, _>>();
@@ -141,9 +145,9 @@ pub fn get_keypair() -> Arc<Keypair> {
     KEYPAIR.get().unwrap().clone()
 }
 
-pub async fn remove_already_ata(instruction_atas: &mut Vec<(Pubkey,Pubkey)>) {
+pub async fn remove_already_ata(instruction_atas: &mut Vec<(Pubkey, Pubkey)>) {
     let read_guard = WALLET_OF_ATA_AMOUNT.get().unwrap().read().await;
-    instruction_atas.retain(|(ata,_)| !read_guard.contains_key(ata));
+    instruction_atas.retain(|(ata, _)| !read_guard.contains_key(ata));
 }
 
 pub fn get_native_mint_ata() -> Arc<Pubkey> {

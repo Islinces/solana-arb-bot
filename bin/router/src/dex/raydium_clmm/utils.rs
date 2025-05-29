@@ -1,18 +1,14 @@
-use crate::dex::raydium_clmm::big_num::U128;
 use crate::dex::raydium_clmm::state::{
-    AmmConfig, PoolState, TickArrayBitmapExtension, TickArrayState, TickState,
-    FEE_RATE_DENOMINATOR_VALUE, TICK_ARRAY_SEED,
+    AmmConfig, PoolState, TickArrayBitmapExtension, TickArrayState, TickState, TICK_ARRAY_SEED,
 };
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::raydium_clmm::{liquidity_math, swap_math, tick_math};
 use crate::interface::DexType;
 use anyhow::Result;
-use borsh::BorshDeserialize;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Neg};
-use std::sync::Arc;
 use tracing::error;
 
 // the top level state of the swap, the results of which are recorded in storage at the end
@@ -79,7 +75,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
 }
 
 fn swap_compute(
-    amm_config: &AmmConfig,
+    _amm_config: &AmmConfig,
     zero_for_one: bool,
     is_base_input: bool,
     is_pool_current_tick_array: bool,
@@ -293,7 +289,7 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
     pool_state: &PoolState,
     tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     zero_for_one: bool,
-) -> Vec<Pubkey> {
+) -> Option<Vec<Pubkey>> {
     // 获取当前可用 tick array 的 start index
     let (_, mut current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(tickarray_bitmap_extension, zero_for_one)
@@ -337,5 +333,5 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
         );
         max_array_size -= 1;
     }
-    tick_array_keys
+    (!tick_array_keys.is_empty()).then_some(tick_array_keys)
 }

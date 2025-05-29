@@ -1,7 +1,5 @@
-use crate::dex::InstructionItem;
 use crate::dex_data::DexJson;
-use crate::interface::DexType;
-use crate::MINT_PROGRAM;
+use crate::interface::{DexType, MINT_PROGRAM_ID};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
@@ -52,34 +50,12 @@ impl EdgeIdentifier {
         ]
     }
 
-    fn identifier(&self) -> (usize, bool) {
-        (self.pool, self.swap_direction)
-    }
-
     #[inline]
     pub fn pool_id(&self) -> Option<&Pubkey> {
         POOL_INDEX
             .get()?
             .get(self.pool)
             .map_or(None, |pool| Some(pool))
-    }
-
-    pub fn to_instruction(&self) -> Option<InstructionItem> {
-        match self.dex_type {
-            DexType::RaydiumAMM => crate::dex::raydium_amm::instruction::to_instruction(
-                self.pool_id()?.clone(),
-                self.swap_direction,
-            ),
-            DexType::RaydiumCLMM => {
-                unimplemented!()
-            }
-            DexType::PumpFunAMM => {
-                unimplemented!()
-            }
-            DexType::MeteoraDLMM => {
-                unimplemented!()
-            }
-        }
     }
 }
 
@@ -131,23 +107,16 @@ impl TwoHopPath {
         &self.first.pool == pool_index
     }
 
-    pub fn to_instructions(&self) -> Option<Vec<InstructionItem>> {
-        Some(vec![
-            self.first.to_instruction()?,
-            self.second.to_instruction()?,
-        ])
-    }
-
     pub fn get_relate_mint_ata(&self, wallet: &Pubkey) -> Vec<(Pubkey, Pubkey)> {
         let mint_0 = find_mint_by_index(self.first.mint_0).unwrap();
         let mint_1 = find_mint_by_index(self.first.mint_1).unwrap();
         vec![
             (
-                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM),
+                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM_ID),
                 mint_0,
             ),
             (
-                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM),
+                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM_ID),
                 mint_1,
             ),
         ]
@@ -242,7 +211,7 @@ pub fn find_mint_by_index(index: usize) -> Option<Pubkey> {
     MINT_INDEX.get()?.get(index).cloned()
 }
 
-pub fn get_graph_with_pool_id(pool_id: &Pubkey) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
+pub fn _get_graph_with_pool_id(pool_id: &Pubkey) -> Option<Arc<Vec<Arc<TwoHopPath>>>> {
     get_graph_with_pool_index(&find_pool_position(pool_id)?)
 }
 

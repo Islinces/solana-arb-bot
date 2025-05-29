@@ -1,8 +1,8 @@
 use crate::arb_bot::Command;
 use crate::executor::Executor;
+use crate::interface::MINT_PROGRAM_ID;
 use crate::metadata::{get_keypair, get_last_blockhash, get_native_mint_ata, remove_already_ata};
 use crate::quoter::QuoteResult;
-use crate::MINT_PROGRAM;
 use anyhow::anyhow;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -96,7 +96,7 @@ impl Executor for JitoExecutor {
 
     async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<()> {
         match self.create_jito_bundle(quote_result).await {
-            Ok((bundle, instruction_cost)) => {
+            Ok((bundle, _instruction_cost)) => {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
                     .into_iter()
@@ -146,7 +146,7 @@ impl Executor for JitoExecutor {
                         bundle_id = format!("Jito returned error: {}", e);
                     }
                 }
-                let send_jito_request_cost = jito_request_start.elapsed();
+                let _send_jito_request_cost = jito_request_start.elapsed();
 
                 // info!("耗时: {}ms, GRPC耗时: {}ns, 路由: {}ns, 指令: {}ns, 发送: {}ms, Size: {}, Hash: {:?}, BundleId: {}, 计算方向: {}, 计算过程: {}",
                 //     start_time.unwrap().elapsed().as_millis(),
@@ -194,10 +194,10 @@ impl JitoExecutor {
         let mut used_atas = quote_result.hop_path.get_relate_mint_ata(&wallet);
 
         let jupiter_swap_result = crate::jupiter::build_jupiter_swap_ix(
+            quote_result.to_instructions().unwrap(),
             quote_result.amount_in_mint,
             quote_result.amount_in,
             tip,
-            quote_result.hop_path.to_instructions().unwrap(),
         );
         if jupiter_swap_result.is_none() {
             return Err(anyhow!("生成 Swap ix 失败"));
@@ -209,13 +209,12 @@ impl JitoExecutor {
                 &wallet,
                 &wallet,
                 &mint,
-                &MINT_PROGRAM,
+                &MINT_PROGRAM_ID,
             ));
         }
         first_instructions.push(jupiter_swap_ix);
-        let bot_name = Some("arb-bot");
         // MEMO
-        if let Some(name) = bot_name.as_ref() {
+        if let Some(name) = self.bot_name.as_ref() {
             first_instructions.push(Instruction::new_with_bytes(
                 Pubkey::from_str("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")?,
                 name.as_bytes(),
@@ -229,20 +228,20 @@ impl JitoExecutor {
         let dst_ata = get_associated_token_address_with_program_id(
             &dst_wallet,
             &spl_token::native_mint::id(),
-            &MINT_PROGRAM,
+            &MINT_PROGRAM_ID,
         );
         // 生成ATA账户执行
         first_instructions.push(create_associated_token_account_idempotent(
             &wallet,
             &dst_wallet,
             &spl_token::native_mint::id(),
-            &MINT_PROGRAM,
+            &MINT_PROGRAM_ID,
         ));
         let source_ata = get_native_mint_ata();
 
         // 转移WSQL到ATA账户中
         first_instructions.push(transfer(
-            &MINT_PROGRAM,
+            &MINT_PROGRAM_ID,
             source_ata.as_ref(),
             &dst_ata,
             &wallet,
@@ -275,7 +274,7 @@ impl JitoExecutor {
         second_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(3_500));
         // 关闭WSOL账户，并将WSOL转换为SOL，最终转移到创建的临时钱包中
         second_instructions.push(spl_token::instruction::close_account(
-            &MINT_PROGRAM,
+            &MINT_PROGRAM_ID,
             &dst_ata,
             &dst_wallet,
             &dst_wallet,

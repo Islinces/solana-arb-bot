@@ -1,41 +1,16 @@
 use crate::executor::Executor;
-use crate::graph::TwoHopPath;
-use crate::metadata::{get_keypair, get_last_blockhash, get_native_mint_ata, remove_already_ata};
 use crate::quoter::QuoteResult;
 use crate::state::{BalanceChangeInfo, GrpcTransactionMsg};
-use crate::MINT_PROGRAM;
-use ahash::AHashMap;
-use anyhow::anyhow;
-use base58::ToBase58;
-use base64::engine::general_purpose;
-use base64::Engine;
 use chrono::{DateTime, Local};
-use rand::Rng;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
-use reqwest::Client;
-use serde_json::json;
-use solana_sdk::address_lookup_table::AddressLookupTableAccount;
-use solana_sdk::compute_budget::ComputeBudgetInstruction;
-use solana_sdk::hash::Hash;
-use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::message::v0::Message;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::transaction::VersionedTransaction;
-use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
-use spl_associated_token_account::{get_associated_token_address_with_program_id, solana_program};
-use spl_token::instruction::transfer;
-use std::ops::{Div, Mul};
-use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 pub struct Arb {
     arb_size: usize,
@@ -88,13 +63,13 @@ impl Arb {
                                     BalanceChangeInfo::new(&pre, &post, &account_keys)
                                 })
                                 .collect::<Vec<_>>();
-                            let get_change_balance_cost = instant.elapsed().as_nanos();
+                            let _get_change_balance_cost = instant.elapsed().as_nanos();
 
-                            let grpc_to_processor_channel_cost =
+                            let _grpc_to_processor_channel_cost =
                                 (send_timestamp - transaction_msg.received_timestamp)
                                     .num_microseconds()
                                     .unwrap() as u128;
-                            let processor_to_arb_channel_cost =
+                            let _processor_to_arb_channel_cost =
                                 (incoming_arb_timestamp - send_timestamp)
                                     .num_microseconds()
                                     .unwrap() as u128;

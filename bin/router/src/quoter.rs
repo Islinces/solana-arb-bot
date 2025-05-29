@@ -2,6 +2,7 @@ use crate::account_cache::get_account_data;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::PoolState;
+use crate::dex::InstructionItem;
 use crate::graph::{find_mint_position, find_pool_position, EdgeIdentifier, TwoHopPath};
 use crate::interface::DexType;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -131,6 +132,33 @@ impl QuoteResult {
             amount_in_mint,
             amount_in,
             profit,
+        }
+    }
+
+    pub fn to_instructions(&self) -> Option<Vec<InstructionItem>> {
+        Some(vec![
+            Self::single(self.hop_path.first.as_ref())?,
+            Self::single(self.hop_path.second.as_ref())?,
+        ])
+    }
+
+    fn single(edge: &EdgeIdentifier) -> Option<InstructionItem> {
+        match edge.dex_type {
+            DexType::RaydiumAMM => crate::dex::raydium_amm::instruction::to_instruction(
+                edge.pool_id()?.clone(),
+                edge.swap_direction,
+            ),
+            DexType::RaydiumCLMM => crate::dex::raydium_clmm::instruction::to_instruction(
+                edge.pool_id()?.clone(),
+                edge.swap_direction,
+            ),
+            DexType::PumpFunAMM => crate::dex::pump_fun::instruction::to_instruction(
+                edge.pool_id()?.clone(),
+                edge.swap_direction,
+            ),
+            DexType::MeteoraDLMM => {
+                unimplemented!()
+            }
         }
     }
 }

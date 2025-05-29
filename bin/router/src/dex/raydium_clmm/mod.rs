@@ -12,6 +12,7 @@ mod unsafe_math;
 pub mod utils;
 pub mod quote;
 pub mod data_slice;
+pub mod instruction;
 
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 

@@ -15,7 +15,7 @@ pub struct KeypairVault {
 }
 
 impl KeypairVault {
-    pub fn create(password: &str, keypair: &Keypair) -> anyhow::Result<Self> {
+    pub fn _create(password: &str, keypair: &Keypair) -> anyhow::Result<Self> {
         // Generate random salt for Argon2
         let mut salt_bytes = [0u8; 16];
         OsRng.fill_bytes(&mut salt_bytes);
@@ -62,7 +62,7 @@ impl KeypairVault {
         })
     }
 
-    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+    pub fn _save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&self.salt);
         data.extend_from_slice(&self.nonce);

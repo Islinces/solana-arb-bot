@@ -1,5 +1,4 @@
 use crate::interface::DexType;
-use borsh::BorshDeserialize;
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Formatter};

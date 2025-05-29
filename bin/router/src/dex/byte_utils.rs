@@ -26,11 +26,6 @@ pub unsafe fn read_u64(bytes: &[u8]) -> u64 {
 }
 
 #[inline(always)]
-pub unsafe fn read_i128(bytes: &[u8]) -> i128 {
-    ptr::read_unaligned(bytes.as_ptr() as *const i128)
-}
-
-#[inline(always)]
 pub unsafe fn read_u128(bytes: &[u8]) -> u128 {
     ptr::read_unaligned(bytes.as_ptr() as *const u128)
 }

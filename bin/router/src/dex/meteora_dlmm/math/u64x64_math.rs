@@ -1,6 +1,3 @@
-// Precision when converting from decimal to fixed point. Or the other way around. 10^12
-pub const PRECISION: u128 = 1_000_000_000_000;
-
 // Number of bits to scale. This will decide the position of the radix point.
 pub const SCALE_OFFSET: u8 = 64;
 

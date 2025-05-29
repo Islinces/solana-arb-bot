@@ -1,5 +1,4 @@
 use crate::data_slice::{slice_data_for_dynamic, slice_data_for_static};
-use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::FromCache;
@@ -9,7 +8,6 @@ use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
-use futures_util::task::SpawnExt;
 use parking_lot::RwLock;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
@@ -20,8 +18,7 @@ use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tokio::task::JoinSet;
-use tracing::{error, info};
-use yellowstone_grpc_proto::prost::Message;
+use tracing::error;
 
 static DYNAMIC_ACCOUNT_CACHE: OnceCell<DynamicCache> = OnceCell::const_new();
 static STATIC_ACCOUNT_CACHE: OnceCell<RwLock<StaticCache>> = OnceCell::const_new();
@@ -341,20 +338,26 @@ async fn init_raydium_clmm_cache(
                 .value(),
         ));
         // 前后各10个tick array
-        all_tick_array_state_accounts.extend(load_cur_and_next_specify_count_tick_array_key(
-            10,
-            &pool_id,
-            &pool_state,
-            &tick_array_bitmap_extension,
-            true,
-        ));
-        all_tick_array_state_accounts.extend(load_cur_and_next_specify_count_tick_array_key(
-            10,
-            &pool_id,
-            &pool_state,
-            &tick_array_bitmap_extension,
-            false,
-        ));
+        all_tick_array_state_accounts.extend(
+            load_cur_and_next_specify_count_tick_array_key(
+                10,
+                &pool_id,
+                &pool_state,
+                &tick_array_bitmap_extension,
+                true,
+            )
+            .unwrap(),
+        );
+        all_tick_array_state_accounts.extend(
+            load_cur_and_next_specify_count_tick_array_key(
+                10,
+                &pool_id,
+                &pool_state,
+                &tick_array_bitmap_extension,
+                false,
+            )
+            .unwrap(),
+        );
     }
     // 查询tick array state
     let all_tick_array_state_accounts = all_tick_array_state_accounts

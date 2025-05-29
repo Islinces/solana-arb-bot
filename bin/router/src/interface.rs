@@ -3,7 +3,8 @@ use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Display, Formatter};
 
 pub const ATA_PROGRAM_ID: Pubkey = pubkey!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
-pub const SYSTEM_PROGRAM: Pubkey = pubkey!("11111111111111111111111111111111");
+pub const SYSTEM_PROGRAM_ID: Pubkey = pubkey!("11111111111111111111111111111111");
+pub const MINT_PROGRAM_ID: Pubkey = spl_token::ID;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DexType {
@@ -56,9 +57,11 @@ pub fn get_dex_type_with_program_id(program_id: &Pubkey) -> Option<DexType> {
         Some(DexType::RaydiumAMM)
     } else if program_id == &crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID {
         Some(DexType::PumpFunAMM)
-    } else if program_id == &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID {
-        unimplemented!()
-    } else {
+    }
+    // else if program_id == &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID {
+    //     unimplemented!()
+    // }
+    else {
         unimplemented!()
     }
 }

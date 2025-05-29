@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
-use tracing::{error, info};
+use tracing::error;
 
 #[derive(Parser, Debug)]
 pub struct Command {

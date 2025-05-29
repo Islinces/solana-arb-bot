@@ -38,6 +38,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .with(EnvFilter::new("info"))
         .init();
-    arb_bot::start_with_custom().await;
+    arb_bot::start_with_custom().await?;
     Ok(())
 }

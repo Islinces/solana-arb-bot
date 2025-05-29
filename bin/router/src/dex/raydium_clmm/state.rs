@@ -1,7 +1,5 @@
 use crate::account_cache::{DynamicCache, StaticCache};
-use crate::dex::byte_utils::{
-    read_i128, read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64,
-};
+use crate::dex::byte_utils::{read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64};
 use crate::dex::raydium_clmm::big_num::{U1024, U512};
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::FromCache;
@@ -15,12 +13,7 @@ use std::ptr;
 
 pub const AMM_CONFIG_SEED: &str = "amm_config";
 /// Seed to derive account address and signature
-pub const POOL_SEED: &str = "pool";
-pub const POOL_VAULT_SEED: &str = "pool_vault";
-pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
 pub const POOL_TICK_ARRAY_BITMAP_SEED: &str = "pool_tick_array_bitmap_extension";
-// Number of rewards Token
-pub const REWARD_NUM: usize = 3;
 
 pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
 /// Holds the current owner of the factory
@@ -48,7 +41,7 @@ impl FromCache for AmmConfig {
     }
 }
 
-pub fn pda_amm_config_key(index: u16) -> Pubkey {
+pub fn _pda_amm_config_key(index: u16) -> Pubkey {
     Pubkey::find_program_address(
         &[AMM_CONFIG_SEED.as_bytes(), &index.to_be_bytes()],
         DexType::RaydiumCLMM.get_ref_program_id(),
@@ -282,18 +275,6 @@ impl FromCache for TickArrayState {
 }
 
 impl TickArrayState {
-    pub fn key(&self) -> Pubkey {
-        Pubkey::find_program_address(
-            &[
-                TICK_ARRAY_SEED.as_bytes(),
-                self.pool_id.as_ref(),
-                &self.start_tick_index.to_be_bytes(),
-            ],
-            DexType::RaydiumCLMM.get_ref_program_id(),
-        )
-        .0
-    }
-
     /// Base on swap directioin, return the first initialized tick in the tick array.
     pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> anyhow::Result<&mut TickState> {
         if zero_for_one {
@@ -353,7 +334,7 @@ impl TickArrayState {
     }
 
     /// Base on swap directioin, return the next tick array start index.
-    pub fn next_tick_arrary_start_index(&self, tick_spacing: u16, zero_for_one: bool) -> i32 {
+    pub fn _next_tick_arrary_start_index(&self, tick_spacing: u16, zero_for_one: bool) -> i32 {
         let ticks_in_array = TICK_ARRAY_SIZE * i32::from(tick_spacing);
         if zero_for_one {
             self.start_tick_index - ticks_in_array
@@ -410,19 +391,6 @@ pub struct TickState {
 }
 
 impl TickState {
-    pub fn from_slice_data(slice_data: &[u8]) -> Self {
-        unsafe {
-            let tick = read_i32(&slice_data[0..4]);
-            let liquidity_net = read_i128(&slice_data[4..20]);
-            let liquidity_gross = read_u128(&slice_data[20..36]);
-            Self {
-                tick,
-                liquidity_net,
-                liquidity_gross,
-            }
-        }
-    }
-
     pub fn is_initialized(self) -> bool {
         self.liquidity_gross != 0
     }

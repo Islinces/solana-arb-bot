@@ -1,8 +1,7 @@
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::InstructionItem;
-use crate::interface::DexType;
+use crate::interface::{DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
-use crate::{ATA_PROGRAM, MINT_PROGRAM};
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::Signer;
@@ -13,7 +12,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     let amm_info = crate::account_cache::get_account_data::<AmmInfo>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(17);
     // 1.mint program
-    accounts.push(AccountMeta::new_readonly(MINT_PROGRAM, false));
+    accounts.push(AccountMeta::new_readonly(MINT_PROGRAM_ID, false));
     // 2.pool
     accounts.push(AccountMeta::new(pool_id, false));
     // 3.authority id
@@ -49,18 +48,18 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     let (coin_ata, _) = Pubkey::find_program_address(
         &[
             &wallet.to_bytes(),
-            &MINT_PROGRAM.to_bytes(),
+            &MINT_PROGRAM_ID.to_bytes(),
             &amm_info.coin_vault_mint.to_bytes(),
         ],
-        &ATA_PROGRAM,
+        &ATA_PROGRAM_ID,
     );
     let (pc_ata, _) = Pubkey::find_program_address(
         &[
             &wallet.to_bytes(),
-            &MINT_PROGRAM.to_bytes(),
+            &MINT_PROGRAM_ID.to_bytes(),
             &amm_info.pc_vault_mint.to_bytes(),
         ],
-        &ATA_PROGRAM,
+        &ATA_PROGRAM_ID,
     );
     if swap_direction {
         // 15.coin mint ata

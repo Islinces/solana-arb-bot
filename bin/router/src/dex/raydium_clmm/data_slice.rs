@@ -124,7 +124,7 @@ pub fn init_raydium_clmm_data_slice() {
         })
         .unwrap();
     DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
-        .set({ ([(8, 1832)], 1832 - 8) })
+        .set(([(8, 1832)], 1832 - 8))
         .unwrap();
     DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
         .set({

@@ -1,6 +1,7 @@
+pub mod data_slice;
+pub mod instruction;
 pub mod quote;
 pub mod state;
-pub mod data_slice;
 
 use rand::Rng;
 use solana_sdk::pubkey;
@@ -22,6 +23,5 @@ const PUMPSWAP_FEE_ACCOUNTS: [&str; 8] = [
 ];
 
 pub(crate) fn get_fee_account_with_rand() -> Pubkey {
-    let mut rng = rand::thread_rng();
-    Pubkey::from_str(PUMPSWAP_FEE_ACCOUNTS[rng.gen_range(0..=7)]).unwrap()
+    Pubkey::from_str(PUMPSWAP_FEE_ACCOUNTS[rand::rng().random_range(0..=7)]).unwrap()
 }

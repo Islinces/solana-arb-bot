@@ -54,11 +54,11 @@ fn get_tick_arrays(
         tick_array_bitmap_extension,
         swap_direction,
     );
-    if tick_array_keys.is_empty() {
+    if tick_array_keys.as_ref()?.is_empty() {
         return None;
     }
-    let expect_count = tick_array_keys.len();
-    let deque = tick_array_keys
+    let expect_count = tick_array_keys.as_ref()?.len();
+    let deque = tick_array_keys?
         .into_iter()
         .filter_map(|key| {
             let account_data = crate::account_cache::get_account_data::<TickArrayState>(&key);
