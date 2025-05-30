@@ -77,7 +77,7 @@ fn normal_quote(
                             if has_profit(amount_in, second_amount_out, min_profit) {
                                 Some((hop_path, (second_amount_out - amount_in) as i64))
                             } else {
-                                Some((hop_path, second_amount_out as i64 - amount_in as i64))
+                                None
                             }
                         })
                     })
@@ -93,7 +93,7 @@ fn normal_quote(
                     if has_profit(amount_in, second_amount_out, min_profit) {
                         Some((hop_path, (second_amount_out - amount_in) as i64))
                     } else {
-                        Some((hop_path, second_amount_out as i64 - amount_in as i64))
+                        None
                     }
                 })
             })

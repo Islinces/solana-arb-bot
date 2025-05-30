@@ -40,81 +40,37 @@ impl GrpcSubscribe {
         let mut stream = Self::single_subscribe_grpc(grpc_url, dex_data)
             .await
             .unwrap();
-        if self.standard_program {
-            info!("GRPC 基准程序单订阅成功");
-            let specify_pool = self.specify_pool.clone();
-            while let Some(message) = stream.next().await {
-                match message {
-                    Ok(data) => {
-                        let time = Local::now();
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            let account = account.account.unwrap();
-                            let tx = account.txn_signature.as_ref().unwrap().to_base58();
-                            let account_key = Pubkey::try_from(account.pubkey).unwrap();
-                            if specify_pool.as_ref().is_none()
-                                || specify_pool.as_ref().unwrap() == &account_key.to_string()
-                            {
-                                let timestamp = time.format("%Y-%m-%d %H:%M:%S%.9f").to_string();
-                                info!(
-                                    "基准程序单订阅, tx : {:?}, account : {}, 推送时间 : {:?}",
-                                    tx, account_key, timestamp,
-                                );
-                            }
-                        } else if let Some(UpdateOneof::Transaction(transaction)) =
-                            data.update_oneof
+        info!("GRPC订阅成功, 等待GRPC推送数据");
+        while let Some(message) = stream.next().await {
+            match message {
+                Ok(data) => {
+                    if let Some(UpdateOneof::Account(account)) = data.update_oneof {
+                        match message_sender
+                            .send(GrpcMessage::Account(GrpcAccountMsg::from(account)))
                         {
-                            match transaction.transaction {
-                                None => {}
-                                Some(tx) => {
-                                    info!(
-                                        "基准程序单订阅, tx : {:?}, GRPC推送时间 : {:?}",
-                                        tx.signature.as_slice().to_base58(),
-                                        time.format("%Y-%m-%d %H:%M:%S%.9f").to_string()
-                                    );
-                                }
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("推送GRPC Account消息失败, 原因 : {}", e);
                             }
                         }
-                    }
-                    Err(e) => {
-                        error!("grpc推送消息失败，原因：{}", e)
-                    }
-                }
-            }
-        } else {
-            info!("GRPC 非基准程序单订阅成功, 等待GRPC推送数据");
-            while let Some(message) = stream.next().await {
-                match message {
-                    Ok(data) => {
-                        if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                            match message_sender
-                                .send(GrpcMessage::Account(GrpcAccountMsg::from(account)))
-                            {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    error!("推送GRPC Account消息失败, 原因 : {}", e);
-                                }
-                            }
-                        } else if let Some(UpdateOneof::Transaction(transaction)) =
-                            data.update_oneof
-                        {
-                            match transaction.transaction {
-                                None => {}
-                                Some(tx) => {
-                                    match message_sender.send(GrpcMessage::Transaction(
-                                        GrpcTransactionMsg::from(tx),
-                                    )) {
-                                        Ok(_) => {}
-                                        Err(e) => {
-                                            error!("推送GRPC Transaction消息失败, 原因 : {}", e);
-                                        }
+                    } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
+                        match transaction.transaction {
+                            None => {}
+                            Some(tx) => {
+                                match message_sender
+                                    .send(GrpcMessage::Transaction(GrpcTransactionMsg::from(tx)))
+                                {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("推送GRPC Transaction消息失败, 原因 : {}", e);
                                     }
                                 }
                             }
                         }
                     }
-                    Err(e) => {
-                        error!("grpc推送消息失败，原因：{}", e)
-                    }
+                }
+                Err(e) => {
+                    error!("grpc推送消息失败，原因：{}", e)
                 }
             }
         }

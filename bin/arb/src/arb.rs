@@ -85,7 +85,7 @@ impl Arb {
                             if !changed_balances.is_empty() {
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
-                                let trigger_cost = if let Some(quote_result) = Self::trigger_quote(
+                                if let Some(quote_result) = Self::trigger_quote(
                                     arb_mint.clone(),
                                     arb_amount_in,
                                     arb_min_profit,
@@ -97,41 +97,23 @@ impl Arb {
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{}", quote_result);
-                                    if quote_result.profit < (arb_min_profit as i64) {
-                                        (Some(trigger_quote_cost), None, Some(quote_info), None)
-                                    } else {
-                                        // 有获利路径后生成指令，发送指令
-                                        let msg = match executor.execute(quote_result).await {
-                                            Ok(msg) => msg,
-                                            Err(e) => {
-                                                format!("发送交易失败，原因：{}", e)
-                                            }
-                                        };
-                                        (
-                                            Some(trigger_quote_cost),
-                                            Some(trigger_instant.elapsed() - trigger_quote_cost),
-                                            Some(quote_info),
-                                            Some(msg),
-                                        )
-                                    }
-                                } else {
-                                    (Some(trigger_instant.elapsed()), None, None, None)
-                                };
-                                let all_cost = transaction_msg.instant.elapsed().as_micros();
-                                let quote_cost =
-                                    trigger_cost.0.unwrap_or(Duration::from_secs(0)).as_micros();
-                                let execute_cost =
-                                    trigger_cost.1.unwrap_or(Duration::from_secs(0)).as_micros();
-                                let quote_info = trigger_cost.2.unwrap_or("".to_string());
-                                let execute_msg = trigger_cost.3.unwrap_or("".to_string());
-                                info!(
-                                    "Arb_{index} ==> 耗时 : {:>3}μs, \
-                                        路由 : {:>3}μs, \
-                                        发送 : {:>3}μs, \
-                                        路由结果 : {}, \
-                                        执行结果 : {}",
-                                    all_cost, quote_cost, execute_cost, quote_info, execute_msg,
-                                );
+                                    // 有获利路径后生成指令，发送指令
+                                    let msg = executor
+                                        .execute(quote_result)
+                                        .await
+                                        .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
+                                    let all_cost = transaction_msg.instant.elapsed().as_micros()
+                                        as f64
+                                        / 1000.0;
+                                    let quote_cost = trigger_quote_cost.as_nanos() as f64 / 1000.0;
+                                    info!(
+                                        "Arb_{index} ==> 耗时 : {:>8.2}μs, \
+                                        路由 : {:>8.2}μs, \
+                                        {}
+                                        路径 : {}",
+                                        all_cost, quote_cost, msg, quote_info
+                                    );
+                                }
                             }
                         }
                         Err(RecvError::Closed) => {
@@ -159,7 +141,6 @@ impl Arb {
             .await?
             .mul(arb_mint_bps_numerator)
             .div(arb_mint_bps_denominator);
-        // let arb_max_amount_in = 100000000000;
         crate::quoter::find_best_hop_path(
             balances.first().unwrap().pool_id,
             arb_mint,

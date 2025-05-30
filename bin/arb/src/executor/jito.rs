@@ -100,7 +100,6 @@ impl Executor for JitoExecutor {
                     .map(|item| bincode::serialize(&item).unwrap())
                     .map(|byte| general_purpose::STANDARD.encode(&byte))
                     .collect::<Vec<_>>();
-                info!("bundles : {:#?}", bundles.first());
                 let transactions = json!(bundles);
                 let params = json!([
                     transactions,
@@ -142,10 +141,11 @@ impl Executor for JitoExecutor {
                     }
                 };
                 Ok(format!(
-                    "指令 : {:?}, 发送 : {:?}, BundleId : {:? }",
-                    instruction_cost.as_micros(),
-                    jito_request_start.elapsed().as_micros(),
-                    bundle_id
+                    "指令 : {:>8.2}μs, 发送 : {:>8.2}ms, BundleId : {}, Base64 : {}",
+                    instruction_cost.as_nanos() as f64 / 1000.0,
+                    jito_request_start.elapsed().as_micros() as f64 / 1000.0,
+                    bundle_id,
+                    bundles.first().unwrap_or(&"".to_string()),
                 ))
             }
             Err(e) => Err(anyhow!("Jito生成bundle失败, {:?}", e)),
