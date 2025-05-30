@@ -21,6 +21,8 @@ pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
 pub struct AmmConfig {
     /// The trade fee, denominated in hundredths of a bip (10^-6)
     pub trade_fee_rate: u32,
+    pub protocol_fee_rate: u32,
+    pub fund_fee_rate:u32
 }
 
 impl FromCache for AmmConfig {
@@ -36,6 +38,7 @@ impl FromCache for AmmConfig {
         unsafe {
             Some(Self {
                 trade_fee_rate: read_u32(&static_data),
+                ..Self::default()
             })
         }
     }
