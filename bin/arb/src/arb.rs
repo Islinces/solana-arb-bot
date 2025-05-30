@@ -97,7 +97,7 @@ impl Arb {
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{}", quote_result);
-                                    if (quote_result.profit as u64) < arb_min_profit {
+                                    if quote_result.profit < (arb_min_profit as i64) {
                                         (Some(trigger_quote_cost), None, Some(quote_info), None)
                                     } else {
                                         // 有获利路径后生成指令，发送指令
