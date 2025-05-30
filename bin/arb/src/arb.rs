@@ -97,7 +97,7 @@ impl Arb {
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{}", quote_result);
-                                    if quote_result.profit <= 0 {
+                                    if (quote_result.profit as u64) < arb_min_profit {
                                         (Some(trigger_quote_cost), None, Some(quote_info), None)
                                     } else {
                                         // 有获利路径后生成指令，发送指令
@@ -155,11 +155,11 @@ impl Arb {
         arb_mint_bps_denominator: u64,
         balances: Vec<BalanceChangeInfo>,
     ) -> Option<QuoteResult> {
-        // let arb_max_amount_in = get_arb_mint_ata_amount()
-        //     .await?
-        //     .mul(arb_mint_bps_numerator)
-        //     .div(arb_mint_bps_denominator);
-        let arb_max_amount_in = 100000000000;
+        let arb_max_amount_in = get_arb_mint_ata_amount()
+            .await?
+            .mul(arb_mint_bps_numerator)
+            .div(arb_mint_bps_denominator);
+        // let arb_max_amount_in = 100000000000;
         crate::quoter::find_best_hop_path(
             balances.first().unwrap().pool_id,
             arb_mint,
