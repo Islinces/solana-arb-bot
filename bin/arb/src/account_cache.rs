@@ -66,8 +66,10 @@ impl AltCache {
         self.0.get(pool_id).map_or(None, |v| Some(v.clone()))
     }
 
-    pub fn insert(&mut self, alt: AddressLookupTableAccount) {
-        self.0.entry(alt.key).or_insert(Vec::new()).push(alt);
+    pub fn insert(&mut self, pool_id: Pubkey, alts: Vec<AddressLookupTableAccount>) {
+        if !alts.is_empty() {
+            self.0.insert(pool_id, alts);
+        }
     }
 }
 
@@ -96,19 +98,6 @@ pub async fn init_snapshot(
     ALT_CACHE.set(RwLock::new(AltCache::new()))?;
     for (dex_type, mut dex_data) in dex_data_group {
         info!("【{}】开始初始化Snapshot...", dex_type);
-        // 有效alt
-        let alts = load_lookup_table_accounts(
-            rpc_client.clone(),
-            dex_data
-                .iter()
-                .filter_map(|v| v.address_lookup_table_address)
-                .collect::<Vec<_>>()
-                .as_slice(),
-        )
-        .await;
-        for alt in alts {
-            ALT_CACHE.get().unwrap().write().insert(alt)
-        }
         let mut pool_accounts = Vec::with_capacity(dex_data.len());
         let mut vault_accounts = Vec::with_capacity(dex_data.len() * 2);
         for json in dex_data.iter() {
@@ -151,6 +140,32 @@ pub async fn init_snapshot(
                     .insert(account_key, data)
             });
         }
+        // 有效alt
+        let alts = load_lookup_table_accounts(
+            rpc_client.clone(),
+            dex_data
+                .iter()
+                .filter_map(|v| v.address_lookup_table_address)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .await;
+        dex_data.iter().for_each(|json| {
+            if let Some(address) = json.address_lookup_table_address {
+                ALT_CACHE.get().unwrap().write().insert(
+                    json.pool,
+                    alts.iter()
+                        .filter_map(|alt| {
+                            if alt.key == address {
+                                Some(alt.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>(),
+                );
+            }
+        });
         info!(
             "【{}】初始化Snapshot完毕, 初始化池子数量 : {}",
             dex_type,

@@ -101,10 +101,12 @@ impl Arb {
                                         (Some(trigger_quote_cost), None, Some(quote_info), None)
                                     } else {
                                         // 有获利路径后生成指令，发送指令
-                                        let msg =
-                                            executor.execute(quote_result).await.unwrap_or_else(
-                                                |e| format!("发送交易失败，原因：{}", e),
-                                            );
+                                        let msg = match executor.execute(quote_result).await {
+                                            Ok(msg) => msg,
+                                            Err(e) => {
+                                                format!("发送交易失败，原因：{}", e)
+                                            }
+                                        };
                                         (
                                             Some(trigger_quote_cost),
                                             Some(trigger_instant.elapsed() - trigger_quote_cost),
