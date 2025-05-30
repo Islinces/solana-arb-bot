@@ -2,7 +2,7 @@ use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Display, Formatter};
 
-pub const ATA_PROGRAM_ID: Pubkey = pubkey!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
+pub const ATA_PROGRAM_ID: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 pub const SYSTEM_PROGRAM_ID: Pubkey = pubkey!("11111111111111111111111111111111");
 pub const MINT_PROGRAM_ID: Pubkey = spl_token::ID;
 
