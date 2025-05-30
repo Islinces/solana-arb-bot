@@ -1,6 +1,7 @@
 use crate::data_slice::{retain_intervals_unsafe, SliceType};
 use crate::interface::AccountType;
 use anyhow::anyhow;
+use borsh::BorshDeserialize;
 use tokio::sync::OnceCell;
 
 // ========================= dynamic data 账户订阅的数据切片 =========================
@@ -33,15 +34,27 @@ pub fn slice_data(
                 &DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
                 DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
             )),
-            AccountType::TickArrayState => Ok(retain_intervals_unsafe(
-                data,
-                &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
-                    .get()
-                    .unwrap()
-                    .0
-                    .as_slice(),
-                DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
-            )),
+            AccountType::TickArrayState => {
+                let borsh_data =
+                    crate::dex::raydium_clmm::copy_tick_array::TickArrayState::try_from_slice(
+                        &data[8..],
+                    );
+                let result = Ok(retain_intervals_unsafe(
+                    data,
+                    &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
+                        .get()
+                        .unwrap()
+                        .0
+                        .as_slice(),
+                    DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
+                ));
+
+                // info!("borsh_data : {:#?}", borsh_data);
+                // info!("slice_data : {:#?}", unsafe {
+                //     ptr::read_unaligned(result.as_ref().unwrap().as_slice().as_ptr() as *const TickArrayState)
+                // });
+                result
+            }
             AccountType::TickArrayBitmapExtension => Ok(retain_intervals_unsafe(
                 data,
                 &DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
@@ -155,8 +168,8 @@ pub fn init_raydium_clmm_data_slice() {
                 start_index += 13 * 4;
             }
             // initialized_tick_count
-            data_slice.push((start_index, start_index + 1));
-            total_len += 1;
+            // data_slice.push((start_index, start_index + 1));
+            // total_len += 1;
             (data_slice, total_len)
         })
         .unwrap();

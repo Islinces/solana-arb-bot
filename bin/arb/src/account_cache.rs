@@ -41,6 +41,10 @@ impl DynamicCache {
     pub fn get(&self, account_key: &Pubkey) -> Option<Ref<Pubkey, Vec<u8>>> {
         self.0.get(account_key).map_or(None, |v| Some(v))
     }
+
+    pub fn insert(&self, account_key: Pubkey, data: Vec<u8>) -> Option<Vec<u8>> {
+        self.0.insert(account_key, data)
+    }
 }
 
 impl StaticCache {
@@ -60,6 +64,10 @@ impl AltCache {
 
     pub fn get(&self, pool_id: &Pubkey) -> Option<Vec<AddressLookupTableAccount>> {
         self.0.get(pool_id).map_or(None, |v| Some(v.clone()))
+    }
+
+    pub fn insert(&mut self, alt: AddressLookupTableAccount) {
+        self.0.entry(alt.key).or_insert(Vec::new()).push(alt);
     }
 }
 
@@ -89,7 +97,7 @@ pub async fn init_snapshot(
     for (dex_type, mut dex_data) in dex_data_group {
         info!("【{}】开始初始化Snapshot...", dex_type);
         // 有效alt
-        let alt_map = load_lookup_table_accounts(
+        let alts = load_lookup_table_accounts(
             rpc_client.clone(),
             dex_data
                 .iter()
@@ -97,7 +105,10 @@ pub async fn init_snapshot(
                 .collect::<Vec<_>>()
                 .as_slice(),
         )
-        .await?;
+        .await;
+        for alt in alts {
+            ALT_CACHE.get().unwrap().write().insert(alt)
+        }
         let mut pool_accounts = Vec::with_capacity(dex_data.len());
         let mut vault_accounts = Vec::with_capacity(dex_data.len() * 2);
         for json in dex_data.iter() {
@@ -108,54 +119,37 @@ pub async fn init_snapshot(
         // 剩余有效的dex data，用于订阅使用
         let snapshot_data = match dex_type {
             DexType::RaydiumAMM => {
-                crate::dex::raydium_amm::cache_init::init_cache(
-                    &mut dex_data,
-                    rpc_client.clone(),
-                    pool_accounts,
-                    vault_accounts,
-                    alt_map,
-                )
-                .await
+                crate::dex::raydium_amm::cache_init::init_cache(&mut dex_data, rpc_client.clone())
+                    .await
             }
             DexType::RaydiumCLMM => {
-                crate::dex::raydium_clmm::cache_init::init_cache(
-                    &mut dex_data,
-                    rpc_client.clone(),
-                    pool_accounts,
-                    vault_accounts,
-                    alt_map,
-                )
-                .await
+                crate::dex::raydium_clmm::cache_init::init_cache(&mut dex_data, rpc_client.clone())
+                    .await
             }
             DexType::PumpFunAMM => {
-                crate::dex::pump_fun::cache_init::init_cache(
-                    &mut dex_data,
-                    rpc_client.clone(),
-                    pool_accounts,
-                    vault_accounts,
-                    alt_map,
-                )
-                .await
+                crate::dex::pump_fun::cache_init::init_cache(&mut dex_data, rpc_client.clone())
+                    .await
             }
             DexType::MeteoraDLMM => {
                 unimplemented!()
             }
         };
-        match snapshot_data {
-            None => {
-                warn!("【{}】初始化Snapshot完毕, 无可使用的池子", dex_type,);
-            }
-            Some((static_data, dynamic_data, alts)) => {
-                static_data.into_iter().for_each(|(k, v)| {
-                    STATIC_ACCOUNT_CACHE.get().unwrap().write().0.insert(k, v);
-                });
-                dynamic_data.into_iter().for_each(|(k, v)| {
-                    DYNAMIC_ACCOUNT_CACHE.get().unwrap().0.insert(k, v);
-                });
-                alts.into_iter().for_each(|(k, v)| {
-                    ALT_CACHE.get().unwrap().write().0.insert(k, v);
-                })
-            }
+        for account in snapshot_data {
+            let account_key = account.account_key;
+            account.static_slice_data.and_then(|data| {
+                STATIC_ACCOUNT_CACHE
+                    .get()
+                    .unwrap()
+                    .write()
+                    .0
+                    .insert(account_key, data)
+            });
+            account.dynamic_slice_data.and_then(|data| {
+                DYNAMIC_ACCOUNT_CACHE
+                    .get()
+                    .unwrap()
+                    .insert(account_key, data)
+            });
         }
         info!(
             "【{}】初始化Snapshot完毕, 初始化池子数量 : {}",
@@ -177,7 +171,7 @@ pub async fn get_account_data_with_data_slice(
     dex_type: DexType,
     account_type: AccountType,
     rpc_client: Arc<RpcClient>,
-) -> Vec<Vec<(Option<Vec<u8>>, Option<Vec<u8>>)>> {
+) -> Vec<AccountDataSlice> {
     if accounts.is_empty() {
         return vec![];
     }
@@ -188,22 +182,17 @@ pub async fn get_account_data_with_data_slice(
         let account_type = account_type.clone();
         let account_chunks = account_chunks.to_vec();
         join_set.spawn(async move {
-            base_get_account_with_data_slice(
-                rpc_client,
-                account_chunks.as_slice(),
-                dex_type,
-                account_type,
-            )
-            .await
+            base_get_account_with_data_slice(rpc_client, account_chunks, dex_type, account_type)
+                .await
         });
     }
-    join_set.join_all().await
+    join_set.join_all().await.into_iter().flatten().collect()
 }
 
 async fn load_lookup_table_accounts(
     rpc_client: Arc<RpcClient>,
     all_alts: &[Pubkey],
-) -> anyhow::Result<AHashMap<Pubkey, AddressLookupTableAccount>> {
+) -> Vec<AddressLookupTableAccount> {
     let mut join_set = JoinSet::new();
     for alts in all_alts.chunks(100) {
         let alts = alts.to_vec();
@@ -216,49 +205,44 @@ async fn load_lookup_table_accounts(
                     .flat_map(|(account, pubkey)| match account {
                         None => None,
                         Some(account) => match AddressLookupTable::deserialize(&account.data) {
-                            Ok(lookup_table) => {
-                                let lookup_table_account = AddressLookupTableAccount {
-                                    key: pubkey,
-                                    addresses: lookup_table.addresses.into_owned(),
-                                };
-                                Some((pubkey, lookup_table_account))
-                            }
+                            Ok(lookup_table) => Some(AddressLookupTableAccount {
+                                key: pubkey,
+                                addresses: lookup_table.addresses.into_owned(),
+                            }),
                             Err(e) => {
                                 error!("   Failed to deserialize lookup table {}: {}", pubkey, e);
                                 None
                             }
                         },
                     })
-                    .collect::<AHashMap<_, _>>(),
-                Err(_) => AHashMap::default(),
+                    .collect::<Vec<_>>(),
+                Err(_) => vec![],
             }
         });
     }
-    let mut alt_map = AHashMap::with_capacity(all_alts.len());
-    while let Some(Ok(alt)) = join_set.join_next().await {
-        alt_map.extend(alt);
-    }
-    if alt_map.is_empty() {
-        Err(anyhow!("未找到任何【AddressLookupTableAccount】"))
-    } else {
-        Ok(alt_map)
-    }
+    join_set
+        .join_all()
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
 }
 
 async fn base_get_account_with_data_slice(
     rpc_client: Arc<RpcClient>,
-    accounts: &[Pubkey],
+    accounts: Vec<Pubkey>,
     dex_type: DexType,
     account_type: AccountType,
-) -> Vec<(Option<Vec<u8>>, Option<Vec<u8>>)> {
+) -> Vec<AccountDataSlice> {
     rpc_client
-        .get_multiple_accounts_with_commitment(accounts, CommitmentConfig::finalized())
+        .get_multiple_accounts_with_commitment(accounts.as_slice(), CommitmentConfig::finalized())
         .await
         .unwrap()
         .value
         .into_iter()
-        .map(|account| {
-            account.map_or((None, None), |acc| {
+        .zip(accounts)
+        .map(|(account, account_key)| {
+            account.map_or(AccountDataSlice::new(account_key, None, None), |acc| {
                 let dynamic_data = slice_data(
                     dex_type.clone(),
                     account_type.clone(),
@@ -273,7 +257,7 @@ async fn base_get_account_with_data_slice(
                     SliceType::Unsubscribed,
                 )
                 .map_or(None, |v| Some(v));
-                (dynamic_data, static_data)
+                AccountDataSlice::new(account_key, static_data, dynamic_data)
             })
         })
         .collect::<Vec<_>>()
@@ -287,4 +271,35 @@ pub fn get_account_data<T: FromCache>(pool_id: &Pubkey) -> Option<T> {
 
 pub fn get_alt(pool_id: &Pubkey) -> Option<Vec<AddressLookupTableAccount>> {
     ALT_CACHE.get()?.read().get(pool_id)
+}
+
+pub fn update_cache(account_key: Pubkey, data: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    DYNAMIC_ACCOUNT_CACHE
+        .get()
+        .map_or(Err(anyhow!("")), |cache| {
+            cache
+                .insert(account_key, data)
+                .map_or(Err(anyhow!("")), |pre| Ok(pre))
+        })
+}
+
+#[derive(Clone, Debug)]
+pub struct AccountDataSlice {
+    pub account_key: Pubkey,
+    pub static_slice_data: Option<Vec<u8>>,
+    pub dynamic_slice_data: Option<Vec<u8>>,
+}
+
+impl AccountDataSlice {
+    pub fn new(
+        account_key: Pubkey,
+        static_slice_data: Option<Vec<u8>>,
+        dynamic_slice_data: Option<Vec<u8>>,
+    ) -> Self {
+        Self {
+            account_key,
+            static_slice_data,
+            dynamic_slice_data,
+        }
+    }
 }

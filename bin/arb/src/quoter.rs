@@ -281,20 +281,14 @@ impl QuoteResult {
 
 impl Display for QuoteResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut formatter = f.debug_struct("QuoteResult");
-        let first = format!(
-            "[{} {:?}]",
-            self.hop_path.first.dex_type.clone(),
-            self.hop_path.first.pool_id().unwrap_or(&Pubkey::default())
-        );
-        let second = format!(
-            "[{} {:?}]",
-            self.hop_path.second.dex_type.clone(),
-            self.hop_path.second.pool_id().unwrap_or(&Pubkey::default())
-        );
-        formatter.field("hop_path", &format!("{} -> {}", first, second));
-        formatter.field("amount_in", &self.amount_in);
-        formatter.field("profit", &self.profit);
-        formatter.finish()
+        let binding = Pubkey::default();
+        let first_pool = self.hop_path.first.pool_id().unwrap_or(&binding);
+        let second_pool = self.hop_path.second.pool_id().unwrap_or(&binding);
+        let f_dex_type = &self.hop_path.first.dex_type;
+        let s_dex_type = &self.hop_path.second.dex_type;
+        f.write_str(&format!(
+            "[{} {}] -> [{} {}], amount_in : {}, profit : {}",
+            f_dex_type, first_pool, s_dex_type, second_pool, self.amount_in, self.profit
+        ))
     }
 }

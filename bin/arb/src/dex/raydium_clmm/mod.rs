@@ -14,6 +14,9 @@ pub mod quote;
 pub mod data_slice;
 pub mod instruction;
 pub mod cache_init;
+pub mod copy_pool;
+pub mod copy_tickarray_bitmap_extension;
+pub mod copy_tick_array;
 
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 

@@ -62,7 +62,7 @@ impl Arb {
             join_set.spawn(async move {
                 loop {
                     match receiver.recv().await {
-                        Ok((transaction_msg, _grpc_to_processor_cost, processor_send_instant)) => {
+                        Ok((transaction_msg, _grpc_to_processor_cost, _processor_send_instant)) => {
                             let tx = transaction_msg.transaction.unwrap();
                             let meta = transaction_msg.meta.unwrap();
                             let account_keys = tx
@@ -96,7 +96,7 @@ impl Arb {
                                 .await
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
-                                    let quote_info = format!("{:?}", quote_result);
+                                    let quote_info = format!("{}", quote_result);
                                     if quote_result.profit <= 0 {
                                         (Some(trigger_quote_cost), None, Some(quote_info), None)
                                     } else {
@@ -123,10 +123,10 @@ impl Arb {
                                 let quote_info = trigger_cost.2.unwrap_or("".to_string());
                                 let execute_msg = trigger_cost.3.unwrap_or("".to_string());
                                 info!(
-                                    "Arb_{index} ==> 🤝耗时 : {:>3}μs\n\
+                                    "Arb_{index} ==> 耗时 : {:>3}μs, \
                                         路由 : {:>3}μs, \
-                                        发送 : {:>3}μs,\n\
-                                        交易路径 : {}\n\
+                                        发送 : {:>3}μs, \
+                                        路由结果 : {}, \
                                         执行结果 : {}",
                                     all_cost, quote_cost, execute_cost, quote_info, execute_msg,
                                 );
@@ -153,10 +153,11 @@ impl Arb {
         arb_mint_bps_denominator: u64,
         balances: Vec<BalanceChangeInfo>,
     ) -> Option<QuoteResult> {
-        let arb_max_amount_in = get_arb_mint_ata_amount()
-            .await?
-            .mul(arb_mint_bps_numerator)
-            .div(arb_mint_bps_denominator);
+        // let arb_max_amount_in = get_arb_mint_ata_amount()
+        //     .await?
+        //     .mul(arb_mint_bps_numerator)
+        //     .div(arb_mint_bps_denominator);
+        let arb_max_amount_in = 100000000000;
         crate::quoter::find_best_hop_path(
             balances.first().unwrap().pool_id,
             arb_mint,
@@ -165,20 +166,5 @@ impl Arb {
             arb_min_profit,
         )
         .await
-
-        // // TODO 所有的？
-        // balances
-        //     // 多个pool并行quote
-        //     .into_par_iter()
-        //     .filter_map(|balance_info| {
-        //         crate::quoter::find_best_hop_path(
-        //             &balance_info.pool_id,
-        //             &amount_in_mint,
-        //             // TODO
-        //             10000,
-        //             arb_min_profit,
-        //         )
-        //     })
-        //     .max_by_key(|quote_result| quote_result.profit)
     }
 }

@@ -6,7 +6,7 @@ use solana_sdk::message::AddressLookupTableAccount;
 use solana_sdk::pubkey::Pubkey;
 
 mod amm_math;
-mod byte_utils;
+pub mod byte_utils;
 // pub mod meteora_dlmm;
 pub mod pump_fun;
 pub mod raydium_amm;

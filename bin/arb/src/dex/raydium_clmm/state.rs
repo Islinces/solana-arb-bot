@@ -95,40 +95,60 @@ impl FromCache for PoolState {
 
 impl PoolState {
     pub fn from_slice_data(static_data: &[u8], dynamic_data: &[u8]) -> Self {
-        unsafe {
-            let amm_config = read_pubkey(&static_data[0..32]);
-            let token_mint_0 = read_pubkey(&static_data[32..64]);
-            let token_mint_1 = read_pubkey(&static_data[64..96]);
-            let token_vault_0 = read_pubkey(&static_data[96..128]);
-            let token_vault_1 = read_pubkey(&static_data[128..160]);
-            let observation_key = read_pubkey(&static_data[160..192]);
-            let tick_spacing = read_u16(&static_data[192..194]);
-            let liquidity = read_u128(&dynamic_data[0..16]);
-            let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
-            let tick_current = read_i32(&dynamic_data[32..36]);
-            let tick_array_bitmap = ptr::read_unaligned(
-                dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
-            );
-            // let mut tick_array_bitmap = [0; 16];
-            // for (index, data) in dynamic_data[36..16 + 16 + 4 + 8 * 16]
-            //     .chunks(8)
-            //     .into_iter()
-            //     .enumerate()
-            // {
-            //     tick_array_bitmap[index] = ptr::read_unaligned(data.as_ptr() as *const u64);
-            // }
-            Self {
-                amm_config,
-                token_mint_0,
-                token_mint_1,
-                token_vault_0,
-                token_vault_1,
-                observation_key,
-                tick_spacing,
-                liquidity,
-                sqrt_price_x64,
-                tick_current,
-                tick_array_bitmap,
+        if static_data.len() == 0 {
+            unsafe {
+                // let amm_config = read_pubkey(&static_data[0..32]);
+                // let token_mint_0 = read_pubkey(&static_data[32..64]);
+                // let token_mint_1 = read_pubkey(&static_data[64..96]);
+                // let token_vault_0 = read_pubkey(&static_data[96..128]);
+                // let token_vault_1 = read_pubkey(&static_data[128..160]);
+                // let observation_key = read_pubkey(&static_data[160..192]);
+                // let tick_spacing = read_u16(&static_data[192..194]);
+
+                let liquidity = read_u128(&dynamic_data[0..16]);
+                let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
+                let tick_current = read_i32(&dynamic_data[32..36]);
+                let tick_array_bitmap = ptr::read_unaligned(
+                    dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
+                );
+                Self {
+                    liquidity,
+                    sqrt_price_x64,
+                    tick_current,
+                    tick_array_bitmap,
+                    ..Self::default()
+                }
+            }
+        } else {
+            unsafe {
+                let amm_config = read_pubkey(&static_data[0..32]);
+                let token_mint_0 = read_pubkey(&static_data[32..64]);
+                let token_mint_1 = read_pubkey(&static_data[64..96]);
+                let token_vault_0 = read_pubkey(&static_data[96..128]);
+                let token_vault_1 = read_pubkey(&static_data[128..160]);
+                let observation_key = read_pubkey(&static_data[160..192]);
+                let tick_spacing = read_u16(&static_data[192..194]);
+
+                let liquidity = read_u128(&dynamic_data[0..16]);
+                let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
+                let tick_current = read_i32(&dynamic_data[32..36]);
+                let tick_array_bitmap = ptr::read_unaligned(
+                    dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
+                );
+                Self {
+                    amm_config,
+                    token_mint_0,
+                    token_mint_1,
+                    token_vault_0,
+                    token_vault_1,
+                    observation_key,
+                    tick_spacing,
+                    liquidity,
+                    sqrt_price_x64,
+                    tick_current,
+                    tick_array_bitmap,
+                    ..Self::default()
+                }
             }
         }
     }
