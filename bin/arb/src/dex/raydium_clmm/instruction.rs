@@ -60,7 +60,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     accounts.push(AccountMeta::new_readonly(MINT_PROGRAM_ID, false));
     // 10.current tick array
     let bit_map_extension_key = pda_bit_map_extension_key(&pool_id);
-    let tick_arrays = load_cur_and_next_specify_count_tick_array_key(
+    let mut tick_arrays = load_cur_and_next_specify_count_tick_array_key(
         3,
         &pool_id,
         &pool_state,
@@ -74,6 +74,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
                 .collect::<Vec<_>>(),
         )
     })?;
+    accounts.push(tick_arrays.remove(0));
     // 11.bitmap_extension
     accounts.push(AccountMeta::new(bit_map_extension_key, false));
     accounts.extend(tick_arrays);
