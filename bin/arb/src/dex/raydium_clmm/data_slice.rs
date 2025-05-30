@@ -19,7 +19,7 @@ static DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE: OnceCell<(Vec<(usize, usize)
 static STATIC_RAYDIUM_CLMM_POOL_SLICE: OnceCell<([(usize, usize); 7], usize)> =
     OnceCell::const_new();
 // clmm amm config
-static STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE: OnceCell<([(usize, usize); 1], usize)> =
+static STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE: OnceCell<([(usize, usize); 3], usize)> =
     OnceCell::const_new();
 
 pub fn slice_data(
@@ -202,10 +202,14 @@ pub fn init_raydium_clmm_data_slice() {
         .set({
             (
                 [
+                    // protocol_fee_rate
+                    (43, 43 + 4),
                     // trade_fee_rate
                     (47, 47 + 4),
+                    // fund_fee_rate
+                    (53, 53 + 4),
                 ],
-                4,
+                4 * 3,
             )
         })
         .unwrap();
