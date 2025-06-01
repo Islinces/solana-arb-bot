@@ -1,2 +1,2 @@
-pub(crate) mod accounts;
+pub mod accounts;
 pub(crate)mod typedefs;

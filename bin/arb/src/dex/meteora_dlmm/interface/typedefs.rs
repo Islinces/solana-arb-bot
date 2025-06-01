@@ -1,4 +1,6 @@
+use crate::dex::byte_utils::read_from;
 use borsh::{BorshDeserialize, BorshSerialize};
+
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
 pub struct Bin {
@@ -22,6 +24,31 @@ pub struct StaticParameters {
     pub base_fee_power_factor: u8,
 }
 
+impl StaticParameters {
+    pub(crate) fn from_slice_data(data: &[u8]) -> Self {
+        unsafe {
+            let base_factor = read_from::<u16>(&data[0..2]);
+            let filter_period = read_from::<u16>(&data[2..4]);
+            let decay_period = read_from::<u16>(&data[4..6]);
+            let reduction_factor = read_from::<u16>(&data[6..8]);
+            let variable_fee_control = read_from::<u32>(&data[8..12]);
+            let max_volatility_accumulator = read_from::<u32>(&data[12..16]);
+            let protocol_share = read_from::<u16>(&data[16..18]);
+            let base_fee_power_factor = read_from::<u8>(&data[18..19]);
+            Self {
+                base_factor,
+                filter_period,
+                decay_period,
+                reduction_factor,
+                variable_fee_control,
+                max_volatility_accumulator,
+                protocol_share,
+                base_fee_power_factor,
+            }
+        }
+    }
+}
+
 pub(crate) const V_PARAMETER_LEN: usize = 4 + 4 + 4 + 8;
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
@@ -30,6 +57,23 @@ pub struct VariableParameters {
     pub volatility_reference: u32,
     pub index_reference: i32,
     pub last_update_timestamp: i64,
+}
+
+impl VariableParameters {
+    pub(crate) fn from_slice_data(data: &[u8]) -> Self {
+        unsafe {
+            let volatility_accumulator = read_from::<u32>(&data[0..4]);
+            let volatility_reference = read_from::<u32>(&data[4..8]);
+            let index_reference = read_from::<i32>(&data[8..12]);
+            let last_update_timestamp = read_from::<i64>(&data[12..20]);
+            Self {
+                volatility_accumulator,
+                volatility_reference,
+                index_reference,
+                last_update_timestamp,
+            }
+        }
+    }
 }
 #[derive(Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

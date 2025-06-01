@@ -7,6 +7,7 @@ use crate::dex::meteora_dlmm::conversions::status::PairStatusWrapper;
 use crate::dex::meteora_dlmm::conversions::token_program_flag::TokenProgramFlagWrapper;
 use crate::dex::meteora_dlmm::interface::accounts::LbPair;
 use crate::dex::meteora_dlmm::interface::typedefs::TokenProgramFlags;
+use crate::interface::{MINT2022_PROGRAM_ID, MINT_PROGRAM_ID};
 use anyhow::{ensure, Context, Result};
 use ruint::aliases::U1024;
 use solana_sdk::pubkey::Pubkey;
@@ -60,8 +61,8 @@ impl LbPairExtension for LbPair {
         {
             let flag: TokenProgramFlagWrapper = token_program_flag.try_into()?;
             let token_program_id = match flag.deref() {
-                TokenProgramFlags::TokenProgram => spl_token::ID,
-                TokenProgramFlags::TokenProgram2022 => spl_token_2022::ID,
+                TokenProgramFlags::TokenProgram => MINT_PROGRAM_ID,
+                TokenProgramFlags::TokenProgram2022 => MINT2022_PROGRAM_ID,
             };
             token_programs_id[i] = token_program_id;
         }

@@ -1,4 +1,5 @@
 use crate::account_cache::get_account_data;
+use crate::dex::meteora_dlmm::interface::accounts::LbPair;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::PoolState;
@@ -142,30 +143,28 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
     let pool_id = edge.pool_id()?;
     let dex_type = &edge.dex_type;
     match dex_type {
-        DexType::RaydiumAMM => {
-            let amm_info = get_account_data::<AmmInfo>(pool_id)?;
-            // info!("RaydiumAMM \n{:#?}", amm_info);
-            crate::dex::raydium_amm::quote::quote(amount_in, edge.swap_direction, &amm_info)
-        }
-        DexType::RaydiumCLMM => {
-            let pool_state = get_account_data::<PoolState>(pool_id)?;
-            // info!("RaydiumCLMM \n{:#?}", pool_state);
-            crate::dex::raydium_clmm::quote::quote(
-                amount_in,
-                edge.swap_direction,
-                pool_id,
-                &pool_state,
-            )
-        }
-        DexType::PumpFunAMM => {
-            let pool = get_account_data::<Pool>(pool_id)?;
-            // info!("PumpFunAMM \n{:#?}", pool);
-            crate::dex::pump_fun::quote::quote(amount_in, edge.swap_direction, &pool)
-        }
-        DexType::MeteoraDLMM => {
-            unimplemented!()
-        }
-        DexType::Token2022 => unreachable!(),
+        DexType::RaydiumAMM => crate::dex::raydium_amm::quote::quote(
+            amount_in,
+            edge.swap_direction,
+            get_account_data::<AmmInfo>(pool_id)?,
+        ),
+        DexType::RaydiumCLMM => crate::dex::raydium_clmm::quote::quote(
+            amount_in,
+            edge.swap_direction,
+            pool_id,
+            get_account_data::<PoolState>(pool_id)?,
+        ),
+        DexType::PumpFunAMM => crate::dex::pump_fun::quote::quote(
+            amount_in,
+            edge.swap_direction,
+            get_account_data::<Pool>(pool_id)?,
+        ),
+        DexType::MeteoraDLMM => crate::dex::meteora_dlmm::quote::quote(
+            amount_in,
+            edge.swap_direction,
+            pool_id,
+            get_account_data::<LbPair>(pool_id)?,
+        ),
     }
 }
 
@@ -276,7 +275,6 @@ impl QuoteResult {
             DexType::MeteoraDLMM => {
                 unimplemented!()
             }
-            DexType::Token2022 => unreachable!(),
         }
     }
 }

@@ -71,7 +71,7 @@ async fn get_bitmap_extension_accounts(
         .map(|account| {
             (
                 crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
-                    account.account_key,
+                    &account.account_key,
                 ),
                 account.account_key,
             )
@@ -100,7 +100,7 @@ async fn get_bin_array_accounts(
     let bin_array_keys = all_pool_account_data
         .iter()
         .filter_map(|account| {
-            let pool_id = account.account_key;
+            let pool_id = &account.account_key;
             // bitmap extension
             let bitmap_extension_key =
                 crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(pool_id);
@@ -146,7 +146,7 @@ async fn get_bin_array_accounts(
                 Some(
                     bin_array_keys
                         .into_iter()
-                        .map(|key| (key, pool_id))
+                        .map(|key| (key, pool_id.clone()))
                         .collect::<Vec<_>>(),
                 )
             }

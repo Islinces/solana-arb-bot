@@ -15,7 +15,7 @@ static STATIC_POOL_SLICE: OnceCell<([(usize, usize); 20], usize)> = OnceCell::co
 
 pub fn slice_data(
     account_type: AccountType,
-    data: &[u8],
+    data: Vec<u8>,
     slice_type: SliceType,
 ) -> anyhow::Result<Vec<u8>> {
     match slice_type {

@@ -12,7 +12,7 @@ static STATIC_PUMP_FUN_GLOBAL_CONFIG_SLICE: OnceCell<([(usize, usize); 2], usize
 
 pub fn slice_data(
     account_type: AccountType,
-    data: &[u8],
+    data: Vec<u8>,
     slice_type: SliceType,
 ) -> anyhow::Result<Vec<u8>> {
     match slice_type {

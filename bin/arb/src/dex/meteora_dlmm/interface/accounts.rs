@@ -6,7 +6,7 @@ use crate::dex::meteora_dlmm::interface::typedefs::{
 use crate::dex::FromCache;
 use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;
-use std::ptr;
+use std::{mem, ptr};
 
 pub const BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM: [u8; 8] = [80, 111, 124, 113, 55, 237, 18, 5];
 #[repr(C)]
@@ -116,10 +116,24 @@ impl FromCache for LbPair {
     }
 }
 
+#[test]
+fn test() {
+    println!("{}", mem::align_of::<VariableParameters>());
+    println!("Size: {}", size_of::<VariableParameters>()); // 输出24
+    println!("Align: {}", align_of::<VariableParameters>()); // 输出8
+
+    let data = unsafe {
+        VariableParameters::from_slice_data(&[
+            48, 117, 0, 0, 0, 0, 0, 0, 59, 18, 0, 0, 240, 2, 60, 104, 0, 0, 0, 0, 0, 0, 0, 0,
+        ])
+    };
+    println!("{:#?}", data);
+}
+
 impl LbPair {
     pub fn from_slice_data(static_data: &[u8], dynamic_data: &[u8]) -> Self {
         unsafe {
-            let parameters = read_from::<StaticParameters>(&static_data[0..S_PARAMETER_LEN]);
+            let parameters = StaticParameters::from_slice_data(&static_data[0..S_PARAMETER_LEN]);
             let pair_type = read_from::<u8>(&static_data[S_PARAMETER_LEN..S_PARAMETER_LEN + 1]);
             let bin_step =
                 read_from::<u16>(&static_data[S_PARAMETER_LEN + 1..S_PARAMETER_LEN + 1 + 2]);
@@ -160,7 +174,8 @@ impl LbPair {
                 &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 1
                     ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 1 + 1],
             );
-            let v_parameters = read_from::<VariableParameters>(&dynamic_data[0..V_PARAMETER_LEN]);
+            let v_parameters =
+                VariableParameters::from_slice_data(&dynamic_data[0..V_PARAMETER_LEN]);
             let active_id = read_from::<i32>(&dynamic_data[V_PARAMETER_LEN..V_PARAMETER_LEN + 4]);
             let bin_array_bitmap = read_from::<[u64; 16]>(
                 &dynamic_data[V_PARAMETER_LEN + 4..V_PARAMETER_LEN + 4 + 128],

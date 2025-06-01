@@ -77,7 +77,7 @@ impl BinArrayExtension for BinArray {
 
     fn bin_id_to_bin_array_key(lb_pair: Pubkey, bin_id: i32) -> Result<Pubkey> {
         let bin_array_index = Self::bin_id_to_bin_array_index(bin_id)?;
-        Ok(derive_bin_array_pda(lb_pair, bin_array_index.into()).0)
+        Ok(derive_bin_array_pda(&lb_pair, bin_array_index.into()))
     }
 
     fn get_bin_array_indexes_coverage(lower_bin_id: i32, upper_bin_id: i32) -> Result<Vec<i32>> {
@@ -104,7 +104,7 @@ impl BinArrayExtension for BinArray {
         Ok(bin_array_indexes
             .into_iter()
             .map(|index| AccountMeta {
-                pubkey: derive_bin_array_pda(lb_pair, index.into()).0,
+                pubkey: derive_bin_array_pda(&lb_pair, index.into()),
                 is_signer: false,
                 is_writable: true,
             })

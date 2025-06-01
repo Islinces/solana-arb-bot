@@ -14,7 +14,7 @@ static STATIC_RAYDIUM_AMM_POOL_SLICE: OnceCell<([(usize, usize); 6], usize)> =
 
 pub fn slice_data(
     account_type: AccountType,
-    data: &[u8],
+    data: Vec<u8>,
     slice_type: SliceType,
 ) -> anyhow::Result<Vec<u8>> {
     match slice_type {

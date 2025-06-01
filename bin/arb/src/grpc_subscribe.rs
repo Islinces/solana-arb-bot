@@ -4,7 +4,9 @@ use crate::state::{GrpcAccountMsg, GrpcMessage, GrpcTransactionMsg};
 use base58::ToBase58;
 use chrono::Local;
 use flume::Sender;
+use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sysvar::SysvarId;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio_stream::{Stream, StreamExt};
@@ -34,7 +36,6 @@ pub struct GrpcSubscribe {
 pub const POOL_TICK_ARRAY_BITMAP_SEED: &str = "pool_tick_array_bitmap_extension";
 
 impl GrpcSubscribe {
-
     pub async fn subscribe(&self, dex_data: Vec<DexJson>, message_sender: Sender<GrpcMessage>) {
         let grpc_url = self.grpc_url.clone();
         let mut stream = Self::single_subscribe_grpc(grpc_url, dex_data)
@@ -83,6 +84,7 @@ impl GrpcSubscribe {
         let mut raydium_amm_account_keys = Vec::with_capacity(dex_data.len());
         let mut pump_fun_account_keys = Vec::with_capacity(dex_data.len());
         let mut raydium_clmm_account_keys = Vec::with_capacity(dex_data.len());
+        let mut meteora_dlmm_account_keys = Vec::with_capacity(dex_data.len());
 
         for json in dex_data.iter() {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
@@ -105,11 +107,22 @@ impl GrpcSubscribe {
                 );
                 raydium_clmm_account_keys.push(json.pool);
             }
+            if &json.owner == DexType::MeteoraDLMM.get_ref_program_id() {
+                // BinArrayBitmapExtension
+                meteora_dlmm_account_keys.push(
+                    crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
+                        &json.pool,
+                    ),
+                );
+                meteora_dlmm_account_keys.push(json.pool);
+            }
         }
+        let need_clock = !meteora_dlmm_account_keys.is_empty();
         let all_account_keys = raydium_amm_account_keys
             .iter()
             .chain(pump_fun_account_keys.iter())
             .chain(raydium_clmm_account_keys.iter())
+            .chain(meteora_dlmm_account_keys.iter())
             .map(|key| key.to_string())
             .collect::<Vec<_>>();
         let mut grpc_client = create_grpc_client(grpc_url).await;
@@ -119,7 +132,13 @@ impl GrpcSubscribe {
             accounts.insert(
                 "accounts".to_string(),
                 SubscribeRequestFilterAccounts {
-                    account: all_account_keys.clone(),
+                    account: {
+                        let mut accounts = all_account_keys.clone();
+                        if need_clock {
+                            accounts.push(Clock::id().to_string());
+                        }
+                        accounts
+                    },
                     ..Default::default()
                 },
             );

@@ -2,7 +2,7 @@ use crate::dex::amm_math::CheckedCeilDiv;
 use crate::dex::pump_fun::state::Pool;
 use std::ops::{Add, Div, Mul, Sub};
 
-pub fn quote(amount_in: u64, swap_direction: bool, pool: &Pool) -> Option<u64> {
+pub fn quote(amount_in: u64, swap_direction: bool, pool: Pool) -> Option<u64> {
     let base_vault_amount = u128::from(pool.base_vault_amount);
     let quote_vault_amount = u128::from(pool.quote_vault_amount);
     let amount_in = u128::from(amount_in);

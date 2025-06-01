@@ -2,7 +2,7 @@ use crate::dex::amm_math::CheckedCeilDiv;
 use crate::dex::raydium_amm::state::AmmInfo;
 use std::ops::{Add, Div, Mul, Sub};
 
-pub fn quote(amount_in: u64, swap_direction: bool, amm_info: &AmmInfo) -> Option<u64> {
+pub fn quote(amount_in: u64, swap_direction: bool, amm_info: AmmInfo) -> Option<u64> {
     let amount_in = u128::from(amount_in);
     let swap_fee_numerator = u128::from(amm_info.swap_fee_numerator);
     let swap_fee_denominator = u128::from(amm_info.swap_fee_denominator);

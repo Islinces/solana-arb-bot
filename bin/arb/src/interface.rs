@@ -5,6 +5,8 @@ use std::fmt::{Debug, Display, Formatter};
 pub const ATA_PROGRAM_ID: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 pub const SYSTEM_PROGRAM_ID: Pubkey = pubkey!("11111111111111111111111111111111");
 pub const MINT_PROGRAM_ID: Pubkey = spl_token::ID;
+pub const MINT2022_PROGRAM_ID: Pubkey = spl_token_2022::ID;
+pub const CLOCK_ID: Pubkey = pubkey!("SysvarC1ock11111111111111111111111111111111");
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DexType {
@@ -12,7 +14,6 @@ pub enum DexType {
     RaydiumCLMM,
     PumpFunAMM,
     MeteoraDLMM,
-    Token2022,
 }
 
 #[derive(Debug, Clone)]
@@ -20,8 +21,6 @@ pub enum AccountType {
     // common
     Pool,
     MintVault,
-    // token
-    Token2022,
     // clmm
     AmmConfig,
     TickArray,
@@ -31,6 +30,7 @@ pub enum AccountType {
     // dlmm
     BinArray,
     BinArrayBitmap,
+    Clock,
 }
 
 impl Display for DexType {
@@ -40,7 +40,6 @@ impl Display for DexType {
             DexType::RaydiumCLMM => "RaydiumCLmm",
             DexType::PumpFunAMM => "PumpFunAMM",
             DexType::MeteoraDLMM => "MeteoraDLMM",
-            DexType::Token2022 => "Token2022",
         })
     }
 }
@@ -52,7 +51,6 @@ impl DexType {
             DexType::RaydiumCLMM => &crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID,
             DexType::PumpFunAMM => &crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID,
             DexType::MeteoraDLMM => &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID,
-            DexType::Token2022 => unreachable!(),
         }
     }
 }
@@ -68,6 +66,6 @@ pub fn get_dex_type_with_program_id(program_id: &Pubkey) -> Option<DexType> {
     } else if program_id == &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID {
         Some(DexType::MeteoraDLMM)
     } else {
-        None
+        unreachable!()
     }
 }

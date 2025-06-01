@@ -24,7 +24,7 @@ static STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE: OnceCell<([(usize, usize); 3], usiz
 
 pub fn slice_data(
     account_type: AccountType,
-    data: &[u8],
+    data: Vec<u8>,
     slice_type: SliceType,
 ) -> anyhow::Result<Vec<u8>> {
     match slice_type {

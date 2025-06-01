@@ -4,6 +4,7 @@ use crate::dex::meteora_dlmm::commons::typedefs::SwapResult;
 use crate::dex::meteora_dlmm::extensions::bin::BinExtension;
 use crate::dex::meteora_dlmm::extensions::bin_array::BinArrayExtension;
 use crate::dex::meteora_dlmm::extensions::bin_array_bitmap::BinArrayBitmapExtExtension;
+use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::interface::typedefs::{ActivationType, PairStatus, PairType};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use anyhow::Result;
@@ -11,9 +12,7 @@ use anyhow::{ensure, Context};
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
-use std::sync::Arc;
 use std::{collections::HashMap, ops::Deref};
-use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 
 #[derive(Debug)]
 pub struct SwapExactInQuote {
@@ -62,7 +61,7 @@ pub fn quote_exact_in(
     swap_for_y: bool,
     bin_arrays: HashMap<Pubkey, BinArray>,
     bitmap_extension: Option<BinArrayBitmapExtension>,
-    clock: Arc<Clock>,
+    clock: Clock,
     mint_x_account: Option<TransferFeeConfig>,
     mint_y_account: Option<TransferFeeConfig>,
 ) -> Result<SwapExactInQuote> {
@@ -95,7 +94,7 @@ pub fn quote_exact_in(
         loop_count += 1;
         // 查找第一个有流动性的bin_array
         let active_bin_array_pubkey = get_bin_array_pubkeys_for_swap(
-            lb_pair_pubkey,
+            &lb_pair_pubkey,
             &lb_pair,
             bitmap_extension.as_ref(),
             swap_for_y,
@@ -158,7 +157,7 @@ pub fn quote_exact_in(
 }
 
 pub fn get_bin_array_pubkeys_for_swap(
-    lb_pair_pubkey: Pubkey,
+    lb_pair_pubkey: &Pubkey,
     lb_pair: &LbPair,
     bitmap_extension: Option<&BinArrayBitmapExtension>,
     swap_for_y: bool,
@@ -210,7 +209,7 @@ pub fn get_bin_array_pubkeys_for_swap(
 
     let bin_array_pubkeys = bin_array_idx
         .into_iter()
-        .map(|idx| derive_bin_array_pda(lb_pair_pubkey, idx.into()).0)
+        .map(|idx| derive_bin_array_pda(lb_pair_pubkey, idx.into()))
         .collect();
 
     Ok(bin_array_pubkeys)

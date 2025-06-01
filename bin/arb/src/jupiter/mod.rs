@@ -84,6 +84,5 @@ fn get_jupiter_swap_type(dex_type: &DexType, swap_direction: bool) -> Swap {
             }
         }
         DexType::MeteoraDLMM => Swap::MeteoraDlmm,
-        DexType::Token2022 => unreachable!(),
     }
 }

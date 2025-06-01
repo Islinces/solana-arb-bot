@@ -1,10 +1,10 @@
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 
-mod commons;
+pub mod commons;
 mod conversions;
 mod extensions;
-mod interface;
+pub mod interface;
 pub mod lb_pair;
 mod math;
 pub mod data_slice;

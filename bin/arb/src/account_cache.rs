@@ -1,18 +1,22 @@
 use crate::data_slice::{slice_data, SliceType};
+use crate::dex::byte_utils::read_from;
 use crate::dex::FromCache;
 use crate::dex_data::DexJson;
-use crate::interface::{get_dex_type_with_program_id, AccountType, DexType};
+use crate::interface::{get_dex_type_with_program_id, AccountType, DexType, CLOCK_ID};
 use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
+use futures_util::future::ok;
 use parking_lot::RwLock;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::accounts_equal;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::sysvar::SysvarId;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::hash_map::Entry;
@@ -184,12 +188,30 @@ pub async fn init_snapshot(
         );
         effective_dex_data.extend(dex_data);
     }
+    init_clock(effective_dex_data.as_slice(), rpc_client.clone()).await;
     init_token_2022(effective_dex_data.as_slice(), rpc_client.clone()).await;
     info!("初始化Snapshot结束, 数量 : {}", effective_dex_data.len());
     if effective_dex_data.is_empty() {
         Err(anyhow!("所有DexJson均加载失败"))
     } else {
         Ok(effective_dex_data)
+    }
+}
+
+async fn init_clock(effective_dex_data: &[DexJson], rpc_client: Arc<RpcClient>) {
+    if effective_dex_data
+        .iter()
+        .any(|json| &json.owner == DexType::MeteoraDLMM.get_ref_program_id())
+    {
+        let clock_data = rpc_client
+            .clone()
+            .get_account_data(&CLOCK_ID)
+            .await
+            .unwrap();
+        DYNAMIC_ACCOUNT_CACHE
+            .get()
+            .unwrap()
+            .insert(CLOCK_ID, clock_data);
     }
 }
 
@@ -200,16 +222,52 @@ async fn init_token_2022(effective_dex_data: &[DexJson], rpc_client: Arc<RpcClie
         .collect::<AHashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let token_2022_accounts = get_account_data_with_data_slice(
-        all_tokens,
-        DexType::Token2022,
-        AccountType::Token2022,
-        rpc_client,
-    )
-    .await
-    .into_iter()
-    .filter(|account| account.dynamic_slice_data.is_some())
-    .collect::<Vec<_>>();
+    let mut join_set = JoinSet::new();
+    for account_chunks in all_tokens.chunks(100) {
+        let rpc_client = rpc_client.clone();
+        let account_chunks = account_chunks.to_vec();
+        join_set.spawn(async move {
+            rpc_client
+                .get_multiple_accounts_with_commitment(
+                    account_chunks.as_slice(),
+                    CommitmentConfig::finalized(),
+                )
+                .await
+                .unwrap()
+                .value
+                .into_iter()
+                .zip(account_chunks)
+                .map(|(account, account_key)| {
+                    account.map_or(AccountDataSlice::new(account_key, None, None), |acc| {
+                        let token_2022 = if let Ok(mint_extensions) =
+                            StateWithExtensions::<spl_token_2022::state::Mint>::unpack(
+                                acc.data.as_ref(),
+                            ) {
+                            mint_extensions
+                                .get_extension::<TransferFeeConfig>()
+                                .map_or(None, |_| Some(()))
+                        } else {
+                            None
+                        };
+                        if token_2022.is_some() {
+                            AccountDataSlice::new(account_key, None, Some(acc.data))
+                        } else {
+                            AccountDataSlice::new(account_key, None, None)
+                        }
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
+    }
+    let token_2022_accounts = join_set
+        .join_all()
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .into_iter()
+        .filter(|account| account.dynamic_slice_data.is_some())
+        .collect::<Vec<_>>();
     info!("Token2022加载完毕，数量 : {}", token_2022_accounts.len());
     token_2022_accounts.into_iter().for_each(|account| {
         STATIC_ACCOUNT_CACHE
@@ -300,14 +358,14 @@ async fn base_get_account_with_data_slice(
                 let dynamic_data = slice_data(
                     dex_type.clone(),
                     account_type.clone(),
-                    acc.data.as_slice(),
+                    acc.data.clone(),
                     SliceType::Subscribed,
                 )
                 .map_or(None, |v| Some(v));
                 let static_data = slice_data(
                     dex_type.clone(),
                     account_type.clone(),
-                    acc.data.as_slice(),
+                    acc.data,
                     SliceType::Unsubscribed,
                 )
                 .map_or(None, |v| Some(v));
@@ -317,23 +375,45 @@ async fn base_get_account_with_data_slice(
         .collect::<Vec<_>>()
 }
 
-pub fn get_account_data<T: FromCache>(pool_id: &Pubkey) -> Option<T> {
+pub fn get_account_data<T: FromCache>(account_key: &Pubkey) -> Option<T> {
     let static_data = STATIC_ACCOUNT_CACHE.get()?.read();
     let dynamic_data = DYNAMIC_ACCOUNT_CACHE.get()?;
-    T::from_cache(pool_id, static_data, dynamic_data)
+    T::from_cache(account_key, static_data, dynamic_data)
+}
+
+pub fn get_token2022_data(mint_key: &Pubkey) -> Option<TransferFeeConfig> {
+    let static_data = STATIC_ACCOUNT_CACHE.get()?.read();
+    let data = static_data.0.get(mint_key).unwrap();
+    StateWithExtensions::<spl_token_2022::state::Mint>::unpack(data.as_slice()).map_or(
+        None,
+        |mint_extensions| {
+            mint_extensions
+                .get_extension::<TransferFeeConfig>()
+                .map_or(None, |result| Some(result.clone()))
+        },
+    )
+}
+
+pub fn get_clock() -> Option<Clock> {
+    DYNAMIC_ACCOUNT_CACHE
+        .get()?
+        .get(&CLOCK_ID)
+        .map_or(None, |result| {
+            let clock_data = result.value().as_slice();
+            Some(unsafe { read_from::<Clock>(clock_data) })
+        })
 }
 
 pub fn get_alt(pool_id: &Pubkey) -> Option<Vec<AddressLookupTableAccount>> {
     ALT_CACHE.get()?.read().get(pool_id)
 }
 
-pub fn update_cache(account_key: Pubkey, data: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+pub fn update_cache(account_key: Pubkey, data: Vec<u8>) -> anyhow::Result<()> {
     DYNAMIC_ACCOUNT_CACHE
         .get()
         .map_or(Err(anyhow!("")), |cache| {
-            cache
-                .insert(account_key, data)
-                .map_or(Err(anyhow!("")), |pre| Ok(pre))
+            cache.insert(account_key, data);
+            Ok(())
         })
 }
 
