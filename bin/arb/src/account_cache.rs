@@ -2,7 +2,10 @@ use crate::data_slice::{slice_data, SliceType};
 use crate::dex::byte_utils::read_from;
 use crate::dex::FromCache;
 use crate::dex_data::DexJson;
-use crate::interface::{get_dex_type_with_program_id, AccountType, DexType, CLOCK_ID};
+use crate::interface::{
+    get_dex_type_with_program_id, AccountType, DexType, CLOCK_ID, MINT2022_PROGRAM_ID,
+    MINT_PROGRAM_ID,
+};
 use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
 use dashmap::mapref::one::Ref;
@@ -379,6 +382,20 @@ pub fn get_account_data<T: FromCache>(account_key: &Pubkey) -> Option<T> {
     let static_data = STATIC_ACCOUNT_CACHE.get()?.read();
     let dynamic_data = DYNAMIC_ACCOUNT_CACHE.get()?;
     T::from_cache(account_key, static_data, dynamic_data)
+}
+
+pub fn get_token_program(mint: &Pubkey) -> Pubkey {
+    if STATIC_ACCOUNT_CACHE
+        .get()
+        .unwrap()
+        .read()
+        .0
+        .contains_key(mint)
+    {
+        MINT2022_PROGRAM_ID
+    } else {
+        MINT_PROGRAM_ID
+    }
 }
 
 pub fn get_token2022_data(mint_key: &Pubkey) -> Option<TransferFeeConfig> {

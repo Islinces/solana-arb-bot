@@ -272,9 +272,10 @@ impl QuoteResult {
                 edge.pool_id()?.clone(),
                 edge.swap_direction,
             ),
-            DexType::MeteoraDLMM => {
-                unimplemented!()
-            }
+            DexType::MeteoraDLMM => crate::dex::meteora_dlmm::instruction::to_instruction(
+                edge.pool_id()?.clone(),
+                edge.swap_direction,
+            ),
         }
     }
 }

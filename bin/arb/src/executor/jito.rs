@@ -177,113 +177,116 @@ impl JitoExecutor {
         ));
         // 设置 swap
         let mut used_atas = quote_result.hop_path.get_relate_mint_ata(&wallet);
-
-        let jupiter_swap_result = crate::jupiter::build_jupiter_swap_ix(
-            quote_result.to_instructions().unwrap(),
-            quote_result.swaped_mint().unwrap(),
-            quote_result.amount_in,
-            tip,
-        );
-        if jupiter_swap_result.is_none() {
-            return Err(anyhow!("生成 Swap ix 失败"));
-        }
-        let (jupiter_swap_ix, alts) = jupiter_swap_result.unwrap();
-        remove_already_ata(&mut used_atas).await;
-        for (_, mint) in used_atas {
+        if let Some(instructions) = quote_result.to_instructions() {
+            let jupiter_swap_result = crate::jupiter::build_jupiter_swap_ix(
+                instructions,
+                quote_result.swaped_mint().unwrap(),
+                quote_result.amount_in,
+                tip,
+            );
+            if jupiter_swap_result.is_none() {
+                return Err(anyhow!("生成 Swap ix 失败"));
+            }
+            let (jupiter_swap_ix, alts) = jupiter_swap_result.unwrap();
+            remove_already_ata(&mut used_atas).await;
+            for (_, mint) in used_atas {
+                first_instructions.push(create_associated_token_account_idempotent(
+                    &wallet,
+                    &wallet,
+                    &mint,
+                    &MINT_PROGRAM_ID,
+                ));
+            }
+            first_instructions.push(jupiter_swap_ix);
+            // MEMO
+            if let Some(name) = self.bot_name.as_ref() {
+                first_instructions.push(Instruction::new_with_bytes(
+                    Pubkey::from_str("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")?,
+                    name.as_bytes(),
+                    vec![],
+                ));
+            }
+            // 生成临时钱包
+            let dst_keypair = Keypair::new();
+            let dst_wallet = dst_keypair.pubkey();
+            // 生成临时钱包WSOL ATA账户地址
+            let dst_ata = get_associated_token_address_with_program_id(
+                &dst_wallet,
+                &spl_token::native_mint::id(),
+                &MINT_PROGRAM_ID,
+            );
+            // 生成ATA账户执行
             first_instructions.push(create_associated_token_account_idempotent(
                 &wallet,
-                &wallet,
-                &mint,
+                &dst_wallet,
+                &spl_token::native_mint::id(),
                 &MINT_PROGRAM_ID,
             ));
-        }
-        first_instructions.push(jupiter_swap_ix);
-        // MEMO
-        if let Some(name) = self.bot_name.as_ref() {
-            first_instructions.push(Instruction::new_with_bytes(
-                Pubkey::from_str("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")?,
-                name.as_bytes(),
-                vec![],
-            ));
-        }
-        // 生成临时钱包
-        let dst_keypair = Keypair::new();
-        let dst_wallet = dst_keypair.pubkey();
-        // 生成临时钱包WSOL ATA账户地址
-        let dst_ata = get_associated_token_address_with_program_id(
-            &dst_wallet,
-            &spl_token::native_mint::id(),
-            &MINT_PROGRAM_ID,
-        );
-        // 生成ATA账户执行
-        first_instructions.push(create_associated_token_account_idempotent(
-            &wallet,
-            &dst_wallet,
-            &spl_token::native_mint::id(),
-            &MINT_PROGRAM_ID,
-        ));
-        let source_ata = get_arb_mint_ata();
+            let source_ata = get_arb_mint_ata();
 
-        // 转移WSQL到ATA账户中
-        first_instructions.push(transfer(
-            &MINT_PROGRAM_ID,
-            &source_ata,
-            &dst_ata,
-            &wallet,
-            &[],
-            tip + 10000,
-        )?);
-        // 转移SQL，用于支付账户租金+签名费
-        first_instructions.push(solana_program::system_instruction::transfer(
-            &wallet,
-            &dst_wallet,
-            2039280 + 5000,
-        ));
-        // 生成Transaction
-        let latest_blockhash = get_last_blockhash().await;
-        let first_message = Message::try_compile(
-            &wallet,
-            &first_instructions,
-            alts.as_slice(),
-            latest_blockhash,
-        )?;
-        // info!("alt {:#?}", alts.as_slice());
-        // info!("first_message {:#?}", first_message);
-        let first_transaction = VersionedTransaction::try_new(
-            solana_sdk::message::VersionedMessage::V0(first_message),
-            &[keypair.as_ref()],
-        )?;
-        // ======================第二个Transaction====================
-        let mut second_instructions = Vec::with_capacity(4);
-        // 设置CU
-        second_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(3_500));
-        // 关闭WSOL账户，并将WSOL转换为SOL，最终转移到创建的临时钱包中
-        second_instructions.push(spl_token::instruction::close_account(
-            &MINT_PROGRAM_ID,
-            &dst_ata,
-            &dst_wallet,
-            &dst_wallet,
-            &[],
-        )?);
-        // 给JITO发小费
-        second_instructions.push(solana_program::system_instruction::transfer(
-            &dst_wallet,
-            &get_jito_fee_account_with_rand(),
-            tip,
-        ));
-        // 转移临时钱包SOL到主钱包
-        second_instructions.push(solana_program::system_instruction::transfer(
-            &dst_wallet,
-            &wallet,
-            2039280 + 2039280 + 10000,
-        ));
-        // 生成Transaction
-        let second_message =
-            Message::try_compile(&dst_wallet, &second_instructions, &[], latest_blockhash)?;
-        let second_transaction = VersionedTransaction::try_new(
-            solana_sdk::message::VersionedMessage::V0(second_message),
-            &[&dst_keypair],
-        )?;
-        Ok((vec![first_transaction, second_transaction], start.elapsed()))
+            // 转移WSQL到ATA账户中
+            first_instructions.push(transfer(
+                &MINT_PROGRAM_ID,
+                &source_ata,
+                &dst_ata,
+                &wallet,
+                &[],
+                tip + 10000,
+            )?);
+            // 转移SQL，用于支付账户租金+签名费
+            first_instructions.push(solana_program::system_instruction::transfer(
+                &wallet,
+                &dst_wallet,
+                2039280 + 5000,
+            ));
+            // 生成Transaction
+            let latest_blockhash = get_last_blockhash().await;
+            let first_message = Message::try_compile(
+                &wallet,
+                &first_instructions,
+                alts.as_slice(),
+                latest_blockhash,
+            )?;
+            // info!("alt {:#?}", alts.as_slice());
+            // info!("first_message {:#?}", first_message);
+            let first_transaction = VersionedTransaction::try_new(
+                solana_sdk::message::VersionedMessage::V0(first_message),
+                &[keypair.as_ref()],
+            )?;
+            // ======================第二个Transaction====================
+            let mut second_instructions = Vec::with_capacity(4);
+            // 设置CU
+            second_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(3_500));
+            // 关闭WSOL账户，并将WSOL转换为SOL，最终转移到创建的临时钱包中
+            second_instructions.push(spl_token::instruction::close_account(
+                &MINT_PROGRAM_ID,
+                &dst_ata,
+                &dst_wallet,
+                &dst_wallet,
+                &[],
+            )?);
+            // 给JITO发小费
+            second_instructions.push(solana_program::system_instruction::transfer(
+                &dst_wallet,
+                &get_jito_fee_account_with_rand(),
+                tip,
+            ));
+            // 转移临时钱包SOL到主钱包
+            second_instructions.push(solana_program::system_instruction::transfer(
+                &dst_wallet,
+                &wallet,
+                2039280 + 2039280 + 10000,
+            ));
+            // 生成Transaction
+            let second_message =
+                Message::try_compile(&dst_wallet, &second_instructions, &[], latest_blockhash)?;
+            let second_transaction = VersionedTransaction::try_new(
+                solana_sdk::message::VersionedMessage::V0(second_message),
+                &[&dst_keypair],
+            )?;
+            Ok((vec![first_transaction, second_transaction], start.elapsed()))
+        } else {
+            Err(anyhow!("生成指令失败"))
+        }
     }
 }
