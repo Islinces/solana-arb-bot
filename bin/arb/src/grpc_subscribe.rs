@@ -135,7 +135,7 @@ impl GrpcSubscribe {
                     account: {
                         let mut accounts = all_account_keys.clone();
                         if need_clock {
-                            accounts.push(Clock::id().to_string());
+                            // accounts.push(Clock::id().to_string());
                         }
                         accounts
                     },
