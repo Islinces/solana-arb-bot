@@ -162,7 +162,7 @@ impl LbPair {
                     ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32],
             );
             let activation_point = read_from::<u64>(
-                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32
                     ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8],
             );
 
