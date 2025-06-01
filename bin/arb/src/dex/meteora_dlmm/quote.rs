@@ -12,7 +12,7 @@ use tracing::error;
 pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPair) -> Option<u64> {
     let bitmap_extension = get_bitmap_extension(pool_id);
     let token_transfer_configs = get_token_transfer_config(&pool);
-    match get_bin_arrays(pool_id, &pool, bitmap_extension.as_ref(), swap_direction, 10) {
+    match get_bin_arrays(pool_id, &pool, bitmap_extension.as_ref(), swap_direction, 3) {
         None => None,
         Some(bin_arrays) => {
             match quote_exact_in(

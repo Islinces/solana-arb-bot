@@ -14,7 +14,7 @@ pub fn quote(
 ) -> Option<u64> {
     let bitmap_extension = Some(get_bitmap_extension(pool_id)?);
     let mut tick_arrays =
-        get_tick_arrays(pool_id, &pool_state, &bitmap_extension, swap_direction, 10)?;
+        get_tick_arrays(pool_id, &pool_state, &bitmap_extension, swap_direction, 3)?;
     utils::get_out_put_amount_and_remaining_accounts(
         amount_in,
         None,

@@ -86,7 +86,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         &lb_pair,
         bitmap_extension.as_ref(),
         swap_direction,
-        10,
+        3,
     )
     .map_or(
         Err(anyhow!("生成指令获取Binarray失败")),
