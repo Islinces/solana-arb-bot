@@ -6,6 +6,7 @@ use crate::dex::raydium_clmm::state::PoolState;
 use crate::dex::InstructionItem;
 use crate::graph::{find_mint_position, find_pool_position, EdgeIdentifier, TwoHopPath};
 use crate::interface::DexType;
+use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Display, Formatter};
@@ -251,31 +252,58 @@ impl QuoteResult {
         self.hop_path.swaped_mint()
     }
 
-    pub fn to_instructions(&self) -> Option<Vec<InstructionItem>> {
-        Some(vec![
+    pub fn to_instructions(&self) -> Result<Vec<InstructionItem>> {
+        Ok(vec![
             Self::single(self.hop_path.first.as_ref())?,
             Self::single(self.hop_path.second.as_ref())?,
         ])
     }
 
-    fn single(edge: &EdgeIdentifier) -> Option<InstructionItem> {
-        match edge.dex_type {
-            DexType::RaydiumAMM => crate::dex::raydium_amm::instruction::to_instruction(
-                edge.pool_id()?.clone(),
-                edge.swap_direction,
-            ),
-            DexType::RaydiumCLMM => crate::dex::raydium_clmm::instruction::to_instruction(
-                edge.pool_id()?.clone(),
-                edge.swap_direction,
-            ),
-            DexType::PumpFunAMM => crate::dex::pump_fun::instruction::to_instruction(
-                edge.pool_id()?.clone(),
-                edge.swap_direction,
-            ),
-            DexType::MeteoraDLMM => crate::dex::meteora_dlmm::instruction::to_instruction(
-                edge.pool_id()?.clone(),
-                edge.swap_direction,
-            ),
+    fn single(edge: &EdgeIdentifier) -> Result<InstructionItem> {
+        if let Some(pool_id) = edge.pool_id() {
+            let pool_id = pool_id.clone();
+            crate::account_cache::get_alt(&pool_id).map_or(
+                Err(anyhow!("生成指令获取alt失败")),
+                |alt| {
+                    match &edge.dex_type {
+                        DexType::RaydiumAMM => {
+                            crate::dex::raydium_amm::instruction::to_instruction(
+                                pool_id,
+                                edge.swap_direction,
+                            )
+                        }
+                        DexType::RaydiumCLMM => {
+                            crate::dex::raydium_clmm::instruction::to_instruction(
+                                pool_id,
+                                edge.swap_direction,
+                            )
+                        }
+                        DexType::PumpFunAMM => crate::dex::pump_fun::instruction::to_instruction(
+                            pool_id,
+                            edge.swap_direction,
+                        ),
+                        DexType::MeteoraDLMM => {
+                            crate::dex::meteora_dlmm::instruction::to_instruction(
+                                pool_id,
+                                edge.swap_direction,
+                            )
+                        }
+                    }
+                    .map_or(
+                        Err(anyhow!("生成指令获取AccountMetadata失败")),
+                        |accounts| {
+                            Ok(InstructionItem::new(
+                                edge.dex_type,
+                                edge.swap_direction,
+                                accounts,
+                                alt,
+                            ))
+                        },
+                    )
+                },
+            )
+        } else {
+            Err(anyhow!("生成指令获取pool_id失败"))
         }
     }
 }

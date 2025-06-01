@@ -2,14 +2,14 @@ use crate::dex::raydium_clmm::state::{
     pda_bit_map_extension_key, PoolState, TickArrayBitmapExtension,
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
-use crate::dex::InstructionItem;
-use crate::interface::{DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::interface::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
+use anyhow::{anyhow, Result};
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::Signer;
 
-pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<InstructionItem> {
+pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
     let pool_state = crate::account_cache::get_account_data::<PoolState>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(11);
@@ -21,17 +21,17 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     accounts.push(AccountMeta::new(pool_id, false));
     let (token_mint_0_ata, _) = Pubkey::find_program_address(
         &[
-            &wallet.to_bytes(),
-            &MINT_PROGRAM_ID.to_bytes(),
-            &pool_state.token_mint_0.to_bytes(),
+            wallet.as_ref(),
+            MINT_PROGRAM_ID.as_ref(),
+            pool_state.token_mint_0.as_ref(),
         ],
         &ATA_PROGRAM_ID,
     );
     let (token_mint_1_ata, _) = Pubkey::find_program_address(
         &[
-            &wallet.to_bytes(),
-            &MINT_PROGRAM_ID.to_bytes(),
-            &pool_state.token_mint_1.to_bytes(),
+            wallet.as_ref(),
+            MINT_PROGRAM_ID.as_ref(),
+            pool_state.token_mint_1.as_ref(),
         ],
         &ATA_PROGRAM_ID,
     );
@@ -67,21 +67,18 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
         &crate::account_cache::get_account_data::<TickArrayBitmapExtension>(&bit_map_extension_key),
         swap_direction,
     )
-    .map_or(None, |keys| {
-        Some(
-            keys.into_iter()
+    .map_or(
+        Err(anyhow!("生成指令，获取TickArray失败")),
+        |keys| {
+            Ok(keys
+                .into_iter()
                 .map(|k| AccountMeta::new(k, false))
-                .collect::<Vec<_>>(),
-        )
-    })?;
+                .collect::<Vec<_>>())
+        },
+    )?;
     accounts.push(tick_arrays.remove(0));
     // 11.bitmap_extension
     accounts.push(AccountMeta::new(bit_map_extension_key, false));
     accounts.extend(tick_arrays);
-    Some(InstructionItem::new(
-        DexType::RaydiumCLMM,
-        swap_direction,
-        accounts,
-        crate::account_cache::get_alt(&pool_id)?,
-    ))
+    Ok(accounts)
 }

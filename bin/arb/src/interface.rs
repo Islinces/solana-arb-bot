@@ -8,7 +8,7 @@ pub const MINT_PROGRAM_ID: Pubkey = spl_token::ID;
 pub const MINT2022_PROGRAM_ID: Pubkey = spl_token_2022::ID;
 pub const CLOCK_ID: Pubkey = pubkey!("SysvarC1ock11111111111111111111111111111111");
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum DexType {
     RaydiumAMM,
     RaydiumCLMM,

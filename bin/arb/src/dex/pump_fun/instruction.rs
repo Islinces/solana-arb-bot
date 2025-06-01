@@ -1,13 +1,13 @@
 use crate::dex::pump_fun::state::{global_config_key, Pool};
-use crate::dex::InstructionItem;
-use crate::interface::{DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
+use crate::interface::{ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
 use crate::metadata::get_keypair;
+use anyhow::Result;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::Signer;
 use std::str::FromStr;
 
-pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<InstructionItem> {
+pub fn to_instruction(pool_id: Pubkey, _swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
     let pool = crate::account_cache::get_account_data::<Pool>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(17);
@@ -24,9 +24,9 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     // 6.base mint ata
     let (base_ata, _) = Pubkey::find_program_address(
         &[
-            &wallet.to_bytes(),
-            &MINT_PROGRAM_ID.to_bytes(),
-            &pool.base_mint.to_bytes(),
+            wallet.as_ref(),
+            MINT_PROGRAM_ID.as_ref(),
+            pool.base_mint.as_ref(),
         ],
         &ATA_PROGRAM_ID,
     );
@@ -34,9 +34,9 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     // 7.quote mint ata
     let (quote_ata, _) = Pubkey::find_program_address(
         &[
-            &wallet.to_bytes(),
-            &MINT_PROGRAM_ID.to_bytes(),
-            &pool.quote_mint.to_bytes(),
+            wallet.as_ref(),
+            MINT_PROGRAM_ID.as_ref(),
+            pool.quote_mint.as_ref(),
         ],
         &ATA_PROGRAM_ID,
     );
@@ -86,10 +86,5 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
         pool.coin_creator_vault_authority,
         false,
     ));
-    Some(InstructionItem::new(
-        DexType::PumpFunAMM,
-        swap_direction,
-        accounts,
-        crate::account_cache::get_alt(&pool_id)?,
-    ))
+    Ok(accounts)
 }

@@ -1,13 +1,13 @@
 use crate::dex::raydium_amm::state::AmmInfo;
-use crate::dex::InstructionItem;
-use crate::interface::{DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::dex::raydium_amm::SERUM_PROGRAM_ID;
+use crate::interface::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
+use anyhow::Result;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::Signer;
-use std::str::FromStr;
 
-pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<InstructionItem> {
+pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
     let amm_info = crate::account_cache::get_account_data::<AmmInfo>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(17);
@@ -27,10 +27,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     // 6.pc vault
     accounts.push(AccountMeta::new(amm_info.pc_vault, false));
     // 7.Serum Program Id
-    accounts.push(AccountMeta::new(
-        Pubkey::from_str("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb").unwrap(),
-        false,
-    ));
+    accounts.push(AccountMeta::new(SERUM_PROGRAM_ID, false));
     // 8.Serum Market
     accounts.push(AccountMeta::new(pool_id, false));
     // 9.Serum Bids
@@ -47,17 +44,17 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     accounts.push(AccountMeta::new(pool_id, false));
     let (coin_ata, _) = Pubkey::find_program_address(
         &[
-            &wallet.to_bytes(),
-            &MINT_PROGRAM_ID.to_bytes(),
-            &amm_info.coin_vault_mint.to_bytes(),
+            wallet.as_ref(),
+            MINT_PROGRAM_ID.as_ref(),
+            amm_info.coin_vault_mint.as_ref(),
         ],
         &ATA_PROGRAM_ID,
     );
     let (pc_ata, _) = Pubkey::find_program_address(
         &[
-            &wallet.to_bytes(),
-            &MINT_PROGRAM_ID.to_bytes(),
-            &amm_info.pc_vault_mint.to_bytes(),
+            wallet.as_ref(),
+            MINT_PROGRAM_ID.as_ref(),
+            amm_info.pc_vault_mint.as_ref(),
         ],
         &ATA_PROGRAM_ID,
     );
@@ -74,10 +71,5 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     }
     // 17.wallet
     accounts.push(AccountMeta::new(wallet, true));
-    Some(InstructionItem::new(
-        DexType::RaydiumAMM,
-        swap_direction,
-        accounts,
-        crate::account_cache::get_alt(&pool_id)?,
-    ))
+    Ok(accounts)
 }

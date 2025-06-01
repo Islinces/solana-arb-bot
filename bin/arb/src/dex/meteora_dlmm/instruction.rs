@@ -2,14 +2,14 @@ use crate::account_cache::get_token_program;
 use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
 use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::{METEORA_DLMM_EVENT_AUTHORITY_PROGRAM_ID, METEORA_DLMM_PROGRAM_ID};
-use crate::dex::InstructionItem;
-use crate::interface::{DexType, ATA_PROGRAM_ID};
+use crate::interface::ATA_PROGRAM_ID;
 use crate::metadata::get_keypair;
+use anyhow::{anyhow, Result};
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signer;
 
-pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<InstructionItem> {
+pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
     let lb_pair = crate::account_cache::get_account_data::<LbPair>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(20);
@@ -18,7 +18,8 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     // 2.bitmap extension
     let bitmap_extension_key =
         crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(&pool_id);
-    let bitmap_extension = get_bitmap_extension(&bitmap_extension_key);
+    let bitmap_extension =
+        crate::account_cache::get_account_data::<BinArrayBitmapExtension>(&bitmap_extension_key);
     accounts.push(AccountMeta::new_readonly(
         bitmap_extension
             .as_ref()
@@ -80,46 +81,23 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Option<Instructi
     // 15.program
     accounts.push(AccountMeta::new_readonly(METEORA_DLMM_PROGRAM_ID, false));
     // 16~~.current bin array
-    let bin_array_keys = get_bin_arrays(
+    get_bin_array_pubkeys_for_swap(
         &pool_id,
         &lb_pair,
         bitmap_extension.as_ref(),
         swap_direction,
         3,
-    );
-    if let Ok(keys) = bin_array_keys {
-        accounts.extend(
-            keys.into_iter()
-                .map(|k| AccountMeta::new(k, false))
-                .collect::<Vec<_>>(),
-        );
-        Some(InstructionItem::new(
-            DexType::MeteoraDLMM,
-            swap_direction,
-            accounts,
-            crate::account_cache::get_alt(&pool_id)?,
-        ))
-    } else {
-        None
-    }
-}
-
-fn get_bitmap_extension(extension_key: &Pubkey) -> Option<BinArrayBitmapExtension> {
-    crate::account_cache::get_account_data::<BinArrayBitmapExtension>(&extension_key)
-}
-
-fn get_bin_arrays(
-    lb_pair_pubkey: &Pubkey,
-    lb_pair: &LbPair,
-    bitmap_extension: Option<&BinArrayBitmapExtension>,
-    swap_for_y: bool,
-    take_count: u8,
-) -> anyhow::Result<Vec<Pubkey>> {
-    get_bin_array_pubkeys_for_swap(
-        lb_pair_pubkey,
-        lb_pair,
-        bitmap_extension,
-        swap_for_y,
-        take_count,
+    )
+    .map_or(
+        Err(anyhow!("生成指令获取Binarray失败")),
+        |bin_arrays| {
+            accounts.extend(
+                bin_arrays
+                    .into_iter()
+                    .map(|k| AccountMeta::new(k, false))
+                    .collect::<Vec<_>>(),
+            );
+            Ok(accounts)
+        },
     )
 }
