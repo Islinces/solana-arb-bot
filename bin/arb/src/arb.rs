@@ -107,7 +107,7 @@ impl Arb {
                                         / 1000.0;
                                     let quote_cost = trigger_quote_cost.as_nanos() as f64 / 1000.0;
                                     info!(
-                                        "Arb_{index} ==> 耗时 : {:>8.2}μs, \
+                                        "Arb_{index} ==> 耗时 : {:>8.2}ms, \
                                         路由 : {:>8.2}μs, \
                                         {}
                                         路径 : {}",
