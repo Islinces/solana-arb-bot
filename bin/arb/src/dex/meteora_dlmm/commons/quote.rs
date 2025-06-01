@@ -12,7 +12,8 @@ use anyhow::{ensure, Context};
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
-use std::{collections::HashMap, ops::Deref};
+use std::collections::VecDeque;
+use std::ops::Deref;
 
 #[derive(Debug)]
 pub struct SwapExactInQuote {
@@ -55,12 +56,10 @@ fn validate_swap_activation(
 
 #[allow(clippy::too_many_arguments)]
 pub fn quote_exact_in(
-    lb_pair_pubkey: Pubkey,
     lb_pair: LbPair,
     amount_in: u64,
     swap_for_y: bool,
-    bin_arrays: HashMap<Pubkey, BinArray>,
-    bitmap_extension: Option<BinArrayBitmapExtension>,
+    mut bin_arrays: VecDeque<BinArray>,
     clock: Clock,
     mint_x_account: Option<TransferFeeConfig>,
     mint_y_account: Option<TransferFeeConfig>,
@@ -93,19 +92,8 @@ pub fn quote_exact_in(
     while amount_left > 0 {
         loop_count += 1;
         // 查找第一个有流动性的bin_array
-        let active_bin_array_pubkey = get_bin_array_pubkeys_for_swap(
-            &lb_pair_pubkey,
-            &lb_pair,
-            bitmap_extension.as_ref(),
-            swap_for_y,
-            1,
-        )?
-        .pop()
-        .context("Pool out of liquidity")?;
-
         let mut active_bin_array = bin_arrays
-            .get(&active_bin_array_pubkey)
-            .cloned()
+            .pop_front()
             .context("Active bin array not found")?;
 
         loop {

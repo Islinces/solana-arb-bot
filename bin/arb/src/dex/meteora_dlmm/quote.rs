@@ -16,19 +16,17 @@ pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPai
         None => None,
         Some(bin_arrays) => {
             match quote_exact_in(
-                pool_id.clone(),
                 pool,
                 amount_in,
                 swap_direction,
                 bin_arrays,
-                bitmap_extension,
                 crate::account_cache::get_clock()?,
                 token_transfer_configs[0],
                 token_transfer_configs[1],
             ) {
                 Ok(quote) => Some(quote.amount_out),
                 Err(e) => {
-                    error!("DLMM[{}] quote 失败：{:?}", pool_id, e);
+                    error!("DLMM[{}] quote 失败：{}", pool_id, e);
                     None
                 }
             }
@@ -63,7 +61,7 @@ fn get_bin_arrays(
     bitmap_extension: Option<&BinArrayBitmapExtension>,
     swap_for_y: bool,
     take_count: u8,
-) -> Option<HashMap<Pubkey, BinArray>> {
+) -> Option<VecDeque<BinArray>> {
     match get_bin_array_pubkeys_for_swap(
         lb_pair_pubkey,
         lb_pair,
@@ -78,12 +76,12 @@ fn get_bin_arrays(
                 .filter_map(|key| {
                     let bin_array = crate::account_cache::get_account_data::<BinArray>(&key);
                     if let Some(bin_array) = bin_array {
-                        Some((key, bin_array))
+                        Some(bin_array)
                     } else {
                         None
                     }
                 })
-                .collect::<HashMap<Pubkey, BinArray>>();
+                .collect::<VecDeque<_>>();
             if bin_array_map.len() != expect_count {
                 error!("转换BinArray失败");
                 None
