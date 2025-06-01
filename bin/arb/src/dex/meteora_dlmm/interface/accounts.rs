@@ -1,155 +1,188 @@
-use borsh::{BorshDeserialize, BorshSerialize};
+use crate::account_cache::{DynamicCache, StaticCache};
+use crate::dex::byte_utils::read_from;
+use crate::dex::meteora_dlmm::interface::typedefs::{
+    Bin, StaticParameters, VariableParameters, S_PARAMETER_LEN, V_PARAMETER_LEN,
+};
+use crate::dex::FromCache;
+use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;
-use bytemuck::{Pod, Zeroable};
-use crate::dex::meteora_dlmm::interface::typedefs::{Bin, ProtocolFee, RewardInfo, StaticParameters, VariableParameters};
+use std::ptr;
 
 pub const BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM: [u8; 8] = [80, 111, 124, 113, 55, 237, 18, 5];
 #[repr(C)]
-#[derive(Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq, Pod, Copy, Zeroable)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct BinArrayBitmapExtension {
     pub lb_pair: Pubkey,
     pub positive_bin_array_bitmap: [[u64; 8]; 12],
     pub negative_bin_array_bitmap: [[u64; 8]; 12],
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct BinArrayBitmapExtensionAccount(pub BinArrayBitmapExtension);
-impl BinArrayBitmapExtensionAccount {
-    pub fn deserialize(buf: &[u8]) -> std::io::Result<Self> {
-        use std::io::Read;
-        let mut reader = buf;
-        let mut maybe_discm = [0u8; 8];
-        reader.read_exact(&mut maybe_discm)?;
-        if maybe_discm != BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "discm does not match. Expected: {:?}. Received: {:?}",
-                    BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM, maybe_discm
-                ),
-            ));
-        }
-        Ok(Self(BinArrayBitmapExtension::deserialize(&mut reader)?))
+impl BinArrayBitmapExtension {
+    pub fn from_slice_data(data: &[u8]) -> Self {
+        unsafe { ptr::read_unaligned(data.as_ptr() as *const BinArrayBitmapExtension) }
     }
-    pub fn serialize<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
-        writer.write_all(&BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM)?;
-        self.0.serialize(&mut writer)
-    }
-    pub fn try_to_vec(&self) -> std::io::Result<Vec<u8>> {
-        let mut data = Vec::new();
-        self.serialize(&mut data)?;
-        Ok(data)
+}
+
+impl FromCache for BinArrayBitmapExtension {
+    fn from_cache(
+        account_key: &Pubkey,
+        _static_cache: RwLockReadGuard<StaticCache>,
+        dynamic_cache: &DynamicCache,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let dynamic_data = dynamic_cache.get(&account_key)?;
+        let dynamic_data = dynamic_data.value().as_slice();
+        Some(BinArrayBitmapExtension::from_slice_data(dynamic_data))
     }
 }
 pub const BIN_ARRAY_ACCOUNT_DISCM: [u8; 8] = [92, 142, 92, 220, 5, 148, 70, 181];
 #[repr(C)]
-#[derive(Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq, Pod, Copy, Zeroable)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct BinArray {
     pub index: i64,
-    pub version: u8,
-    pub padding: [u8; 7],
     pub lb_pair: Pubkey,
     pub bins: [Bin; 70],
 }
-#[derive(Clone, Debug, PartialEq)]
-pub struct BinArrayAccount(pub BinArray);
-impl BinArrayAccount {
-    pub fn deserialize(buf: &[u8]) -> std::io::Result<Self> {
-        use std::io::Read;
-        let mut reader = buf;
-        let mut maybe_discm = [0u8; 8];
-        reader.read_exact(&mut maybe_discm)?;
-        if maybe_discm != BIN_ARRAY_ACCOUNT_DISCM {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "discm does not match. Expected: {:?}. Received: {:?}",
-                    BIN_ARRAY_ACCOUNT_DISCM, maybe_discm
-                ),
-            ));
+
+impl FromCache for BinArray {
+    fn from_cache(
+        account_key: &Pubkey,
+        _static_cache: RwLockReadGuard<StaticCache>,
+        dynamic_cache: &DynamicCache,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let dynamic_data = dynamic_cache.get(&account_key)?;
+        let dynamic_data = dynamic_data.value().as_slice();
+        Some(BinArray::from_slice_data(dynamic_data))
+    }
+}
+
+impl BinArray {
+    pub fn from_slice_data(data: &[u8]) -> Self {
+        unsafe {
+            let index = read_from::<i64>(&data[0..8]);
+            let lb_pair = read_from::<Pubkey>(&data[8..40]);
+            let bins = read_from::<[Bin; 70]>(&data[40..]);
+            Self {
+                index,
+                lb_pair,
+                bins,
+            }
         }
-        Ok(Self(BinArray::deserialize(&mut reader)?))
-    }
-    pub fn serialize<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
-        writer.write_all(&BIN_ARRAY_ACCOUNT_DISCM)?;
-        self.0.serialize(&mut writer)
-    }
-    pub fn try_to_vec(&self) -> std::io::Result<Vec<u8>> {
-        let mut data = Vec::new();
-        self.serialize(&mut data)?;
-        Ok(data)
     }
 }
 
 pub const LB_PAIR_ACCOUNT_DISCM: [u8; 8] = [33, 11, 49, 98, 181, 101, 177, 13];
 #[repr(C)]
-#[derive(
-    Clone, Debug, BorshDeserialize, BorshSerialize, PartialEq, Pod, Copy, Zeroable, Default,
-)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, Default)]
 pub struct LbPair {
+    // static
     pub parameters: StaticParameters,
-    pub v_parameters: VariableParameters,
-    pub bump_seed: [u8; 1],
-    pub bin_step_seed: [u8; 2],
     pub pair_type: u8,
-    pub active_id: i32,
     pub bin_step: u16,
     pub status: u8,
-    pub require_base_factor_seed: u8,
-    pub base_factor_seed: [u8; 2],
     pub activation_type: u8,
-    pub creator_pool_on_off_control: u8,
     pub token_x_mint: Pubkey,
     pub token_y_mint: Pubkey,
     pub reserve_x: Pubkey,
     pub reserve_y: Pubkey,
-    pub protocol_fee: ProtocolFee,
-    pub padding1: [u8; 32],
-    pub reward_infos: [RewardInfo; 2],
     pub oracle: Pubkey,
-    pub bin_array_bitmap: [u64; 16],
-    pub last_updated_at: i64,
-    pub padding2: [u8; 32],
-    pub pre_activation_swap_address: Pubkey,
-    pub base_key: Pubkey,
     pub activation_point: u64,
-    pub pre_activation_duration: u64,
-    pub padding3: [u8; 8],
-    pub padding4: u64,
-    pub creator: Pubkey,
     pub token_mint_x_program_flag: u8,
     pub token_mint_y_program_flag: u8,
-    pub reserved: [u8; 22],
+    // dynamic
+    pub v_parameters: VariableParameters,
+    pub active_id: i32,
+    pub bin_array_bitmap: [u64; 16],
 }
-#[derive(Clone, Debug, PartialEq)]
-pub struct LbPairAccount(pub LbPair);
-impl LbPairAccount {
-    pub fn deserialize(buf: &[u8]) -> std::io::Result<Self> {
-        use std::io::Read;
-        let mut reader = buf;
-        let mut maybe_discm = [0u8; 8];
-        reader.read_exact(&mut maybe_discm)?;
-        if maybe_discm != LB_PAIR_ACCOUNT_DISCM {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "discm does not match. Expected: {:?}. Received: {:?}",
-                    LB_PAIR_ACCOUNT_DISCM, maybe_discm
-                ),
-            ));
+
+impl FromCache for LbPair {
+    fn from_cache(
+        account_key: &Pubkey,
+        static_cache: RwLockReadGuard<StaticCache>,
+        dynamic_cache: &DynamicCache,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let static_data = static_cache.get(&account_key);
+        let dynamic_data = dynamic_cache.get(&account_key)?;
+        let dynamic_data = dynamic_data.value().as_slice();
+        Some(LbPair::from_slice_data(static_data?, dynamic_data))
+    }
+}
+
+impl LbPair {
+    pub fn from_slice_data(static_data: &[u8], dynamic_data: &[u8]) -> Self {
+        unsafe {
+            let parameters = read_from::<StaticParameters>(&static_data[0..S_PARAMETER_LEN]);
+            let pair_type = read_from::<u8>(&static_data[S_PARAMETER_LEN..S_PARAMETER_LEN + 1]);
+            let bin_step =
+                read_from::<u16>(&static_data[S_PARAMETER_LEN + 1..S_PARAMETER_LEN + 1 + 2]);
+            let status =
+                read_from::<u8>(&static_data[S_PARAMETER_LEN + 1 + 2..S_PARAMETER_LEN + 1 + 2 + 1]);
+            let activation_type = read_from::<u8>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1..S_PARAMETER_LEN + 1 + 2 + 1 + 1],
+            );
+            let token_x_mint = read_from::<Pubkey>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32],
+            );
+            let token_y_mint = read_from::<Pubkey>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32],
+            );
+            let reserve_x = read_from::<Pubkey>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32],
+            );
+            let reserve_y = read_from::<Pubkey>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32],
+            );
+            let oracle = read_from::<Pubkey>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32],
+            );
+            let activation_point = read_from::<u64>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8],
+            );
+
+            let token_mint_x_program_flag = read_from::<u8>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 1],
+            );
+            let token_mint_y_program_flag = read_from::<u8>(
+                &static_data[S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 1
+                    ..S_PARAMETER_LEN + 1 + 2 + 1 + 1 + 32 + 32 + 32 + 32 + 32 + 8 + 1 + 1],
+            );
+            let v_parameters = read_from::<VariableParameters>(&dynamic_data[0..V_PARAMETER_LEN]);
+            let active_id = read_from::<i32>(&dynamic_data[V_PARAMETER_LEN..V_PARAMETER_LEN + 4]);
+            let bin_array_bitmap = read_from::<[u64; 16]>(
+                &dynamic_data[V_PARAMETER_LEN + 4..V_PARAMETER_LEN + 4 + 128],
+            );
+            Self {
+                parameters,
+                pair_type,
+                bin_step,
+                status,
+                activation_type,
+                token_x_mint,
+                token_y_mint,
+                reserve_x,
+                reserve_y,
+                oracle,
+                activation_point,
+                token_mint_x_program_flag,
+                token_mint_y_program_flag,
+                v_parameters,
+                active_id,
+                bin_array_bitmap,
+            }
         }
-        Ok(Self(LbPair::deserialize(&mut reader)?))
-    }
-    pub fn serialize<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
-        writer.write_all(&LB_PAIR_ACCOUNT_DISCM)?;
-        self.0.serialize(&mut writer)
-    }
-    pub fn try_to_vec(&self) -> std::io::Result<Vec<u8>> {
-        let mut data = Vec::new();
-        self.serialize(&mut data)?;
-        Ok(data)
     }
 }

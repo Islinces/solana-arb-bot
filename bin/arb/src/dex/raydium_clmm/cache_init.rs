@@ -26,7 +26,7 @@ pub async fn init_cache(
         AccountType::Pool,
         rpc_client.clone(),
     )
-        .await;
+    .await;
     all_pool_account_data.retain(|account| {
         if account.static_slice_data.as_ref().is_none()
             || account.dynamic_slice_data.as_ref().is_none()
@@ -43,7 +43,7 @@ pub async fn init_cache(
         &all_pool_account_data,
         &mut invalid_pool,
     )
-        .await;
+    .await;
     all_pool_account_data.retain(|account| !invalid_pool.contains(&account.account_key));
     // bitmap extension
     let all_bitmap_extension_account_data = get_bitmap_extension_accounts(
@@ -51,7 +51,7 @@ pub async fn init_cache(
         &all_pool_account_data,
         &mut invalid_pool,
     )
-        .await;
+    .await;
     all_pool_account_data.retain(|account| !invalid_pool.contains(&account.account_key));
     // tick array
     let tick_array_account_data = get_tick_array_accounts(
@@ -61,7 +61,7 @@ pub async fn init_cache(
         10,
         &mut invalid_pool,
     )
-        .await;
+    .await;
     all_pool_account_data.retain(|account| !invalid_pool.contains(&account.account_key));
     if dex_data.is_empty() {
         vec![]
@@ -100,15 +100,15 @@ async fn get_amm_config_accounts(
         AccountType::AmmConfig,
         rpc_client.clone(),
     )
-        .await;
+    .await;
     all_amm_config_account_data.retain(|account| {
         if account.static_slice_data.as_ref().is_none_or(|data| {
             data.len()
                 != crate::data_slice::get_slice_size(
-                DexType::RaydiumCLMM,
-                AccountType::AmmConfig,
-                SliceType::Unsubscribed,
-            )
+                    DexType::RaydiumCLMM,
+                    AccountType::AmmConfig,
+                    SliceType::Unsubscribed,
+                )
                 .unwrap()
                 .unwrap()
         }) {
@@ -145,18 +145,18 @@ async fn get_bitmap_extension_accounts(
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>(),
         DexType::RaydiumCLMM,
-        AccountType::TickArrayBitmapExtension,
+        AccountType::TickArrayBitmap,
         rpc_client.clone(),
     )
-        .await;
+    .await;
     all_bitmap_extension_account_data.retain(|account| {
         if account.dynamic_slice_data.as_ref().is_none_or(|data| {
             data.len()
                 != crate::data_slice::get_slice_size(
-                DexType::RaydiumCLMM,
-                AccountType::TickArrayBitmapExtension,
-                SliceType::Subscribed,
-            )
+                    DexType::RaydiumCLMM,
+                    AccountType::TickArrayBitmap,
+                    SliceType::Subscribed,
+                )
                 .unwrap()
                 .unwrap()
         }) {
@@ -211,7 +211,7 @@ async fn get_tick_array_accounts(
                 &tick_array_bitmap_extension,
                 true,
             )
-                .unwrap_or(vec![]);
+            .unwrap_or(vec![]);
             tick_array_states.extend(
                 load_cur_and_next_specify_count_tick_array_key(
                     load_count,
@@ -220,7 +220,7 @@ async fn get_tick_array_accounts(
                     &tick_array_bitmap_extension,
                     false,
                 )
-                    .unwrap_or(vec![]),
+                .unwrap_or(vec![]),
             );
             if tick_array_states.is_empty() {
                 None
@@ -243,10 +243,10 @@ async fn get_tick_array_accounts(
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>(),
         DexType::RaydiumCLMM,
-        AccountType::TickArrayState,
+        AccountType::TickArray,
         rpc_client.clone(),
     )
-        .await;
+    .await;
     all_tick_array_state_account_data.retain(|account| {
         if account.dynamic_slice_data.as_ref().is_none() {
             invalid_pool.insert(

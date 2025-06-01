@@ -1,5 +1,7 @@
 use crate::account_cache::{DynamicCache, StaticCache};
-use crate::dex::byte_utils::{read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64};
+use crate::dex::byte_utils::{
+    read_from, read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64,
+};
 use crate::dex::raydium_clmm::big_num::{U1024, U512};
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::FromCache;
@@ -21,7 +23,7 @@ pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
 pub struct AmmConfig {
     pub protocol_fee_rate: u32,
     pub trade_fee_rate: u32,
-    pub fund_fee_rate:u32,
+    pub fund_fee_rate: u32,
 }
 
 impl FromCache for AmmConfig {
@@ -98,60 +100,33 @@ impl FromCache for PoolState {
 
 impl PoolState {
     pub fn from_slice_data(static_data: &[u8], dynamic_data: &[u8]) -> Self {
-        if static_data.len() == 0 {
-            unsafe {
-                // let amm_config = read_pubkey(&static_data[0..32]);
-                // let token_mint_0 = read_pubkey(&static_data[32..64]);
-                // let token_mint_1 = read_pubkey(&static_data[64..96]);
-                // let token_vault_0 = read_pubkey(&static_data[96..128]);
-                // let token_vault_1 = read_pubkey(&static_data[128..160]);
-                // let observation_key = read_pubkey(&static_data[160..192]);
-                // let tick_spacing = read_u16(&static_data[192..194]);
+        unsafe {
+            let amm_config = read_pubkey(&static_data[0..32]);
+            let token_mint_0 = read_pubkey(&static_data[32..64]);
+            let token_mint_1 = read_pubkey(&static_data[64..96]);
+            let token_vault_0 = read_pubkey(&static_data[96..128]);
+            let token_vault_1 = read_pubkey(&static_data[128..160]);
+            let observation_key = read_pubkey(&static_data[160..192]);
+            let tick_spacing = read_u16(&static_data[192..194]);
 
-                let liquidity = read_u128(&dynamic_data[0..16]);
-                let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
-                let tick_current = read_i32(&dynamic_data[32..36]);
-                let tick_array_bitmap = ptr::read_unaligned(
-                    dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
-                );
-                Self {
-                    liquidity,
-                    sqrt_price_x64,
-                    tick_current,
-                    tick_array_bitmap,
-                    ..Self::default()
-                }
-            }
-        } else {
-            unsafe {
-                let amm_config = read_pubkey(&static_data[0..32]);
-                let token_mint_0 = read_pubkey(&static_data[32..64]);
-                let token_mint_1 = read_pubkey(&static_data[64..96]);
-                let token_vault_0 = read_pubkey(&static_data[96..128]);
-                let token_vault_1 = read_pubkey(&static_data[128..160]);
-                let observation_key = read_pubkey(&static_data[160..192]);
-                let tick_spacing = read_u16(&static_data[192..194]);
-
-                let liquidity = read_u128(&dynamic_data[0..16]);
-                let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
-                let tick_current = read_i32(&dynamic_data[32..36]);
-                let tick_array_bitmap = ptr::read_unaligned(
-                    dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
-                );
-                Self {
-                    amm_config,
-                    token_mint_0,
-                    token_mint_1,
-                    token_vault_0,
-                    token_vault_1,
-                    observation_key,
-                    tick_spacing,
-                    liquidity,
-                    sqrt_price_x64,
-                    tick_current,
-                    tick_array_bitmap,
-                    ..Self::default()
-                }
+            let liquidity = read_u128(&dynamic_data[0..16]);
+            let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
+            let tick_current = read_i32(&dynamic_data[32..36]);
+            let tick_array_bitmap = ptr::read_unaligned(
+                dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
+            );
+            Self {
+                amm_config,
+                token_mint_0,
+                token_mint_1,
+                token_vault_0,
+                token_vault_1,
+                observation_key,
+                tick_spacing,
+                liquidity,
+                sqrt_price_x64,
+                tick_current,
+                tick_array_bitmap,
             }
         }
     }
@@ -290,9 +265,14 @@ impl FromCache for TickArrayState {
     {
         let dynamic_slice_data = dynamic_cache.get(account_key)?;
         unsafe {
-            Some(ptr::read_unaligned(
-                dynamic_slice_data.as_slice().as_ptr() as *const TickArrayState
-            ))
+            let pool_id = read_from::<Pubkey>(&dynamic_slice_data[0..32]);
+            let start_tick_index = read_from::<i32>(&dynamic_slice_data[32..36]);
+            let ticks = read_from::<[TickState; TICK_ARRAY_SIZE_USIZE]>(&dynamic_slice_data[36..]);
+            Some(Self {
+                pool_id,
+                start_tick_index,
+                ticks,
+            })
         }
     }
 }
@@ -404,7 +384,7 @@ impl Default for TickArrayState {
 }
 
 #[repr(C, packed)]
-#[derive(Default, Debug, Clone, Copy, BorshDeserialize)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct TickState {
     pub tick: i32,
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)

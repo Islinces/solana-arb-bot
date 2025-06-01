@@ -85,9 +85,9 @@ pub fn get_dex_type_and_account_type(
             .tick_array_extension_bitmap
             .contains_key(account_key)
         {
-            Some((DexType::RaydiumCLMM, AccountType::TickArrayBitmapExtension))
+            Some((DexType::RaydiumCLMM, AccountType::TickArrayBitmap))
         } else {
-            Some((DexType::RaydiumCLMM, AccountType::TickArrayState))
+            Some((DexType::RaydiumCLMM, AccountType::TickArray))
         }
     } else {
         None

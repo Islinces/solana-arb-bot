@@ -117,11 +117,11 @@ pub fn derive_bin_array_pda(lb_pair: Pubkey, bin_array_index: i64) -> (Pubkey, u
     )
 }
 
-pub fn derive_bin_array_bitmap_extension(lb_pair: Pubkey) -> (Pubkey, u8) {
+pub fn derive_bin_array_bitmap_extension(lb_pair: Pubkey) -> Pubkey {
     Pubkey::find_program_address(
         &[BIN_ARRAY_BITMAP_SEED, lb_pair.as_ref()],
         DexType::MeteoraDLMM.get_ref_program_id(),
-    )
+    ).0
 }
 
 pub fn derive_reserve_pda(token_mint: Pubkey, lb_pair: Pubkey) -> (Pubkey, u8) {

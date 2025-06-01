@@ -166,7 +166,6 @@ pub fn compute_swap_step(
 /// Pre calcumate amount_in or amount_out for the specified price range
 /// The amount maybe overflow of u64 due to the `sqrt_price_target_x64` maybe unreasonable.
 /// Therefore, this situation needs to be handled in `compute_swap_step` to recalculate the price that can be reached based on the amount.
-#[cfg(not(test))]
 fn calculate_amount_in_range(
     sqrt_price_current_x64: u128,
     sqrt_price_target_x64: u128,

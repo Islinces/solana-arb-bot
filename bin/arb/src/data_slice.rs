@@ -4,6 +4,8 @@ use crate::dex::raydium_clmm::data_slice::init_raydium_clmm_data_slice;
 use crate::interface::{AccountType, DexType};
 use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
+use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
+use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::ptr;
 use tokio::sync::OnceCell;
 use tracing::info;
@@ -29,8 +31,22 @@ pub fn slice_data(
             crate::dex::pump_fun::data_slice::slice_data(account_type, data, slice_type)
         }
         DexType::MeteoraDLMM => {
-            unreachable!()
+            crate::dex::meteora_dlmm::data_slice::slice_data(account_type, data, slice_type)
         }
+        DexType::Token2022 => match (slice_type, account_type) {
+            (SliceType::Unsubscribed, AccountType::Token2022) => {
+                StateWithExtensions::<spl_token_2022::state::Mint>::unpack(data.as_ref())
+                    .and_then(|mint_extensions| {
+                        mint_extensions
+                            .get_extension::<TransferFeeConfig>()
+                            .and_then(|_| Ok(data))
+                    })
+                    .map_or(Err(anyhow!("Failed to unpack StateWithExtensions")), |d| {
+                        Ok(d.to_vec())
+                    })
+            }
+            _ => Err(anyhow!("类型不正确")),
+        },
     }
 }
 
@@ -80,6 +96,7 @@ pub fn init_data_slice_config() {
     init_raydium_amm_data_slice();
     init_raydium_clmm_data_slice();
     init_pump_fun_data_slice();
+    crate::dex::meteora_dlmm::data_slice::init_data_slice();
     info!("初始化数据切片规则结束");
 }
 
@@ -104,8 +121,9 @@ pub fn get_slice_size(
             crate::dex::pump_fun::data_slice::get_slice_size(account_type, slice_type)
         }
         DexType::MeteoraDLMM => {
-            unimplemented!()
+            crate::dex::meteora_dlmm::data_slice::get_slice_size(account_type, slice_type)
         }
+        DexType::Token2022 => Err(anyhow!("spl_token_2022")),
     }
 }
 

@@ -34,7 +34,7 @@ pub fn slice_data(
                 &DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
                 DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
             )),
-            AccountType::TickArrayState => {
+            AccountType::TickArray => {
                 let borsh_data =
                     crate::dex::raydium_clmm::copy_tick_array::TickArrayState::try_from_slice(
                         &data[8..],
@@ -55,7 +55,7 @@ pub fn slice_data(
                 // });
                 result
             }
-            AccountType::TickArrayBitmapExtension => Ok(retain_intervals_unsafe(
+            AccountType::TickArrayBitmap => Ok(retain_intervals_unsafe(
                 data,
                 &DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
                     .get()
@@ -90,10 +90,10 @@ pub fn get_slice_size(
         SliceType::Subscribed => match account_type {
             AccountType::Pool => Ok(Some(DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1)),
             AccountType::AmmConfig => Ok(None),
-            AccountType::TickArrayState => Ok(Some(
+            AccountType::TickArray => Ok(Some(
                 DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
             )),
-            AccountType::TickArrayBitmapExtension => Ok(Some(
+            AccountType::TickArrayBitmap => Ok(Some(
                 DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE.get().unwrap().1,
             )),
             _ => Err(anyhow!("DexType和AccountType不匹配")),
@@ -103,8 +103,8 @@ pub fn get_slice_size(
             AccountType::AmmConfig => {
                 Ok(Some(STATIC_RAYDIUM_CLMM_AMM_CONFIG_SLICE.get().unwrap().1))
             }
-            AccountType::TickArrayState => Ok(None),
-            AccountType::TickArrayBitmapExtension => Ok(None),
+            AccountType::TickArray => Ok(None),
+            AccountType::TickArrayBitmap => Ok(None),
             _ => Err(anyhow!("DexType和AccountType不匹配")),
         },
     }

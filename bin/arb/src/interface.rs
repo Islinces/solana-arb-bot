@@ -12,6 +12,7 @@ pub enum DexType {
     RaydiumCLMM,
     PumpFunAMM,
     MeteoraDLMM,
+    Token2022,
 }
 
 #[derive(Debug, Clone)]
@@ -19,12 +20,17 @@ pub enum AccountType {
     // common
     Pool,
     MintVault,
+    // token
+    Token2022,
     // clmm
     AmmConfig,
-    TickArrayState,
-    TickArrayBitmapExtension,
+    TickArray,
+    TickArrayBitmap,
     // pumpfun
     PumpFunGlobalConfig,
+    // dlmm
+    BinArray,
+    BinArrayBitmap,
 }
 
 impl Display for DexType {
@@ -33,7 +39,8 @@ impl Display for DexType {
             DexType::RaydiumAMM => "RaydiumAMM",
             DexType::RaydiumCLMM => "RaydiumCLmm",
             DexType::PumpFunAMM => "PumpFunAMM",
-            DexType::MeteoraDLMM => unimplemented!(),
+            DexType::MeteoraDLMM => "MeteoraDLMM",
+            DexType::Token2022 => "Token2022",
         })
     }
 }
@@ -44,7 +51,8 @@ impl DexType {
             DexType::RaydiumAMM => &crate::dex::raydium_amm::RAYDIUM_AMM_PROGRAM_ID,
             DexType::RaydiumCLMM => &crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID,
             DexType::PumpFunAMM => &crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID,
-            DexType::MeteoraDLMM => unimplemented!(),
+            DexType::MeteoraDLMM => &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID,
+            DexType::Token2022 => unreachable!(),
         }
     }
 }
@@ -57,11 +65,9 @@ pub fn get_dex_type_with_program_id(program_id: &Pubkey) -> Option<DexType> {
         Some(DexType::RaydiumAMM)
     } else if program_id == &crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID {
         Some(DexType::PumpFunAMM)
-    }
-    // else if program_id == &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID {
-    //     unimplemented!()
-    // }
-    else {
+    } else if program_id == &crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID {
+        Some(DexType::MeteoraDLMM)
+    } else {
         None
     }
 }

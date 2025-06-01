@@ -165,6 +165,7 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
         DexType::MeteoraDLMM => {
             unimplemented!()
         }
+        DexType::Token2022 => unreachable!(),
     }
 }
 
@@ -275,6 +276,7 @@ impl QuoteResult {
             DexType::MeteoraDLMM => {
                 unimplemented!()
             }
+            DexType::Token2022 => unreachable!(),
         }
     }
 }

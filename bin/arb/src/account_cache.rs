@@ -2,16 +2,19 @@ use crate::data_slice::{slice_data, SliceType};
 use crate::dex::FromCache;
 use crate::dex_data::DexJson;
 use crate::interface::{get_dex_type_with_program_id, AccountType, DexType};
-use ahash::{AHashMap, RandomState};
+use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::account::accounts_equal;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
+use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
+use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
@@ -54,6 +57,10 @@ impl StaticCache {
 
     pub fn get(&self, account_key: &Pubkey) -> Option<&[u8]> {
         self.0.get(account_key).map_or(None, |v| Some(v.as_slice()))
+    }
+
+    pub fn insert(&mut self, account_key: Pubkey, data: Vec<u8>) {
+        self.0.insert(account_key, data);
     }
 }
 
@@ -120,7 +127,11 @@ pub async fn init_snapshot(
                     .await
             }
             DexType::MeteoraDLMM => {
-                unimplemented!()
+                crate::dex::meteora_dlmm::cache_init::init_cache(&mut dex_data, rpc_client.clone())
+                    .await
+            }
+            _ => {
+                vec![]
             }
         };
         for account in snapshot_data {
@@ -173,12 +184,40 @@ pub async fn init_snapshot(
         );
         effective_dex_data.extend(dex_data);
     }
-    info!("初始化Snapshot结束");
+    init_token_2022(effective_dex_data.as_slice(), rpc_client.clone()).await;
+    info!("初始化Snapshot结束, 数量 : {}", effective_dex_data.len());
     if effective_dex_data.is_empty() {
         Err(anyhow!("所有DexJson均加载失败"))
     } else {
         Ok(effective_dex_data)
     }
+}
+
+async fn init_token_2022(effective_dex_data: &[DexJson], rpc_client: Arc<RpcClient>) {
+    let all_tokens = effective_dex_data
+        .iter()
+        .flat_map(|json| vec![json.mint_a, json.mint_b])
+        .collect::<AHashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let token_2022_accounts = get_account_data_with_data_slice(
+        all_tokens,
+        DexType::Token2022,
+        AccountType::Token2022,
+        rpc_client,
+    )
+    .await
+    .into_iter()
+    .filter(|account| account.dynamic_slice_data.is_some())
+    .collect::<Vec<_>>();
+    info!("Token2022加载完毕，数量 : {}", token_2022_accounts.len());
+    token_2022_accounts.into_iter().for_each(|account| {
+        STATIC_ACCOUNT_CACHE
+            .get()
+            .unwrap()
+            .write()
+            .insert(account.account_key, account.dynamic_slice_data.unwrap());
+    })
 }
 
 pub async fn get_account_data_with_data_slice(

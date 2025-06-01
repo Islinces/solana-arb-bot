@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use crate::dex::meteora_dlmm::commons::constants::BASIS_POINT_MAX;
 use crate::dex::meteora_dlmm::commons::typedefs::SwapResult;
 use crate::dex::meteora_dlmm::interface::accounts::LbPair;
@@ -6,14 +5,16 @@ use crate::dex::meteora_dlmm::interface::typedefs::{Bin, Rounding};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use crate::dex::meteora_dlmm::math::price_math::get_price_from_id;
 use crate::dex::meteora_dlmm::math::u64x64_math::SCALE_OFFSET;
-use crate::dex::meteora_dlmm::math::utils::{safe_mul_div_cast, safe_mul_shr_cast, safe_shl_div_cast};
+use crate::dex::meteora_dlmm::math::utils::{
+    safe_mul_shr_cast, safe_shl_div_cast,
+};
+use anyhow::{Context, Result};
 
 pub trait BinExtension {
     fn get_or_store_bin_price(&mut self, id: i32, bin_step: u16) -> Result<u128>;
     fn is_empty(&self, is_x: bool) -> bool;
     fn get_max_amount_out(&self, swap_for_y: bool) -> u64;
     fn get_max_amount_in(&self, price: u128, swap_for_y: bool) -> Result<u64>;
-    fn calculate_out_amount(&self, liquidity_share: u128) -> Result<(u64, u64)>;
 
     fn swap(
         &mut self,
@@ -77,23 +78,6 @@ impl BinExtension for Bin {
         } else {
             safe_shl_div_cast(amount_in.into(), price, SCALE_OFFSET, Rounding::Down)
         }
-    }
-
-    fn calculate_out_amount(&self, liquidity_share: u128) -> Result<(u64, u64)> {
-        let out_amount_x = safe_mul_div_cast(
-            liquidity_share,
-            self.amount_x.into(),
-            self.liquidity_supply,
-            Rounding::Down,
-        )?;
-
-        let out_amount_y = safe_mul_div_cast(
-            liquidity_share,
-            self.amount_y.into(),
-            self.liquidity_supply,
-            Rounding::Down,
-        )?;
-        Ok((out_amount_x, out_amount_y))
     }
 
     fn swap(

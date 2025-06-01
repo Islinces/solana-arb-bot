@@ -7,7 +7,7 @@ use solana_sdk::pubkey::Pubkey;
 
 mod amm_math;
 pub mod byte_utils;
-// pub mod meteora_dlmm;
+pub mod meteora_dlmm;
 pub mod pump_fun;
 pub mod raydium_amm;
 pub mod raydium_clmm;

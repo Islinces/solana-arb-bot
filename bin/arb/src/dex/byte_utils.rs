@@ -2,6 +2,11 @@ use solana_sdk::pubkey::Pubkey;
 use std::ptr;
 
 #[inline(always)]
+pub unsafe fn read_from<T>(bytes: &[u8]) -> T {
+    ptr::read_unaligned(bytes.as_ptr() as *const T)
+}
+
+#[inline(always)]
 pub unsafe fn read_u16(bytes: &[u8]) -> u16 {
     // *(bytes.as_ptr() as *const u16)
     ptr::read_unaligned(bytes.as_ptr() as *const u16)

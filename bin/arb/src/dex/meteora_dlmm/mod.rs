@@ -5,7 +5,11 @@ mod commons;
 mod conversions;
 mod extensions;
 mod interface;
-mod lb_pair;
+pub mod lb_pair;
 mod math;
+pub mod data_slice;
+pub mod cache_init;
+pub mod instruction;
+pub mod quote;
 
 pub const METEORA_DLMM_PROGRAM_ID: Pubkey = pubkey!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
