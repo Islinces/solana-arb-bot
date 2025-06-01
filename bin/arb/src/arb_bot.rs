@@ -10,10 +10,13 @@ use clap::Parser;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::fs::File;
+use std::str::FromStr;
 use std::sync::Arc;
+use aes_gcm::aes::cipher::typenum::op;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tracing::{error, info};
+use crate::dex::meteora_dlmm::interface::accounts::LbPair;
 
 #[derive(Parser, Debug)]
 pub struct Command {
@@ -97,48 +100,53 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         rpc_client,
     )
     .await?;
-    // grpc消息消费通道
-    let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
-    // Account本地缓存更新后广播通道
-    let (cached_message_sender, _) = broadcast::channel(arb_channel_capacity);
-    // 接收发生改变的缓存数据，判断是否需要触发route
-    let mut join_set = JoinSet::new();
-    // 将GRPC通过过来的数据保存到本地缓存中
-    // 缓存数据发生改变，将数据发送出来
-    MessageProcessor::new(processor_size)
-        .start(
-            &mut join_set,
-            &grpc_message_receiver,
-            &cached_message_sender,
-        )
-        .await;
-    // 接收更新缓存的Account信息，判断是否需要触发route
-    Arb::new(
-        arb_size,
-        arb_amount_in,
-        arb_min_profit,
-        arb_mint,
-        arb_mint_bps_numerator,
-        arb_mint_bps_denominator,
-        JitoExecutor::initialize(&command)?,
-    )
-    .start(&mut join_set, &cached_message_sender)
-    .await;
-    join_set.spawn(async move {
-        // 订阅GRPC
-        let subscribe = GrpcSubscribe {
-            grpc_url,
-            single_mode,
-            specify_pool: command.specify_pool.clone(),
-            standard_program: command.standard_program,
-        };
-        subscribe.subscribe(dex_data, grpc_message_sender).await
-    });
-    while let Some(event) = join_set.join_next().await {
-        if let Err(err) = event {
-            error!("task terminated unexpectedly: {err:#}");
-        }
-    }
+    let pool_id=Pubkey::from_str("3msVd34R5KxonDzyNSV5nT19UtUeJ2RF1NaQhvVPNLxL").unwrap();
+    let option = crate::account_cache::get_account_data::<LbPair>(&pool_id).unwrap();
+    info!("{:#?}", option);
+    let option1 = crate::dex::meteora_dlmm::quote::quote(100000000, true, &pool_id, option);
+    info!("{:#?}", option1);
+    // // grpc消息消费通道
+    // let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
+    // // Account本地缓存更新后广播通道
+    // let (cached_message_sender, _) = broadcast::channel(arb_channel_capacity);
+    // // 接收发生改变的缓存数据，判断是否需要触发route
+    // let mut join_set = JoinSet::new();
+    // // 将GRPC通过过来的数据保存到本地缓存中
+    // // 缓存数据发生改变，将数据发送出来
+    // MessageProcessor::new(processor_size)
+    //     .start(
+    //         &mut join_set,
+    //         &grpc_message_receiver,
+    //         &cached_message_sender,
+    //     )
+    //     .await;
+    // // 接收更新缓存的Account信息，判断是否需要触发route
+    // Arb::new(
+    //     arb_size,
+    //     arb_amount_in,
+    //     arb_min_profit,
+    //     arb_mint,
+    //     arb_mint_bps_numerator,
+    //     arb_mint_bps_denominator,
+    //     JitoExecutor::initialize(&command)?,
+    // )
+    // .start(&mut join_set, &cached_message_sender)
+    // .await;
+    // join_set.spawn(async move {
+    //     // 订阅GRPC
+    //     let subscribe = GrpcSubscribe {
+    //         grpc_url,
+    //         single_mode,
+    //         specify_pool: command.specify_pool.clone(),
+    //         standard_program: command.standard_program,
+    //     };
+    //     subscribe.subscribe(dex_data, grpc_message_sender).await
+    // });
+    // while let Some(event) = join_set.join_next().await {
+    //     if let Err(err) = event {
+    //         error!("task terminated unexpectedly: {err:#}");
+    //     }
+    // }
     Ok(())
 }
 
@@ -162,7 +170,7 @@ pub async fn init_start_data(
     // 初始化account之间的关系，用于解析GRPC推送数据
     crate::account_relation::init(dex_data.as_slice())?;
     // 构建边
-    crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
+    // crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
     Ok(dex_data)
 }
 
