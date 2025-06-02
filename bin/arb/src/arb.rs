@@ -116,8 +116,7 @@ impl Arb {
                                     info!(
                                         "Arb_{index} ==> 耗时 : {:>4.2}ms, \
                                         路由 : {:>4.2}μs, \
-                                        {}
-                                        路径 : {}, tx : {},  Slot : {}",
+                                        {} \n路径 : {}, tx : {},  Slot : {}",
                                         all_cost,
                                         quote_cost,
                                         msg,
