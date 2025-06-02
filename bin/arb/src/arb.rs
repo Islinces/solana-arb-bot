@@ -114,8 +114,8 @@ impl Arb {
                                         .take(4)
                                         .collect::<String>();
                                     info!(
-                                        "Arb_{index} ==> 耗时 : {:>8.2}ms, \
-                                        路由 : {:>8.2}μs, \
+                                        "Arb_{index} ==> 耗时 : {:>4.2}ms, \
+                                        路由 : {:>4.2}μs, \
                                         {}
                                         路径 : {}, tx : {},  Slot : {}",
                                         all_cost,

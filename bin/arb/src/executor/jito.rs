@@ -141,7 +141,7 @@ impl Executor for JitoExecutor {
                     }
                 };
                 Ok(format!(
-                    "指令 : {:>8.2}μs, 发送 : {:>8.2}ms, BundleId : {}, Base64 : {}",
+                    "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, BundleId : {} \nBase64 : {}",
                     instruction_cost.as_nanos() as f64 / 1000.0,
                     jito_request_start.elapsed().as_micros() as f64 / 1000.0,
                     bundle_id,
