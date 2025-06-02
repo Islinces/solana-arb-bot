@@ -114,13 +114,14 @@ impl Arb {
                                     info!(
                                         "\nArb_{index} ==> 耗时 : {:>4.2}ms, \
                                         路由 : {:>4.2}μs, \
-                                        {} \n路径 : {}, tx : {},  Slot : {}",
+                                        {} \n路径 : {}, tx : {},  Slot : {}, Time: {}",
                                         all_cost,
                                         quote_cost,
                                         msg,
                                         quote_info,
                                         tx,
                                         transaction_msg.slot,
+                                        transaction_msg.received_timestamp.format("%Y-%m-%d %H:%M:%S.%3f")
                                     );
                                 }
                             }
