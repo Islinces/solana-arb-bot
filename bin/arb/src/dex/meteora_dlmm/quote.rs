@@ -26,7 +26,7 @@ pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPai
             ) {
                 Ok(quote) => Some(quote.amount_out),
                 Err(e) => {
-                    error!("DLMM[{}] quote 失败：{}", pool_id, e);
+                    // error!("DLMM[{}] quote 失败：{}", pool_id, e);
                     None
                 }
             }
