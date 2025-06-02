@@ -45,18 +45,20 @@ pub struct GrpcTransactionMsg {
     pub meta: Option<TransactionStatusMeta>,
     pub _index: u64,
     pub received_timestamp: DateTime<Local>,
+    pub slot: u64,
     pub instant: Instant,
 }
 
-impl From<SubscribeUpdateTransactionInfo> for GrpcTransactionMsg {
-    fn from(transaction: SubscribeUpdateTransactionInfo) -> Self {
+impl From<(SubscribeUpdateTransactionInfo, u64)> for GrpcTransactionMsg {
+    fn from(transaction: (SubscribeUpdateTransactionInfo, u64)) -> Self {
         let time = Local::now();
         Self {
-            signature: transaction.signature,
-            transaction: transaction.transaction,
-            meta: transaction.meta,
-            _index: transaction.index,
+            signature: transaction.0.signature,
+            transaction: transaction.0.transaction,
+            meta: transaction.0.meta,
+            _index: transaction.0.index,
             received_timestamp: time,
+            slot: transaction.1,
             instant: Instant::now(),
         }
     }

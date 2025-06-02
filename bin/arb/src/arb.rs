@@ -106,12 +106,24 @@ impl Arb {
                                         as f64
                                         / 1000.0;
                                     let quote_cost = trigger_quote_cost.as_nanos() as f64 / 1000.0;
+                                    let tx = transaction_msg
+                                        .signature
+                                        .as_slice()
+                                        .to_base58()
+                                        .chars()
+                                        .take(4)
+                                        .collect::<String>();
                                     info!(
                                         "Arb_{index} ==> 耗时 : {:>8.2}ms, \
                                         路由 : {:>8.2}μs, \
                                         {}
-                                        路径 : {}",
-                                        all_cost, quote_cost, msg, quote_info
+                                        路径 : {}, tx : {},  Slot : {}",
+                                        all_cost,
+                                        quote_cost,
+                                        msg,
+                                        quote_info,
+                                        tx,
+                                        transaction_msg.slot,
                                     );
                                 }
                             }

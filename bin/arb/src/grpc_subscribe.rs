@@ -55,12 +55,13 @@ impl GrpcSubscribe {
                             }
                         }
                     } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
+                        let slot = transaction.slot;
                         match transaction.transaction {
                             None => {}
                             Some(tx) => {
-                                match message_sender
-                                    .send(GrpcMessage::Transaction(GrpcTransactionMsg::from(tx)))
-                                {
+                                match message_sender.send(GrpcMessage::Transaction(
+                                    GrpcTransactionMsg::from((tx, slot)),
+                                )) {
                                     Ok(_) => {}
                                     Err(e) => {
                                         error!("推送GRPC Transaction消息失败, 原因 : {}", e);
