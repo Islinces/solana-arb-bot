@@ -186,7 +186,7 @@ impl GrpcSubscribe {
                     SubscribeRequestFilterAccounts {
                         owner: vec![DexType::RaydiumCLMM.get_ref_program_id().to_string()],
                         filters: vec![
-                            // BinArray data大小为10240
+                            // BinArray data大小为10136
                             SubscribeRequestFilterAccountsFilter {
                                 filter: Some(Datasize(10136)),
                             },
