@@ -84,7 +84,9 @@ impl GrpcSubscribe {
         let mut raydium_amm_account_keys = Vec::with_capacity(dex_data.len());
         let mut pump_fun_account_keys = Vec::with_capacity(dex_data.len());
         let mut raydium_clmm_account_keys = Vec::with_capacity(dex_data.len());
+        let mut raydium_clmm_bitmap_extension_account_keys = Vec::with_capacity(dex_data.len());
         let mut meteora_dlmm_account_keys = Vec::with_capacity(dex_data.len());
+        let mut meteora_dlmm_bitmap_extension_account_keys = Vec::with_capacity(dex_data.len());
 
         for json in dex_data.iter() {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
@@ -98,7 +100,7 @@ impl GrpcSubscribe {
             }
             if &json.owner == DexType::RaydiumCLMM.get_ref_program_id() {
                 // TickArrayBitmapExtension
-                raydium_clmm_account_keys.push(
+                raydium_clmm_bitmap_extension_account_keys.push(
                     Pubkey::find_program_address(
                         &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), json.pool.as_ref()],
                         DexType::RaydiumCLMM.get_ref_program_id(),
@@ -109,7 +111,7 @@ impl GrpcSubscribe {
             }
             if &json.owner == DexType::MeteoraDLMM.get_ref_program_id() {
                 // BinArrayBitmapExtension
-                meteora_dlmm_account_keys.push(
+                meteora_dlmm_bitmap_extension_account_keys.push(
                     crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
                         &json.pool,
                     ),
@@ -122,7 +124,9 @@ impl GrpcSubscribe {
             .iter()
             .chain(pump_fun_account_keys.iter())
             .chain(raydium_clmm_account_keys.iter())
+            .chain(raydium_clmm_bitmap_extension_account_keys.iter())
             .chain(meteora_dlmm_account_keys.iter())
+            .chain(meteora_dlmm_bitmap_extension_account_keys.iter())
             .map(|key| key.to_string())
             .collect::<Vec<_>>();
         let mut grpc_client = create_grpc_client(grpc_url).await;
@@ -135,7 +139,7 @@ impl GrpcSubscribe {
                     account: {
                         let mut accounts = all_account_keys.clone();
                         if need_clock {
-                            // accounts.push(Clock::id().to_string());
+                            accounts.push(Clock::id().to_string());
                         }
                         accounts
                     },
@@ -160,6 +164,37 @@ impl GrpcSubscribe {
                                 filter: Some(
                                     Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
                                         offset: 8,
+                                        data: Some(
+                                            subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                                pool_id.to_bytes().to_vec(),
+                                            ),
+                                        ),
+                                    }),
+                                ),
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+        // dlmm bin array
+        if !meteora_dlmm_account_keys.is_empty() {
+            for pool_id in meteora_dlmm_account_keys.iter() {
+                accounts.insert(
+                    pool_id.to_string(),
+                    SubscribeRequestFilterAccounts {
+                        owner: vec![DexType::RaydiumCLMM.get_ref_program_id().to_string()],
+                        filters: vec![
+                            // BinArray data大小为10240
+                            SubscribeRequestFilterAccountsFilter {
+                                filter: Some(Datasize(10136)),
+                            },
+                            // 订阅关注的池子的BinArray
+                            SubscribeRequestFilterAccountsFilter {
+                                filter: Some(
+                                    Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
+                                        offset: 24,
                                         data: Some(
                                             subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
                                                 pool_id.to_bytes().to_vec(),
