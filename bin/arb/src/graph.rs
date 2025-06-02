@@ -135,7 +135,7 @@ impl TwoHopPath {
                 mint_0,
             ),
             (
-                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM_ID),
+                get_associated_token_address_with_program_id(wallet, &mint_1, &MINT_PROGRAM_ID),
                 mint_1,
             ),
         ]
