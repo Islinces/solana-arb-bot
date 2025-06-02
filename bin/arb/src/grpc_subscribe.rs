@@ -184,7 +184,7 @@ impl GrpcSubscribe {
                 accounts.insert(
                     pool_id.to_string(),
                     SubscribeRequestFilterAccounts {
-                        owner: vec![DexType::RaydiumCLMM.get_ref_program_id().to_string()],
+                        owner: vec![DexType::MeteoraDLMM.get_ref_program_id().to_string()],
                         filters: vec![
                             // BinArray data大小为10136
                             SubscribeRequestFilterAccountsFilter {
