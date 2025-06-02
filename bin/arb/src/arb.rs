@@ -102,10 +102,8 @@ impl Arb {
                                         .execute(quote_result)
                                         .await
                                         .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
-                                    let all_cost = transaction_msg.instant.elapsed().as_micros()
-                                        as f64
-                                        / 1000.0;
-                                    let quote_cost = trigger_quote_cost.as_nanos() as f64 / 1000.0;
+                                    let all_cost = transaction_msg.instant.elapsed().as_millis();
+                                    let quote_cost = trigger_quote_cost.as_micros();
                                     let tx = transaction_msg
                                         .signature
                                         .as_slice()
