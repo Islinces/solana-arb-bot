@@ -97,13 +97,6 @@ impl Arb {
                                 {
                                     let trigger_quote_cost = trigger_instant.elapsed();
                                     let quote_info = format!("{}", quote_result);
-                                    // 有获利路径后生成指令，发送指令
-                                    let msg = executor
-                                        .execute(quote_result)
-                                        .await
-                                        .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
-                                    let all_cost = transaction_msg.instant.elapsed().as_millis();
-                                    let quote_cost = trigger_quote_cost.as_micros();
                                     let tx = transaction_msg
                                         .signature
                                         .as_slice()
@@ -111,6 +104,13 @@ impl Arb {
                                         .chars()
                                         .take(4)
                                         .collect::<String>();
+                                    // 有获利路径后生成指令，发送指令
+                                    let msg = executor
+                                        .execute(quote_result, tx, transaction_msg.slot)
+                                        .await
+                                        .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
+                                    let all_cost = transaction_msg.instant.elapsed().as_millis();
+                                    let quote_cost = trigger_quote_cost.as_micros();
                                     info!(
                                         "\nArb_{index} ==> 耗时 : {:>4.2}ms, \
                                         路由 : {:>4.2}μs, \
@@ -121,7 +121,9 @@ impl Arb {
                                         quote_info,
                                         tx,
                                         transaction_msg.slot,
-                                        transaction_msg.received_timestamp.format("%Y-%m-%d %H:%M:%S.%3f")
+                                        transaction_msg
+                                            .received_timestamp
+                                            .format("%Y-%m-%d %H:%M:%S.%3f")
                                     );
                                 }
                             }

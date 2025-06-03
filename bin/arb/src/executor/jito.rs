@@ -91,8 +91,13 @@ impl Executor for JitoExecutor {
         }))
     }
 
-    async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<String> {
-        match self.create_jito_bundle(quote_result).await {
+    async fn execute(
+        &self,
+        quote_result: QuoteResult,
+        tx: String,
+        slot: u64,
+    ) -> anyhow::Result<String> {
+        match self.create_jito_bundle(quote_result, tx, slot).await {
             Ok((bundle, instruction_cost)) => {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
@@ -161,6 +166,8 @@ impl JitoExecutor {
     async fn create_jito_bundle(
         &self,
         quote_result: QuoteResult,
+        tx: String,
+        slot: u64,
     ) -> anyhow::Result<(Vec<VersionedTransaction>, Duration)> {
         let start = Instant::now();
         let keypair = get_keypair();
@@ -199,9 +206,10 @@ impl JitoExecutor {
         first_instructions.push(jupiter_swap_ix);
         // MEMO
         if let Some(name) = self.bot_name.as_ref() {
+            let memo_name = format!("{}-{}-{}", name.as_str(), tx, slot);
             first_instructions.push(Instruction::new_with_bytes(
                 Pubkey::from_str("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")?,
-                name.as_bytes(),
+                memo_name.as_bytes(),
                 vec![],
             ));
         }

@@ -1,6 +1,6 @@
+use crate::arb_bot::Command;
 use crate::quoter::QuoteResult;
 use std::sync::Arc;
-use crate::arb_bot::Command;
 
 pub mod jito;
 
@@ -10,5 +10,10 @@ pub trait Executor: Sync + Send {
     where
         Self: Sized;
 
-    async fn execute(&self, quote_result: QuoteResult) -> anyhow::Result<String>;
+    async fn execute(
+        &self,
+        quote_result: QuoteResult,
+        tx: String,
+        slot: u64,
+    ) -> anyhow::Result<String>;
 }
