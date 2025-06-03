@@ -106,7 +106,7 @@ impl Arb {
                                         .collect::<String>();
                                     // 有获利路径后生成指令，发送指令
                                     let msg = executor
-                                        .execute(quote_result, tx, transaction_msg.slot)
+                                        .execute(quote_result, tx.clone(), transaction_msg.slot)
                                         .await
                                         .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
                                     let all_cost = transaction_msg.instant.elapsed().as_millis();
