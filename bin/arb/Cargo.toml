@@ -103,4 +103,8 @@ incremental = false      # 禁用增量编译，确保完整优化
 debug = false            # 禁用调试信息
 strip = "symbols"        # 去除符号表，减小体积（需要 Rust 1.60
 
+[[bench]]
+name = "dlmm_quote"
+harness = false
+
 

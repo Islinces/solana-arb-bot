@@ -3,7 +3,7 @@ mod account_relation;
 pub mod arb;
 pub mod arb_bot;
 mod data_slice;
-mod dex;
+pub mod dex;
 pub mod dex_data;
 mod graph;
 pub mod grpc_processor;
