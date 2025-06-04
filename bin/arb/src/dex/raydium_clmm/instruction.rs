@@ -1,7 +1,9 @@
+use crate::account_cache::get_token_program;
 use crate::dex::raydium_clmm::state::{
     pda_bit_map_extension_key, PoolState, TickArrayBitmapExtension,
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
+use crate::dex::raydium_clmm::RAYDIUM_CLMM_MEMO_PROGRAM_ID;
 use crate::interface::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
 use anyhow::{anyhow, Result};
@@ -56,9 +58,21 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     }
     // 8.Observation State
     accounts.push(AccountMeta::new(pool_state.observation_key, false));
-    // 9.token program
-    accounts.push(AccountMeta::new_readonly(MINT_PROGRAM_ID, false));
-    // 10.current tick array
+    // 9.token mint 0 program
+    accounts.push(AccountMeta::new_readonly(
+        get_token_program(&pool_state.token_mint_0),
+        false,
+    ));
+    // 10.token mint 1 program
+    accounts.push(AccountMeta::new_readonly(
+        get_token_program(&pool_state.token_mint_1),
+        false,
+    ));
+    // 11.memo program
+    accounts.push(AccountMeta::new_readonly(
+        RAYDIUM_CLMM_MEMO_PROGRAM_ID,
+        false,
+    ));
     let bit_map_extension_key = pda_bit_map_extension_key(&pool_id);
     let mut tick_arrays = load_cur_and_next_specify_count_tick_array_key(
         3,
@@ -76,9 +90,11 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
                 .collect::<Vec<_>>())
         },
     )?;
+    // 12.current tick array
     accounts.push(tick_arrays.remove(0));
-    // 11.bitmap_extension
+    // 13.bitmap_extension
     accounts.push(AccountMeta::new(bit_map_extension_key, false));
+    // 14.remaining tick array
     accounts.extend(tick_arrays);
     Ok(accounts)
 }

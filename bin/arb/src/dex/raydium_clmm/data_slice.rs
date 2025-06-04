@@ -6,7 +6,7 @@ use tokio::sync::OnceCell;
 
 // ========================= dynamic data 账户订阅的数据切片 =========================
 // clmm pool
-static DYNAMIC_RAYDIUM_CLMM_POOL_SLICE: OnceCell<([(usize, usize); 4], usize)> =
+static DYNAMIC_RAYDIUM_CLMM_POOL_SLICE: OnceCell<([(usize, usize); 5], usize)> =
     OnceCell::const_new();
 // clmm bitmap extension
 static DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE: OnceCell<([(usize, usize); 1], usize)> =
@@ -34,27 +34,15 @@ pub fn slice_data(
                 &DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().0,
                 DYNAMIC_RAYDIUM_CLMM_POOL_SLICE.get().unwrap().1,
             )),
-            AccountType::TickArray => {
-                let borsh_data =
-                    crate::dex::raydium_clmm::copy_tick_array::TickArrayState::try_from_slice(
-                        &data[8..],
-                    );
-                let result = Ok(retain_intervals_unsafe(
-                    data,
-                    &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
-                        .get()
-                        .unwrap()
-                        .0
-                        .as_slice(),
-                    DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
-                ));
-
-                // info!("borsh_data : {:#?}", borsh_data);
-                // info!("slice_data : {:#?}", unsafe {
-                //     ptr::read_unaligned(result.as_ref().unwrap().as_slice().as_ptr() as *const TickArrayState)
-                // });
-                result
-            }
+            AccountType::TickArray => Ok(retain_intervals_unsafe(
+                data,
+                &DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE
+                    .get()
+                    .unwrap()
+                    .0
+                    .as_slice(),
+                DYNAMIC_RAYDIUM_CLMM_TICK_ARRAY_STATE_SLICE.get().unwrap().1,
+            )),
             AccountType::TickArrayBitmap => Ok(retain_intervals_unsafe(
                 data,
                 &DYNAMIC_RAYDIUM_CLMM_BITMAP_EXTENSION_SLICE
@@ -123,8 +111,10 @@ pub fn init_raydium_clmm_data_slice() {
                     (269, 269 + 4),
                     // tick_array_bitmap
                     (904, 904 + 128),
+                    // recent_epoch
+                    (1088, 1088 + 8),
                 ],
-                16 + 16 + 4 + 128,
+                16 + 16 + 4 + 128 + 8,
             )
         })
         .unwrap();

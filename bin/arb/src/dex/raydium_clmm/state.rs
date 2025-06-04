@@ -78,6 +78,7 @@ pub struct PoolState {
     pub tick_current: i32,
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
+    pub recent_epoch: u64,
 }
 
 impl FromCache for PoolState {
@@ -115,6 +116,9 @@ impl PoolState {
             let tick_array_bitmap = ptr::read_unaligned(
                 dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
             );
+            let recent_epoch = ptr::read_unaligned(
+                dynamic_data[16 + 16 + 4 + 8 * 16..16 + 16 + 4 + 8 * 16 + 8].as_ptr() as *const u64,
+            );
             Self {
                 amm_config,
                 token_mint_0,
@@ -127,6 +131,7 @@ impl PoolState {
                 sqrt_price_x64,
                 tick_current,
                 tick_array_bitmap,
+                recent_epoch,
             }
         }
     }

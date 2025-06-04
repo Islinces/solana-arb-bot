@@ -3,7 +3,6 @@ use crate::interface::{DexType, MINT_PROGRAM_ID};
 use crate::jupiter::jupiter_route::RouteBuilder;
 use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;
-use crate::jupiter::swap::Swap::{Raydium, RaydiumClmm};
 use crate::metadata::{get_arb_mint_ata, get_keypair};
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction};
@@ -74,8 +73,8 @@ pub fn build_jupiter_swap_ix(
 
 fn get_jupiter_swap_type(dex_type: &DexType, swap_direction: bool) -> Swap {
     match dex_type {
-        DexType::RaydiumAMM => Raydium,
-        DexType::RaydiumCLMM => RaydiumClmm,
+        DexType::RaydiumAMM => Swap::Raydium,
+        DexType::RaydiumCLMM => Swap::RaydiumClmmV2,
         DexType::PumpFunAMM => {
             if swap_direction {
                 Swap::PumpdotfunAmmSell

@@ -44,3 +44,13 @@ impl InstructionItem {
         }
     }
 }
+
+pub(crate) fn get_transfer_fee(mint: &Pubkey, epoch: u64, pre_fee_amount: u64) -> u64 {
+    if let Some(fee_config) = crate::account_cache::get_token2022_data(mint) {
+        fee_config
+            .calculate_epoch_fee(epoch, pre_fee_amount)
+            .unwrap()
+    } else {
+        0
+    }
+}

@@ -1,3 +1,4 @@
+use crate::dex::get_transfer_fee;
 use crate::dex::raydium_clmm::big_num::U128;
 use crate::dex::raydium_clmm::state::{
     AmmConfig, PoolState, TickArrayBitmapExtension, TickArrayState, TickState,
@@ -12,6 +13,7 @@ use borsh::BorshDeserialize;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Neg};
 use std::sync::Arc;
@@ -51,7 +53,7 @@ struct StepComputations {
 }
 
 pub fn get_out_put_amount_and_remaining_accounts(
-    input_amount: u64,
+    mut input_amount: u64,
     sqrt_price_limit_x64: Option<u128>,
     zero_for_one: bool,
     is_base_input: bool,
@@ -60,6 +62,16 @@ pub fn get_out_put_amount_and_remaining_accounts(
     tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     tick_arrays: &mut VecDeque<TickArrayState>,
 ) -> Result<(u64, u64, VecDeque<i32>), &'static str> {
+    let transfer_fee = get_transfer_fee(
+        if zero_for_one {
+            &pool_state.token_mint_0
+        } else {
+            &pool_state.token_mint_1
+        },
+        pool_state.recent_epoch,
+        input_amount,
+    );
+    input_amount -= transfer_fee;
     let (is_pool_current_tick_array, current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(tickarray_bitmap_extension, zero_for_one)
         .unwrap();
