@@ -7,7 +7,7 @@ use solana_sdk::pubkey::Pubkey;
 
 /// 字段顺序不要动
 #[derive(Default, Debug)]
-pub(crate) struct Pool {
+pub struct Pool {
     // ============= static data =================
     // 池子
     pub base_mint: Pubkey,
