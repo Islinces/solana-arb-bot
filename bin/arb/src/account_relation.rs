@@ -1,3 +1,4 @@
+use crate::dex::meteora_dlmm::commons::pda;
 use crate::dex::raydium_clmm::state::POOL_TICK_ARRAY_BITMAP_SEED;
 use crate::dex_data::DexJson;
 use crate::interface;
@@ -16,6 +17,7 @@ pub struct AccountRelation {
     pool: AHashMap<Pubkey, DexType>,
     vault: AHashMap<Pubkey, (Pubkey, DexType)>,
     tick_array_extension_bitmap: AHashMap<Pubkey, Pubkey>,
+    bin_array_extension_bitmap: AHashMap<Pubkey, Pubkey>,
 }
 
 impl AccountRelation {
@@ -24,6 +26,7 @@ impl AccountRelation {
         let mut pool = AHashMap::with_capacity(dex_data.len());
         let mut vault = AHashMap::with_capacity(dex_data.len());
         let mut tick_array_extension_bitmap = AHashMap::with_capacity(dex_data.len());
+        let mut bin_array_extension_bitmap = AHashMap::with_capacity(dex_data.len());
         for json in dex_data.iter() {
             if let Some(dex_type) = interface::get_dex_type_with_program_id(&json.owner) {
                 pool.insert(json.pool, dex_type.clone());
@@ -38,6 +41,11 @@ impl AccountRelation {
                         .0,
                         json.pool,
                     );
+                } else if DexType::MeteoraDLMM == dex_type {
+                    bin_array_extension_bitmap.insert(
+                        pda::derive_bin_array_bitmap_extension(&json.pool),
+                        json.pool,
+                    );
                 }
             }
         }
@@ -46,6 +54,7 @@ impl AccountRelation {
             pool,
             vault,
             tick_array_extension_bitmap,
+            bin_array_extension_bitmap,
         })
     }
 }
@@ -88,6 +97,17 @@ pub fn get_dex_type_and_account_type(
             Some((DexType::RaydiumCLMM, AccountType::TickArrayBitmap))
         } else {
             Some((DexType::RaydiumCLMM, AccountType::TickArray))
+        }
+    } else if owner == DexType::MeteoraDLMM.get_ref_program_id() {
+        if relation_cache.pool.contains_key(account_key) {
+            Some((DexType::MeteoraDLMM, AccountType::Pool))
+        } else if relation_cache
+            .bin_array_extension_bitmap
+            .contains_key(account_key)
+        {
+            Some((DexType::MeteoraDLMM, AccountType::BinArrayBitmap))
+        } else {
+            Some((DexType::MeteoraDLMM, AccountType::BinArray))
         }
     } else {
         None
