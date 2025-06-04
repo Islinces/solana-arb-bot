@@ -400,15 +400,16 @@ pub fn get_token_program(mint: &Pubkey) -> Pubkey {
 
 pub fn get_token2022_data(mint_key: &Pubkey) -> Option<TransferFeeConfig> {
     let static_data = STATIC_ACCOUNT_CACHE.get()?.read();
-    let data = static_data.0.get(mint_key).unwrap();
-    StateWithExtensions::<spl_token_2022::state::Mint>::unpack(data.as_slice()).map_or(
-        None,
-        |mint_extensions| {
-            mint_extensions
-                .get_extension::<TransferFeeConfig>()
-                .map_or(None, |result| Some(result.clone()))
-        },
-    )
+    static_data.0.get(mint_key).map_or(None, |data| {
+        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(data.as_slice()).map_or(
+            None,
+            |mint_extensions| {
+                mint_extensions
+                    .get_extension::<TransferFeeConfig>()
+                    .map_or(None, |result| Some(result.clone()))
+            },
+        )
+    })
 }
 
 pub fn get_clock() -> Option<Clock> {
