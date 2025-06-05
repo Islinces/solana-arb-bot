@@ -1,3 +1,4 @@
+use crate::account_cache::get_token_program;
 use crate::arb_bot::Command;
 use crate::executor::Executor;
 use crate::interface::MINT_PROGRAM_ID;
@@ -200,7 +201,7 @@ impl JitoExecutor {
                 &wallet,
                 &wallet,
                 &mint,
-                &MINT_PROGRAM_ID,
+                &get_token_program(&mint),
             ));
         }
         first_instructions.push(jupiter_swap_ix);

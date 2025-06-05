@@ -1,3 +1,4 @@
+use crate::account_cache::get_token_program;
 use crate::dex_data::DexJson;
 use crate::interface::{DexType, MINT_PROGRAM_ID};
 use ahash::AHashMap;
@@ -131,11 +132,19 @@ impl TwoHopPath {
         let mint_1 = find_mint_by_index(self.first.mint_1).unwrap();
         vec![
             (
-                get_associated_token_address_with_program_id(wallet, &mint_0, &MINT_PROGRAM_ID),
+                get_associated_token_address_with_program_id(
+                    wallet,
+                    &mint_0,
+                    &get_token_program(&mint_0),
+                ),
                 mint_0,
             ),
             (
-                get_associated_token_address_with_program_id(wallet, &mint_1, &MINT_PROGRAM_ID),
+                get_associated_token_address_with_program_id(
+                    wallet,
+                    &mint_1,
+                    &get_token_program(&mint_1),
+                ),
                 mint_1,
             ),
         ]

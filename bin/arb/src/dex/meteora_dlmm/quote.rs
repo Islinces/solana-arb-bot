@@ -1,3 +1,4 @@
+use crate::account_cache::get_token2022_data;
 use crate::dex::meteora_dlmm::commons::quote::{get_bin_array_pubkeys_for_swap, quote_exact_in};
 use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
@@ -41,18 +42,10 @@ fn get_bitmap_extension(pool_id: &Pubkey) -> Option<BinArrayBitmapExtension> {
 }
 
 fn get_token_transfer_config(pool: &LbPair) -> [Option<TransferFeeConfig>; 2] {
-    let tokens = [pool.token_x_mint, pool.token_y_mint];
-    let programs = pool.get_token_programs().unwrap();
-    let fees: [Option<TransferFeeConfig>; 2] = array::from_fn(|i| {
-        let mint = tokens[i];
-        let program = programs[i];
-        if program == MINT2022_PROGRAM_ID {
-            crate::account_cache::get_token2022_data(&mint)
-        } else {
-            None
-        }
-    });
-    fees
+    [
+        get_token2022_data(&pool.token_x_mint),
+        get_token2022_data(&pool.token_y_mint),
+    ]
 }
 
 fn get_bin_arrays(
