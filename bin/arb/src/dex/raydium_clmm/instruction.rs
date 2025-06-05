@@ -78,9 +78,9 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         false,
     ));
     // 12.input mint
-    accounts.push(AccountMeta::new_readonly(input_mint,false));
+    accounts.push(AccountMeta::new(input_mint,false));
     // 13.output mint
-    accounts.push(AccountMeta::new_readonly(output_mint,false));
+    accounts.push(AccountMeta::new(output_mint,false));
     let bit_map_extension_key = pda_bit_map_extension_key(&pool_id);
     // TODO 仅加载需要的
     let mut tick_arrays = load_cur_and_next_specify_count_tick_array_key(
