@@ -1,6 +1,6 @@
 use crate::account_cache::get_token_program;
 use crate::arb_bot::Command;
-use crate::executor::Executor;
+use crate::executor::{Executor, MEMO_PROGRAM};
 use crate::interface::MINT_PROGRAM_ID;
 use crate::metadata::{get_arb_mint_ata, get_keypair, get_last_blockhash, remove_already_ata};
 use crate::quoter::QuoteResult;
@@ -209,7 +209,7 @@ impl JitoExecutor {
         if let Some(name) = self.bot_name.as_ref() {
             let memo_name = format!("{}-{}-{}", name.as_str(), tx, slot);
             first_instructions.push(Instruction::new_with_bytes(
-                Pubkey::from_str("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo")?,
+                MEMO_PROGRAM,
                 memo_name.as_bytes(),
                 vec![],
             ));
