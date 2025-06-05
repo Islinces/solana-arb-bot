@@ -4,7 +4,7 @@ use crate::dex::raydium_clmm::state::{
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_MEMO_PROGRAM_ID;
-use crate::interface::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::interface::ATA_PROGRAM_ID;
 use crate::metadata::get_keypair;
 use anyhow::{anyhow, Result};
 use solana_sdk::instruction::AccountMeta;
@@ -21,10 +21,12 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     accounts.push(AccountMeta::new_readonly(pool_state.amm_config, false));
     // 3.pool state
     accounts.push(AccountMeta::new(pool_id, false));
+    let token_mint_0_program = get_token_program(&pool_state.token_mint_0);
+    let token_mint_1_program = get_token_program(&pool_state.token_mint_1);
     let (token_mint_0_ata, _) = Pubkey::find_program_address(
         &[
             wallet.as_ref(),
-            MINT_PROGRAM_ID.as_ref(),
+            token_mint_0_program.as_ref(),
             pool_state.token_mint_0.as_ref(),
         ],
         &ATA_PROGRAM_ID,
@@ -32,7 +34,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     let (token_mint_1_ata, _) = Pubkey::find_program_address(
         &[
             wallet.as_ref(),
-            MINT_PROGRAM_ID.as_ref(),
+            token_mint_1_program.as_ref(),
             pool_state.token_mint_1.as_ref(),
         ],
         &ATA_PROGRAM_ID,
@@ -60,12 +62,12 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     accounts.push(AccountMeta::new(pool_state.observation_key, false));
     // 9.token mint 0 program
     accounts.push(AccountMeta::new_readonly(
-        get_token_program(&pool_state.token_mint_0),
+        token_mint_0_program,
         false,
     ));
     // 10.token mint 1 program
     accounts.push(AccountMeta::new_readonly(
-        get_token_program(&pool_state.token_mint_1),
+        token_mint_1_program,
         false,
     ));
     // 11.memo program
