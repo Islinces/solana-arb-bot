@@ -120,16 +120,11 @@ async fn init_wallet_ata_account(
         }
     });
     let ata_accounts = join_all(ata_fut).await;
-    let ata_accounts = ata_accounts
+    ata_accounts
         .into_iter()
         .filter_map(|info| info)
         .map(|(key, account)| (key, account.lamports))
-        .collect::<AHashMap<_, _>>();
-    info!(
-        "钱包拥有的ATA账户 : {:?}",
-        ata_accounts.iter().map(|(key, _)| key).collect::<Vec<_>>()
-    );
-    ata_accounts
+        .collect::<AHashMap<_, _>>()
 }
 
 async fn wallet_ata_refresher(
