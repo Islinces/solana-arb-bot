@@ -19,7 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
-use tracing::error;
+use tracing::{error, info};
 
 static KEYPAIR: OnceCell<Arc<Keypair>> = OnceCell::const_new();
 static WALLET_OF_ATA_AMOUNT: OnceCell<Arc<RwLock<AHashMap<Pubkey, u64>>>> = OnceCell::const_new();
@@ -117,10 +117,15 @@ async fn init_wallet_ata_account(
         .iter()
         .map(|ata| async { (ata.clone(), rpc_client.get_account(ata).await.unwrap()) });
     let ata_accounts = join_all(ata_fut).await;
-    ata_accounts
+    let ata_accounts = ata_accounts
         .into_iter()
         .map(|(key, account)| (key, account.lamports))
-        .collect::<AHashMap<_, _>>()
+        .collect::<AHashMap<_, _>>();
+    info!(
+        "钱包拥有的ATA账户 : {:?}",
+        ata_accounts.iter().map(|(key, _)| key).collect::<Vec<_>>()
+    );
+    ata_accounts
 }
 
 async fn wallet_ata_refresher(
