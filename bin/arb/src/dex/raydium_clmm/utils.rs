@@ -90,8 +90,16 @@ pub fn get_out_put_amount_and_remaining_accounts(
         tick_arrays,
     )?;
     // println!("tick_array_start_index:{:?}", tick_array_start_index_vec);
-
-    Ok((amount_calculated, fee_amount, tick_array_start_index_vec))
+    let transfer_fee = get_transfer_fee(
+        if zero_for_one {
+            &pool_state.token_mint_1
+        } else {
+            &pool_state.token_mint_0
+        },
+        pool_state.recent_epoch,
+        amount_calculated,
+    );
+    Ok((amount_calculated - transfer_fee, fee_amount, tick_array_start_index_vec))
 }
 
 fn swap_compute(
