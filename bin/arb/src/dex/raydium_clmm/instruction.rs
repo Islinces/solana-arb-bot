@@ -4,7 +4,7 @@ use crate::dex::raydium_clmm::state::{
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_MEMO_PROGRAM_ID;
-use crate::interface::ATA_PROGRAM_ID;
+use crate::interface::{ATA_PROGRAM_ID, MINT2022_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
 use anyhow::{anyhow, Result};
 use solana_sdk::instruction::AccountMeta;
@@ -60,14 +60,14 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     }
     // 8.Observation State
     accounts.push(AccountMeta::new(pool_state.observation_key, false));
-    // 9.token mint 0 program
+    // 9.token_program
     accounts.push(AccountMeta::new_readonly(
-        token_mint_0_program,
+        MINT_PROGRAM_ID,
         false,
     ));
-    // 10.token mint 1 program
+    // 10.token_program_2022
     accounts.push(AccountMeta::new_readonly(
-        token_mint_1_program,
+        MINT2022_PROGRAM_ID,
         false,
     ));
     // 11.memo program
@@ -76,6 +76,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         false,
     ));
     let bit_map_extension_key = pda_bit_map_extension_key(&pool_id);
+    // TODO 仅加载需要的
     let mut tick_arrays = load_cur_and_next_specify_count_tick_array_key(
         3,
         &pool_id,
