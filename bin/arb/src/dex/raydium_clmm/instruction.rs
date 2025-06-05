@@ -39,7 +39,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         ],
         &ATA_PROGRAM_ID,
     );
-    if swap_direction {
+    let (input_mint,output_mint)=if swap_direction {
         // 4.token_mint_0_ata
         accounts.push(AccountMeta::new(token_mint_0_ata, false));
         // 5.token_mint_1_ata
@@ -48,6 +48,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         accounts.push(AccountMeta::new(pool_state.token_vault_0, false));
         // 7.token vault 1
         accounts.push(AccountMeta::new(pool_state.token_vault_1, false));
+        (pool_state.token_mint_0,pool_state.token_mint_1)
     } else {
         // 4.token_mint_1_ata
         accounts.push(AccountMeta::new(token_mint_1_ata, false));
@@ -57,7 +58,8 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         accounts.push(AccountMeta::new(pool_state.token_vault_1, false));
         // 7.token vault 0
         accounts.push(AccountMeta::new(pool_state.token_vault_0, false));
-    }
+        (pool_state.token_mint_1,pool_state.token_mint_0)
+    };
     // 8.Observation State
     accounts.push(AccountMeta::new(pool_state.observation_key, false));
     // 9.token_program
@@ -75,6 +77,10 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         RAYDIUM_CLMM_MEMO_PROGRAM_ID,
         false,
     ));
+    // 12.input mint
+    accounts.push(AccountMeta::new_readonly(input_mint,false));
+    // 13.output mint
+    accounts.push(AccountMeta::new_readonly(output_mint,false));
     let bit_map_extension_key = pda_bit_map_extension_key(&pool_id);
     // TODO 仅加载需要的
     let mut tick_arrays = load_cur_and_next_specify_count_tick_array_key(
