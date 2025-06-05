@@ -4,12 +4,17 @@ use crate::executor::jito::JitoExecutor;
 use crate::executor::Executor;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::GrpcSubscribe;
+use crate::keypair::KeypairVault;
 use crate::state::GrpcMessage;
 use anyhow::anyhow;
 use clap::Parser;
+use rpassword::read_password;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, Signer};
 use std::fs::File;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
@@ -150,20 +155,37 @@ pub async fn init_start_data(
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
     // 初始化钱包
-    // 初始化钱包关联的ATA账户余额
-    // 初始化blockhash
-    crate::metadata::init_metadata(keypair_path, arb_mint, rpc_client.clone()).await?;
+    let keypair = get_keypair(keypair_path)?;
     // 加载json
     let dex_data = init_dex_json(dex_json_path, follow_mints)?;
     // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
     crate::data_slice::init_data_slice_config();
     // 初始化snapshot，返回有效的DexJson
-    let dex_data = crate::account_cache::init_snapshot(dex_data, rpc_client).await?;
+    let dex_data = crate::account_cache::init_snapshot(dex_data, rpc_client.clone()).await?;
+    // 初始化钱包关联的ATA账户余额
+    // 初始化blockhash
+    crate::metadata::init_metadata(keypair, arb_mint, dex_data.as_slice(), rpc_client.clone())
+        .await?;
     // 初始化account之间的关系，用于解析GRPC推送数据
     crate::account_relation::init(dex_data.as_slice())?;
     // 构建边
     crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
     Ok(dex_data)
+}
+
+fn get_keypair(keypair_path: String) -> anyhow::Result<Keypair> {
+    loop {
+        println!("请输入密码：");
+        let input_password = read_password().expect("读取密码失败");
+        let keypair_vault = KeypairVault::load(PathBuf::from_str(&keypair_path)?)?;
+        if let Ok(k) = keypair_vault.decrypt(&input_password) {
+            let wallet = &k.pubkey();
+            println!("密码正确，Pubkey : {:?}, 继续执行...", wallet);
+            return Ok(k);
+        } else {
+            println!("密码错误，请重新输入。");
+        }
+    }
 }
 
 fn init_dex_json(dex_json_path: String, follow_mints: &[Pubkey]) -> anyhow::Result<Vec<DexJson>> {
