@@ -113,7 +113,7 @@ async fn init_wallet_ata_account(
     rpc_client: Arc<RpcClient>,
     mint_atas: &[Pubkey],
 ) -> AHashMap<Pubkey, u64> {
-    let ata_fut = mint_atas.iter().filter_map(|ata| async {
+    let ata_fut = mint_atas.iter().map(|ata| async {
         match rpc_client.get_account(ata).await {
             Ok(account) => Some((ata.clone(), account)),
             Err(_) => None,
@@ -122,6 +122,7 @@ async fn init_wallet_ata_account(
     let ata_accounts = join_all(ata_fut).await;
     let ata_accounts = ata_accounts
         .into_iter()
+        .filter_map(|info| info)
         .map(|(key, account)| (key, account.lamports))
         .collect::<AHashMap<_, _>>();
     info!(
