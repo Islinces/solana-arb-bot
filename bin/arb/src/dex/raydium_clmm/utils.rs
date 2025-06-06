@@ -62,16 +62,16 @@ pub fn get_out_put_amount_and_remaining_accounts(
     tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     tick_arrays: &mut VecDeque<TickArrayState>,
 ) -> Result<(u64, u64, VecDeque<i32>), &'static str> {
-    // let transfer_fee = get_transfer_fee(
-    //     if zero_for_one {
-    //         &pool_state.token_mint_0
-    //     } else {
-    //         &pool_state.token_mint_1
-    //     },
-    //     pool_state.recent_epoch,
-    //     input_amount,
-    // );
-    // input_amount -= transfer_fee;
+    let transfer_fee = get_transfer_fee(
+        if zero_for_one {
+            &pool_state.token_mint_0
+        } else {
+            &pool_state.token_mint_1
+        },
+        pool_state.recent_epoch,
+        input_amount,
+    );
+    input_amount -= transfer_fee;
     let (is_pool_current_tick_array, current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(tickarray_bitmap_extension, zero_for_one)
         .unwrap();
@@ -90,17 +90,16 @@ pub fn get_out_put_amount_and_remaining_accounts(
         tick_arrays,
     )?;
     // println!("tick_array_start_index:{:?}", tick_array_start_index_vec);
-    // let transfer_fee = get_transfer_fee(
-    //     if zero_for_one {
-    //         &pool_state.token_mint_1
-    //     } else {
-    //         &pool_state.token_mint_0
-    //     },
-    //     pool_state.recent_epoch,
-    //     amount_calculated,
-    // );
-    // Ok((amount_calculated - transfer_fee, fee_amount, tick_array_start_index_vec))
-    Ok((amount_calculated, fee_amount, tick_array_start_index_vec))
+    let transfer_fee = get_transfer_fee(
+        if zero_for_one {
+            &pool_state.token_mint_1
+        } else {
+            &pool_state.token_mint_0
+        },
+        pool_state.recent_epoch,
+        amount_calculated,
+    );
+    Ok((amount_calculated - transfer_fee, fee_amount, tick_array_start_index_vec))
 }
 
 fn swap_compute(
