@@ -99,11 +99,9 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
                 .collect::<Vec<_>>())
         },
     )?;
-    // 12.current tick array
-    accounts.push(tick_arrays.remove(0));
-    // 13.bitmap_extension
+    // 12.bitmap_extension
     accounts.push(AccountMeta::new(bit_map_extension_key, false));
-    // 14.remaining tick array
+    // 13.tick array
     accounts.extend(tick_arrays);
     Ok(accounts)
 }
