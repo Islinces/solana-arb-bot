@@ -26,8 +26,6 @@ use tracing::{error, info};
 #[derive(Parser, Debug)]
 pub struct Command {
     #[arg(long, required = true)]
-    grpc_subscribe_type: String,
-    #[arg(long, required = true)]
     dex_json_path: String,
     #[arg(long, required = true)]
     keypair_path: String,
@@ -65,8 +63,6 @@ pub struct Command {
     standard_program: bool,
     #[arg(long, default_value = "1")]
     processor_size: usize,
-    #[arg(long)]
-    specify_pool: Option<String>,
 }
 
 pub async fn start_with_custom() -> anyhow::Result<()> {
@@ -86,11 +82,6 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     let arb_min_profit = command.arb_min_profit;
     // Account本地缓存更新后广播通道容量
     let arb_channel_capacity = command.arb_channel_capacity;
-    let single_mode = if command.grpc_subscribe_type == "single" {
-        true
-    } else {
-        false
-    };
     let rpc_client = Arc::new(RpcClient::new(rpc_url));
     // 0.初始化钱包，ata账户，blockhash
     // 1.初始化各个Account的切片规则
@@ -138,8 +129,6 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         // 订阅GRPC
         GrpcSubscribe {
             grpc_url,
-            single_mode,
-            specify_pool: command.specify_pool.clone(),
             standard_program: command.standard_program,
         }
         .subscribe(dex_data, grpc_message_sender)

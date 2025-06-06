@@ -28,8 +28,6 @@ use yellowstone_grpc_proto::tonic::Status;
 #[derive(Debug)]
 pub struct GrpcSubscribe {
     pub grpc_url: String,
-    pub single_mode: bool,
-    pub specify_pool: Option<String>,
     pub standard_program: bool,
 }
 
