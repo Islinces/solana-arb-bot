@@ -40,7 +40,7 @@ pub fn build_jupiter_swap_ix(
             false,
         ));
         remaining_accounts.extend(instruction_item.account_meta);
-        if swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm {
+        if swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm || swap == Swap::RaydiumClmmV2 {
             remaining_accounts.push(AccountMeta::new_readonly(JUPITER_ID, false));
         }
         alts.extend(instruction_item.alts);
