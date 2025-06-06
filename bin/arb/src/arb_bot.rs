@@ -5,7 +5,7 @@ use crate::executor::Executor;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::GrpcSubscribe;
 use crate::keypair::KeypairVault;
-use crate::state::GrpcMessage;
+use crate::state::{GrpcMessage, GrpcTransactionMsg};
 use anyhow::anyhow;
 use clap::Parser;
 use rpassword::read_password;
@@ -14,10 +14,13 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use std::fs::File;
 use std::path::PathBuf;
+use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
+use tokio::time::Instant;
 use tracing::{error, info};
 
 #[derive(Parser, Debug)]
@@ -50,7 +53,7 @@ pub struct Command {
     arb_mint_bps_numerator: u64,
     #[arg(long, default_value = "100")]
     arb_mint_bps_denominator: u64,
-    #[arg(long, default_value = "10000")]
+    #[arg(long, default_value = "1000")]
     arb_channel_capacity: usize,
     #[arg(long, default_value = "100000")]
     arb_min_profit: u64,
@@ -105,7 +108,8 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     // grpc消息消费通道
     let (grpc_message_sender, grpc_message_receiver) = flume::unbounded::<GrpcMessage>();
     // Account本地缓存更新后广播通道
-    let (cached_message_sender, _) = broadcast::channel(arb_channel_capacity);
+    let (cached_message_sender, cached_message_receiver) =
+        flume::bounded::<GrpcTransactionMsg>(arb_channel_capacity);
     // 接收发生改变的缓存数据，判断是否需要触发route
     let mut join_set = JoinSet::new();
     // 将GRPC通过过来的数据保存到本地缓存中
@@ -114,7 +118,8 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         .start(
             &mut join_set,
             &grpc_message_receiver,
-            &cached_message_sender,
+            cached_message_sender,
+            cached_message_receiver.clone(),
         )
         .await;
     // 接收更新缓存的Account信息，判断是否需要触发route
@@ -127,21 +132,24 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         arb_mint_bps_denominator,
         JitoExecutor::initialize(&command)?,
     )
-    .start(&mut join_set, &cached_message_sender)
+    .start(&mut join_set, cached_message_receiver)
     .await;
     join_set.spawn(async move {
         // 订阅GRPC
-        let subscribe = GrpcSubscribe {
+        GrpcSubscribe {
             grpc_url,
             single_mode,
             specify_pool: command.specify_pool.clone(),
             standard_program: command.standard_program,
-        };
-        subscribe.subscribe(dex_data, grpc_message_sender).await
+        }
+        .subscribe(dex_data, grpc_message_sender)
+        .await;
     });
     while let Some(event) = join_set.join_next().await {
         if let Err(err) = event {
             error!("task terminated unexpectedly: {err:#}");
+            // 退出程序
+            exit(-1);
         }
     }
     Ok(())

@@ -12,7 +12,7 @@ use ahash::RandomState;
 use anyhow::anyhow;
 use borsh::BorshDeserialize;
 use dashmap::DashMap;
-use flume::Receiver;
+use flume::{Receiver, RecvError, TrySendError};
 use futures_util::future::err;
 use solana_sdk::pubkey::Pubkey;
 use spl_token::solana_program::program_pack::Pack;
@@ -37,10 +37,12 @@ impl MessageProcessor {
         &mut self,
         join_set: &mut JoinSet<()>,
         grpc_message_receiver: &Receiver<GrpcMessage>,
-        cached_message_sender: &broadcast::Sender<(GrpcTransactionMsg, Duration, Instant)>,
+        cached_message_sender: flume::Sender<GrpcTransactionMsg>,
+        cached_message_receiver: Receiver<GrpcTransactionMsg>,
     ) {
-        for _index in 0..self.process_size {
+        for index in 0..self.process_size {
             let cached_message_sender = cached_message_sender.clone();
+            let cached_msg_drop_receiver = cached_message_receiver.clone();
             let grpc_message_receiver = grpc_message_receiver.clone();
             join_set.spawn(async move {
                 loop {
@@ -54,20 +56,37 @@ impl MessageProcessor {
                                 );
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
-                                let grpc_to_processor_cost = transaction_msg.instant.elapsed();
-                                match cached_message_sender.send((
-                                    transaction_msg,
-                                    grpc_to_processor_cost,
-                                    Instant::now(),
-                                )) {
+                                match cached_message_sender.try_send(transaction_msg) {
                                     Ok(_) => {}
-                                    Err(e) => {
-                                        error!("发送Transaction到Arb失败，原因：{}", e);
+                                    Err(TrySendError::Full(msg)) => {
+                                        cached_msg_drop_receiver.try_recv().ok();
+                                        info!("Processor_{index} Channel丢弃消息");
+                                        let mut retry_count = 3;
+                                        loop {
+                                            if retry_count != 0 {
+                                                match cached_message_sender.try_send(msg.clone()) {
+                                                    Err(TrySendError::Full(_)) => {
+                                                        cached_msg_drop_receiver.try_recv().ok();
+                                                        retry_count -= 1;
+                                                    }
+                                                    _ => {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(TrySendError::Disconnected(_)) => {
+                                        error!("Processor_{index} 发送消息到Arb失败，原因：所有Arb关闭");
+                                        break;
                                     }
                                 }
                             }
                         },
-                        Err(_) => {}
+                        Err(RecvError::Disconnected) => {
+                            error!("Processor_{index} 接收消息失败，原因：Grpc订阅线程关闭");
+                            break;
+                        }
                     };
                 }
             });

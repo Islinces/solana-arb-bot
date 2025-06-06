@@ -47,10 +47,9 @@ impl Arb {
     pub async fn start(
         &self,
         join_set: &mut JoinSet<()>,
-        message_cached_sender: &Sender<(GrpcTransactionMsg, Duration, Instant)>,
+        cached_message_receiver: flume::Receiver<GrpcTransactionMsg>,
     ) {
         let arb_size = self.arb_size as u64;
-
         for index in 0..arb_size {
             let arb_amount_in = self.arb_amount_in;
             let executor = self.executor.clone();
@@ -58,11 +57,11 @@ impl Arb {
             let arb_mint = self.arb_mint.clone();
             let arb_mint_bps_numerator = self.arb_mint_bps_numerator.clone();
             let arb_mint_bps_denominator = self.arb_mint_bps_denominator.clone();
-            let mut receiver = message_cached_sender.subscribe();
+            let mut receiver = cached_message_receiver.clone();
             join_set.spawn(async move {
                 loop {
-                    match receiver.recv().await {
-                        Ok((transaction_msg, _grpc_to_processor_cost, _processor_send_instant)) => {
+                    match receiver.recv_async().await {
+                        Ok(transaction_msg) => {
                             let tx = transaction_msg.transaction.unwrap();
                             let meta = transaction_msg.meta.unwrap();
                             let account_keys = tx
@@ -128,12 +127,9 @@ impl Arb {
                                 }
                             }
                         }
-                        Err(RecvError::Closed) => {
-                            error!("action channel closed!");
+                        Err(_) => {
+                            error!("Arb_{index} 接收消息失败，原因：所有的Processor关闭");
                             break;
-                        }
-                        Err(RecvError::Lagged(num)) => {
-                            warn!("action channel lagged by {num}")
                         }
                     }
                 }

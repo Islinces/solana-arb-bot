@@ -72,7 +72,8 @@ impl GrpcSubscribe {
                     }
                 }
                 Err(e) => {
-                    error!("grpc推送消息失败，原因：{}", e)
+                    error!("接收grpc推送消息失败，原因：{}", e);
+                    break;
                 }
             }
         }
