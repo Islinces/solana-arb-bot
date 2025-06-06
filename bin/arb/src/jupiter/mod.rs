@@ -74,7 +74,8 @@ pub fn build_jupiter_swap_ix(
 fn get_jupiter_swap_type(dex_type: &DexType, swap_direction: bool) -> Swap {
     match dex_type {
         DexType::RaydiumAMM => Swap::Raydium,
-        DexType::RaydiumCLMM => Swap::RaydiumClmmV2,
+        // DexType::RaydiumCLMM => Swap::RaydiumClmmV2,
+        DexType::RaydiumCLMM => Swap::RaydiumClmm,
         DexType::PumpFunAMM => {
             if swap_direction {
                 Swap::PumpdotfunAmmSell
