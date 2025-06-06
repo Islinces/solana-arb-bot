@@ -84,7 +84,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     let bit_map_extension_key = pda_bit_map_extension_key(&pool_id);
     // TODO 仅加载需要的
     let mut tick_arrays = load_cur_and_next_specify_count_tick_array_key(
-        2,
+        5,
         &pool_id,
         &pool_state,
         &crate::account_cache::get_account_data::<TickArrayBitmapExtension>(&bit_map_extension_key),
