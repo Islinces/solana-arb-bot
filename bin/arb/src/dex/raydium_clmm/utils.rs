@@ -129,14 +129,18 @@ fn swap_compute(
     };
     if zero_for_one {
         if sqrt_price_limit_x64 < tick_math::MIN_SQRT_PRICE_X64 {
-            return Result::Err(anyhow!("sqrt_price_limit_x64 must greater than MIN_SQRT_PRICE_X64"));
+            return Result::Err(anyhow!(
+                "sqrt_price_limit_x64 must greater than MIN_SQRT_PRICE_X64"
+            ));
         }
         if sqrt_price_limit_x64 >= pool_state.sqrt_price_x64 {
             return Result::Err(anyhow!("sqrt_price_limit_x64 must smaller than current"));
         }
     } else {
         if sqrt_price_limit_x64 > tick_math::MAX_SQRT_PRICE_X64 {
-            return Result::Err(anyhow!("sqrt_price_limit_x64 must smaller than MAX_SQRT_PRICE_X64"));
+            return Result::Err(anyhow!(
+                "sqrt_price_limit_x64 must smaller than MAX_SQRT_PRICE_X64"
+            ));
         }
         if sqrt_price_limit_x64 <= pool_state.sqrt_price_x64 {
             return Result::Err(anyhow!("sqrt_price_limit_x64 must greater than current"));
@@ -341,47 +345,52 @@ pub fn load_cur_and_next_specify_count_tick_array_key(
     zero_for_one: bool,
 ) -> Option<Vec<Pubkey>> {
     // 获取当前可用 tick array 的 start index
-    let (_, mut current_vaild_tick_array_start_index) = pool_state
-        .get_first_initialized_tick_array(tickarray_bitmap_extension, zero_for_one)
-        .unwrap();
-    let mut tick_array_keys = Vec::with_capacity(load_count as usize);
+    match pool_state.get_first_initialized_tick_array(tickarray_bitmap_extension, zero_for_one) {
+        Ok((_, mut current_vaild_tick_array_start_index)) => {
+            let mut tick_array_keys = Vec::with_capacity(load_count as usize);
 
-    tick_array_keys.push(
-        Pubkey::find_program_address(
-            &[
-                TICK_ARRAY_SEED.as_bytes(),
-                pool_id.to_bytes().as_ref(),
-                &current_vaild_tick_array_start_index.to_be_bytes(),
-            ],
-            DexType::RaydiumCLMM.get_ref_program_id(),
-        )
-        .0,
-    );
-    let mut max_array_size = load_count;
-    while max_array_size != 0 {
-        let next_tick_array_index = pool_state
-            .next_initialized_tick_array_start_index(
-                tickarray_bitmap_extension,
-                current_vaild_tick_array_start_index,
-                zero_for_one,
-            )
-            .unwrap();
-        if next_tick_array_index.is_none() {
-            break;
+            tick_array_keys.push(
+                Pubkey::find_program_address(
+                    &[
+                        TICK_ARRAY_SEED.as_bytes(),
+                        pool_id.to_bytes().as_ref(),
+                        &current_vaild_tick_array_start_index.to_be_bytes(),
+                    ],
+                    DexType::RaydiumCLMM.get_ref_program_id(),
+                )
+                .0,
+            );
+            let mut max_array_size = load_count;
+            while max_array_size != 0 {
+                let next_tick_array_index = pool_state
+                    .next_initialized_tick_array_start_index(
+                        tickarray_bitmap_extension,
+                        current_vaild_tick_array_start_index,
+                        zero_for_one,
+                    )
+                    .unwrap();
+                if next_tick_array_index.is_none() {
+                    break;
+                }
+                current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
+                tick_array_keys.push(
+                    Pubkey::find_program_address(
+                        &[
+                            TICK_ARRAY_SEED.as_bytes(),
+                            pool_id.to_bytes().as_ref(),
+                            &current_vaild_tick_array_start_index.to_be_bytes(),
+                        ],
+                        DexType::RaydiumCLMM.get_ref_program_id(),
+                    )
+                    .0,
+                );
+                max_array_size -= 1;
+            }
+            (!tick_array_keys.is_empty()).then_some(tick_array_keys)
         }
-        current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
-        tick_array_keys.push(
-            Pubkey::find_program_address(
-                &[
-                    TICK_ARRAY_SEED.as_bytes(),
-                    pool_id.to_bytes().as_ref(),
-                    &current_vaild_tick_array_start_index.to_be_bytes(),
-                ],
-                DexType::RaydiumCLMM.get_ref_program_id(),
-            )
-            .0,
-        );
-        max_array_size -= 1;
+        Err(e) => {
+            error!("CLMM池子[{}]获取TickArrays失败，原因 : {}", pool_id, e);
+            None
+        }
     }
-    (!tick_array_keys.is_empty()).then_some(tick_array_keys)
 }
