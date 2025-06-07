@@ -5,6 +5,7 @@ use crate::dex::raydium_clmm::utils;
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
+use tracing::error;
 
 pub fn quote(
     amount_in: u64,
@@ -15,7 +16,7 @@ pub fn quote(
     let bitmap_extension = Some(get_bitmap_extension(pool_id)?);
     let mut tick_arrays =
         get_tick_arrays(pool_id, &pool_state, &bitmap_extension, swap_direction, 2)?;
-    utils::get_out_put_amount_and_remaining_accounts(
+    match utils::get_out_put_amount_and_remaining_accounts(
         amount_in,
         None,
         swap_direction,
@@ -24,8 +25,13 @@ pub fn quote(
         &pool_state,
         &bitmap_extension,
         &mut tick_arrays,
-    )
-    .map_or(None, |(amount_out, _, _)| Some(amount_out))
+    ) {
+        Ok((amount_out, _, _)) => Some(amount_out),
+        Err(e) => {
+            error!("CLMM池子[{}]quote失败，原因 : {}", pool_id, e);
+            None
+        }
+    }
 }
 
 fn get_amm_config(amm_config_key: &Pubkey) -> Option<AmmConfig> {
