@@ -93,7 +93,7 @@ impl MessageProcessor {
         }
     }
 
-    fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, mut data: Vec<u8>) -> anyhow::Result<()> {
+    fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, data: Vec<u8>) -> anyhow::Result<()> {
         let account_key = Pubkey::try_from(account_key)
             .map_or(Err(anyhow!("转换account_key失败")), |a| Ok(a))?;
         let sliced_data = data_slice::slice_data_auto_get_dex_type(

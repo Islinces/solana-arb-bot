@@ -84,5 +84,10 @@ fn get_jupiter_swap_type(dex_type: &DexType, swap_direction: bool) -> Swap {
             }
         }
         DexType::MeteoraDLMM => Swap::MeteoraDlmm,
+        DexType::OrcaWhirl => Swap::WhirlpoolSwapV2 {
+            //TODO:
+            a_to_b: swap_direction,
+            remaining_accounts_info: None,
+        },
     }
 }

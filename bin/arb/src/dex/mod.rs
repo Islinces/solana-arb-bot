@@ -11,6 +11,7 @@ pub mod meteora_dlmm;
 pub mod pump_fun;
 pub mod raydium_amm;
 pub mod raydium_clmm;
+pub mod orca_whirlpools;
 
 pub trait FromCache {
     fn from_cache(

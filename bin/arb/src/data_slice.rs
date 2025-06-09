@@ -36,6 +36,9 @@ pub fn slice_data(
         DexType::MeteoraDLMM => {
             crate::dex::meteora_dlmm::data_slice::slice_data(account_type, data, slice_type)
         }
+        DexType::OrcaWhirl => {
+            crate::dex::orca_whirlpools::slice_data(account_type, data, slice_type)
+        }
     }
 }
 
@@ -90,6 +93,7 @@ pub fn init_data_slice_config() {
     init_raydium_clmm_data_slice();
     init_pump_fun_data_slice();
     crate::dex::meteora_dlmm::data_slice::init_data_slice();
+    crate::dex::orca_whirlpools::init_data_slice();
     info!("初始化数据切片规则结束");
 }
 
@@ -116,6 +120,7 @@ pub fn get_slice_size(
         DexType::MeteoraDLMM => {
             crate::dex::meteora_dlmm::data_slice::get_slice_size(account_type, slice_type)
         }
+        DexType::OrcaWhirl => crate::dex::orca_whirlpools::get_slice_size(account_type, slice_type),
     }
 }
 

@@ -87,6 +87,8 @@ impl GrpcSubscribe {
         let mut raydium_clmm_bitmap_extension_account_keys = Vec::with_capacity(dex_data.len());
         let mut meteora_dlmm_account_keys = Vec::with_capacity(dex_data.len());
         let mut meteora_dlmm_bitmap_extension_account_keys = Vec::with_capacity(dex_data.len());
+        let mut orca_whirl_account_keys = Vec::with_capacity(dex_data.len());
+        let mut orca_whirl_oracle_account_keys = Vec::with_capacity(dex_data.len());
 
         for json in dex_data.iter() {
             if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
@@ -118,6 +120,11 @@ impl GrpcSubscribe {
                 );
                 meteora_dlmm_account_keys.push(json.pool);
             }
+            if &json.owner == DexType::OrcaWhirl.get_ref_program_id() {
+                orca_whirl_account_keys.push(json.pool);
+                orca_whirl_oracle_account_keys
+                    .push(crate::dex::orca_whirlpools::get_oracle_address(&json.pool)?);
+            }
         }
         let need_clock = !meteora_dlmm_account_keys.is_empty();
         let all_account_keys = raydium_amm_account_keys
@@ -127,6 +134,8 @@ impl GrpcSubscribe {
             .chain(raydium_clmm_bitmap_extension_account_keys.iter())
             .chain(meteora_dlmm_account_keys.iter())
             .chain(meteora_dlmm_bitmap_extension_account_keys.iter())
+            .chain(orca_whirl_account_keys.iter())
+            .chain(orca_whirl_oracle_account_keys.iter())
             .map(|key| key.to_string())
             .collect::<Vec<_>>();
         let mut grpc_client = create_grpc_client(grpc_url).await;
@@ -209,6 +218,38 @@ impl GrpcSubscribe {
                 );
             }
         }
+        // orca whirl tick array
+        if !orca_whirl_account_keys.is_empty() {
+            for pool_id in orca_whirl_account_keys.iter() {
+                accounts.insert(
+                    pool_id.to_string(),
+                    SubscribeRequestFilterAccounts {
+                        owner: vec![DexType::OrcaWhirl.get_ref_program_id().to_string()],
+                        filters: vec![
+                            // TickArray data大小为10136
+                            SubscribeRequestFilterAccountsFilter {
+                                filter: Some(Datasize(9988)),
+                            },
+                            // 订阅关注的池子的TickArray
+                            SubscribeRequestFilterAccountsFilter {
+                                filter: Some(
+                                    Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
+                                        offset: 9956,
+                                        data: Some(
+                                            subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                                pool_id.to_bytes().to_vec(),
+                                            ),
+                                        ),
+                                    }),
+                                ),
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+
         // 交易订阅
         if !accounts.is_empty() {
             let mut transactions = HashMap::new();

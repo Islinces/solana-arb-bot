@@ -137,8 +137,8 @@ pub async fn init_snapshot(
                 crate::dex::meteora_dlmm::cache_init::init_cache(&mut dex_data, rpc_client.clone())
                     .await
             }
-            _ => {
-                vec![]
+            DexType::OrcaWhirl => {
+                crate::dex::orca_whirlpools::init_cache(&mut dex_data, rpc_client.clone()).await
             }
         };
         for account in snapshot_data {
@@ -202,10 +202,10 @@ pub async fn init_snapshot(
 }
 
 async fn init_clock(effective_dex_data: &[DexJson], rpc_client: Arc<RpcClient>) {
-    if effective_dex_data
-        .iter()
-        .any(|json| &json.owner == DexType::MeteoraDLMM.get_ref_program_id())
-    {
+    if effective_dex_data.iter().any(|json| {
+        &json.owner == DexType::MeteoraDLMM.get_ref_program_id()
+            || &json.owner == DexType::OrcaWhirl.get_ref_program_id()
+    }) {
         let clock_data = rpc_client
             .clone()
             .get_account_data(&CLOCK_ID)

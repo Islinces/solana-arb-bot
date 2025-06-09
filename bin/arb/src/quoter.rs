@@ -1,5 +1,6 @@
 use crate::account_cache::get_account_data;
 use crate::dex::meteora_dlmm::interface::accounts::LbPair;
+use crate::dex::orca_whirlpools::Whirlpool;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::PoolState;
@@ -166,6 +167,12 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
             pool_id,
             get_account_data::<LbPair>(pool_id)?,
         ),
+        DexType::OrcaWhirl => crate::dex::orca_whirlpools::quote(
+            amount_in,
+            edge.swap_direction,
+            pool_id,
+            get_account_data::<Whirlpool>(pool_id)?,
+        ),
     }
 }
 
@@ -288,6 +295,10 @@ impl QuoteResult {
                                 edge.swap_direction,
                             )
                         }
+                        DexType::OrcaWhirl => crate::dex::orca_whirlpools::to_instruction(
+                            pool_id,
+                            edge.swap_direction,
+                        ),
                     }
                     .map_or(
                         Err(anyhow!("生成指令获取AccountMetadata失败")),

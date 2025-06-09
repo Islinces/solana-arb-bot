@@ -18,6 +18,7 @@ pub struct AccountRelation {
     vault: AHashMap<Pubkey, (Pubkey, DexType)>,
     tick_array_extension_bitmap: AHashMap<Pubkey, Pubkey>,
     bin_array_extension_bitmap: AHashMap<Pubkey, Pubkey>,
+    oracle: AHashMap<Pubkey, Pubkey>,
 }
 
 impl AccountRelation {
@@ -27,11 +28,12 @@ impl AccountRelation {
         let mut vault = AHashMap::with_capacity(dex_data.len());
         let mut tick_array_extension_bitmap = AHashMap::with_capacity(dex_data.len());
         let mut bin_array_extension_bitmap = AHashMap::with_capacity(dex_data.len());
+        let mut oracle = AHashMap::with_capacity(dex_data.len());
         for json in dex_data.iter() {
             if let Some(dex_type) = interface::get_dex_type_with_program_id(&json.owner) {
-                pool.insert(json.pool, dex_type.clone());
-                vault.insert(json.vault_a, (json.pool, dex_type.clone()));
-                vault.insert(json.vault_b, (json.pool, dex_type.clone()));
+                pool.insert(json.pool, dex_type);
+                vault.insert(json.vault_a, (json.pool, dex_type));
+                vault.insert(json.vault_b, (json.pool, dex_type));
                 if DexType::RaydiumCLMM == dex_type {
                     tick_array_extension_bitmap.insert(
                         Pubkey::find_program_address(
@@ -46,6 +48,11 @@ impl AccountRelation {
                         pda::derive_bin_array_bitmap_extension(&json.pool),
                         json.pool,
                     );
+                } else if DexType::OrcaWhirl == dex_type {
+                    oracle.insert(
+                        crate::dex::orca_whirlpools::get_oracle_address(&json.pool)?,
+                        json.pool,
+                    );
                 }
             }
         }
@@ -55,6 +62,7 @@ impl AccountRelation {
             vault,
             tick_array_extension_bitmap,
             bin_array_extension_bitmap,
+            oracle,
         })
     }
 }
@@ -108,6 +116,14 @@ pub fn get_dex_type_and_account_type(
             Some((DexType::MeteoraDLMM, AccountType::BinArrayBitmap))
         } else {
             Some((DexType::MeteoraDLMM, AccountType::BinArray))
+        }
+    } else if owner == DexType::OrcaWhirl.get_ref_program_id() {
+        if relation_cache.pool.contains_key(account_key) {
+            Some((DexType::OrcaWhirl, AccountType::Pool))
+        } else if relation_cache.oracle.contains_key(account_key) {
+            Some((DexType::OrcaWhirl, AccountType::Oracle))
+        } else {
+            Some((DexType::OrcaWhirl, AccountType::TickArray))
         }
     } else {
         None
