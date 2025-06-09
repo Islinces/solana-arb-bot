@@ -3,6 +3,9 @@ pub mod instruction;
 pub mod quote;
 pub mod state;
 pub mod cache_init;
+mod account_subscriber;
+
+pub use account_subscriber::*;
 
 use rand::Rng;
 use solana_sdk::pubkey;

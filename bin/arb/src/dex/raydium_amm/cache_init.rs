@@ -1,6 +1,6 @@
 use crate::account_cache::{get_account_data_with_data_slice, AccountDataSlice};
 use crate::dex_data::DexJson;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use ahash::{AHashMap, AHashSet};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;

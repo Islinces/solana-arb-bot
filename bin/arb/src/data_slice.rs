@@ -2,7 +2,7 @@ use crate::account_cache::get_clock;
 use crate::dex::pump_fun::data_slice::init_pump_fun_data_slice;
 use crate::dex::raydium_amm::data_slice::init_raydium_amm_data_slice;
 use crate::dex::raydium_clmm::data_slice::init_raydium_clmm_data_slice;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use anyhow::anyhow;
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;

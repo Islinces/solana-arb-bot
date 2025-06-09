@@ -5,7 +5,7 @@ use crate::dex::orca_whirlpools::accounts::{
 };
 use crate::dex::orca_whirlpools::Whirlpool;
 use crate::dex_data::DexJson;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use ahash::{AHashMap, AHashSet};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;

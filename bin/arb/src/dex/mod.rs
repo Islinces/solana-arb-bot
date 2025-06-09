@@ -1,5 +1,5 @@
 use crate::account_cache::{DynamicCache, StaticCache};
-use crate::interface::DexType;
+use crate::interface1::DexType;
 use parking_lot::RwLockReadGuard;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::message::AddressLookupTableAccount;

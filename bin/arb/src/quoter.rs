@@ -6,7 +6,7 @@ use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::PoolState;
 use crate::dex::InstructionItem;
 use crate::graph::{find_mint_position, find_pool_position, EdgeIdentifier, TwoHopPath};
-use crate::interface::DexType;
+use crate::interface1::DexType;
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;

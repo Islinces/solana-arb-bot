@@ -4,7 +4,7 @@ use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
 use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::interface::typedefs::StaticParameters;
 use crate::dex_data::DexJson;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use ahash::{AHashMap, AHashSet};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;

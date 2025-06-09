@@ -1,14 +1,15 @@
 use crate::dex::meteora_dlmm::commons::pda;
 use crate::dex::raydium_clmm::state::POOL_TICK_ARRAY_BITMAP_SEED;
 use crate::dex_data::DexJson;
-use crate::interface;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tracing::info;
+use crate::dex::meteora_dlmm::interface;
+use crate::interface1;
 
 static ACCOUNT_RELATION_CACHE: OnceCell<Arc<AccountRelation>> = OnceCell::const_new();
 
@@ -30,7 +31,7 @@ impl AccountRelation {
         let mut bin_array_extension_bitmap = AHashMap::with_capacity(dex_data.len());
         let mut oracle = AHashMap::with_capacity(dex_data.len());
         for json in dex_data.iter() {
-            if let Some(dex_type) = interface::get_dex_type_with_program_id(&json.owner) {
+            if let Some(dex_type) = interface1::get_dex_type_with_program_id(&json.owner) {
                 pool.insert(json.pool, dex_type);
                 vault.insert(json.vault_a, (json.pool, dex_type));
                 vault.insert(json.vault_b, (json.pool, dex_type));

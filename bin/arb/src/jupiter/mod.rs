@@ -1,5 +1,5 @@
 use crate::dex::InstructionItem;
-use crate::interface::{DexType, MINT_PROGRAM_ID};
+use crate::interface1::{DexType, MINT_PROGRAM_ID};
 use crate::jupiter::jupiter_route::RouteBuilder;
 use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;

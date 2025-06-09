@@ -6,7 +6,7 @@ use crate::dex::raydium_clmm::state::{
 };
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::raydium_clmm::{liquidity_math, swap_math, tick_math};
-use crate::interface::DexType;
+use crate::interface1::DexType;
 use anyhow::{anyhow, Result};
 use bincode::config;
 use borsh::BorshDeserialize;

@@ -1,7 +1,7 @@
 use crate::account_cache::{DynamicCache, StaticCache};
 use crate::dex::byte_utils::{read_pubkey, read_u64};
 use crate::dex::FromCache;
-use crate::interface::DexType;
+use crate::interface1::DexType;
 use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;
 

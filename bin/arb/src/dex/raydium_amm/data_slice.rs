@@ -1,5 +1,5 @@
 use crate::data_slice::{retain_intervals_unsafe, SliceType, DYNAMIC_MINT_VAULT_SLICE};
-use crate::interface::AccountType;
+use crate::interface1::AccountType;
 use anyhow::anyhow;
 use tokio::sync::OnceCell;
 

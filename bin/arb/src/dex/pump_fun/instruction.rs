@@ -1,5 +1,5 @@
 use crate::dex::pump_fun::state::{global_config_key, Pool};
-use crate::interface::{ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
+use crate::interface1::{ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
 use crate::metadata::get_keypair;
 use anyhow::Result;
 use solana_sdk::instruction::AccountMeta;

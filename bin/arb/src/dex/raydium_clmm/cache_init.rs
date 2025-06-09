@@ -3,7 +3,7 @@ use crate::data_slice::SliceType;
 use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex_data::DexJson;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use ahash::{AHashMap, AHashSet};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;

@@ -3,7 +3,7 @@ use crate::dex::orca_whirlpools::{
     get_oracle_address, get_tick_array_address, get_tick_array_start_tick_index
     , Whirlpool, TICK_ARRAY_SIZE,
 };
-use crate::interface::{ATA_PROGRAM_ID, MEMO_PROGRAM, MINT_PROGRAM_ID};
+use crate::interface1::{ATA_PROGRAM_ID, MEMO_PROGRAM, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
 use anyhow::anyhow;
 use solana_sdk::instruction::AccountMeta;

@@ -6,7 +6,7 @@ use crate::dex::pump_fun::state::Pool;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension, TickArrayState};
 use crate::dex::FromCache;
-use crate::interface::{AccountType, DexType};
+use crate::interface1::{AccountType, DexType};
 use crate::state::{GrpcMessage, GrpcTransactionMsg};
 use ahash::RandomState;
 use anyhow::anyhow;

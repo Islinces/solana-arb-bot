@@ -2,7 +2,7 @@ use crate::account_cache::get_token_program;
 use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
 use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::{METEORA_DLMM_EVENT_AUTHORITY_PROGRAM_ID, METEORA_DLMM_PROGRAM_ID};
-use crate::interface::ATA_PROGRAM_ID;
+use crate::interface1::ATA_PROGRAM_ID;
 use crate::metadata::get_keypair;
 use anyhow::{anyhow, Result};
 use solana_sdk::instruction::AccountMeta;

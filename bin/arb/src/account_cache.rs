@@ -2,7 +2,7 @@ use crate::data_slice::{slice_data, SliceType};
 use crate::dex::byte_utils::read_from;
 use crate::dex::FromCache;
 use crate::dex_data::DexJson;
-use crate::interface::{
+use crate::interface1::{
     get_dex_type_with_program_id, AccountType, DexType, CLOCK_ID, MINT2022_PROGRAM_ID,
     MINT_PROGRAM_ID,
 };

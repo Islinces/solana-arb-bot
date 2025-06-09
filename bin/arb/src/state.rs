@@ -1,4 +1,4 @@
-use crate::interface::DexType;
+use crate::interface1::DexType;
 use chrono::{DateTime, Local};
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Debug, Formatter};

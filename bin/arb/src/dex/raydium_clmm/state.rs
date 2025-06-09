@@ -5,7 +5,7 @@ use crate::dex::byte_utils::{
 use crate::dex::raydium_clmm::big_num::{U1024, U512};
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::FromCache;
-use crate::interface::DexType;
+use crate::interface1::DexType;
 use crate::{require, require_gt};
 use anyhow::anyhow;
 use borsh::BorshDeserialize;

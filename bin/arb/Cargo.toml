@@ -45,6 +45,8 @@ spl-associated-token-account = { version = "6.0.0", features = ["no-entrypoint"]
 yellowstone-grpc-client = "6.0.0"
 yellowstone-grpc-proto = "6.0.0"
 
+enum_dispatch = "0.3.13"
+
 num-integer = "0.1.45"
 num-traits = "0.2.19"
 num-derive = "0.4.2"

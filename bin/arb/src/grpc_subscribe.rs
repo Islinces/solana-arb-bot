@@ -1,6 +1,10 @@
 use crate::dex_data::DexJson;
-use crate::interface::DexType;
+use crate::interface::AccountSubscriber;
+use crate::interface1::DexType;
 use crate::state::{GrpcAccountMsg, GrpcMessage, GrpcTransactionMsg};
+use crate::{Subscriber, SubscriptionAccounts};
+use ahash::AHashSet;
+use anyhow::anyhow;
 use base58::ToBase58;
 use chrono::Local;
 use flume::Sender;
@@ -81,213 +85,93 @@ impl GrpcSubscribe {
         grpc_url: String,
         dex_data: Vec<DexJson>,
     ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
-        let mut raydium_amm_account_keys = Vec::with_capacity(dex_data.len());
-        let mut pump_fun_account_keys = Vec::with_capacity(dex_data.len());
-        let mut raydium_clmm_account_keys = Vec::with_capacity(dex_data.len());
-        let mut raydium_clmm_bitmap_extension_account_keys = Vec::with_capacity(dex_data.len());
-        let mut meteora_dlmm_account_keys = Vec::with_capacity(dex_data.len());
-        let mut meteora_dlmm_bitmap_extension_account_keys = Vec::with_capacity(dex_data.len());
-        let mut orca_whirl_account_keys = Vec::with_capacity(dex_data.len());
-        let mut orca_whirl_oracle_account_keys = Vec::with_capacity(dex_data.len());
-
-        for json in dex_data.iter() {
-            if &json.owner == DexType::RaydiumAMM.get_ref_program_id() {
-                raydium_amm_account_keys.push(json.pool);
-                raydium_amm_account_keys.push(json.vault_a);
-                raydium_amm_account_keys.push(json.vault_b);
-            }
-            if &json.owner == DexType::PumpFunAMM.get_ref_program_id() {
-                pump_fun_account_keys.push(json.vault_a);
-                pump_fun_account_keys.push(json.vault_b);
-            }
-            if &json.owner == DexType::RaydiumCLMM.get_ref_program_id() {
-                // TickArrayBitmapExtension
-                raydium_clmm_bitmap_extension_account_keys.push(
-                    Pubkey::find_program_address(
-                        &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), json.pool.as_ref()],
-                        DexType::RaydiumCLMM.get_ref_program_id(),
-                    )
-                    .0,
-                );
-                raydium_clmm_account_keys.push(json.pool);
-            }
-            if &json.owner == DexType::MeteoraDLMM.get_ref_program_id() {
-                // BinArrayBitmapExtension
-                meteora_dlmm_bitmap_extension_account_keys.push(
-                    crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
-                        &json.pool,
-                    ),
-                );
-                meteora_dlmm_account_keys.push(json.pool);
-            }
-            if &json.owner == DexType::OrcaWhirl.get_ref_program_id() {
-                orca_whirl_account_keys.push(json.pool);
-                orca_whirl_oracle_account_keys
-                    .push(crate::dex::orca_whirlpools::get_oracle_address(&json.pool)?);
-            }
-        }
-        let need_clock = !meteora_dlmm_account_keys.is_empty();
-        let all_account_keys = raydium_amm_account_keys
-            .iter()
-            .chain(pump_fun_account_keys.iter())
-            .chain(raydium_clmm_account_keys.iter())
-            .chain(raydium_clmm_bitmap_extension_account_keys.iter())
-            .chain(meteora_dlmm_account_keys.iter())
-            .chain(meteora_dlmm_bitmap_extension_account_keys.iter())
-            .chain(orca_whirl_account_keys.iter())
-            .chain(orca_whirl_oracle_account_keys.iter())
-            .map(|key| key.to_string())
-            .collect::<Vec<_>>();
-        let mut grpc_client = create_grpc_client(grpc_url).await;
-        let mut accounts = HashMap::new();
-        // 所有池子、金库订阅
-        if !all_account_keys.is_empty() {
-            accounts.insert(
-                "accounts".to_string(),
-                SubscribeRequestFilterAccounts {
-                    account: {
-                        let mut accounts = all_account_keys.clone();
-                        if need_clock {
-                            accounts.push(Clock::id().to_string());
-                        }
-                        accounts
-                    },
-                    ..Default::default()
-                },
-            );
-        }
-        // CLMM TickArrayState订阅
-        if !raydium_clmm_account_keys.is_empty() {
-            for pool_id in raydium_clmm_account_keys.iter() {
-                accounts.insert(
-                    pool_id.to_string(),
-                    SubscribeRequestFilterAccounts {
-                        owner: vec![DexType::RaydiumCLMM.get_ref_program_id().to_string()],
-                        filters: vec![
-                            // TickArrayState data大小为10240
-                            SubscribeRequestFilterAccountsFilter {
-                                filter: Some(Datasize(10240)),
-                            },
-                            // 订阅关注的池子的TickArrayState
-                            SubscribeRequestFilterAccountsFilter {
-                                filter: Some(
-                                    Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
-                                        offset: 8,
-                                        data: Some(
-                                            subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
-                                                pool_id.to_bytes().to_vec(),
-                                            ),
-                                        ),
-                                    }),
-                                ),
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-        // dlmm bin array
-        if !meteora_dlmm_account_keys.is_empty() {
-            for pool_id in meteora_dlmm_account_keys.iter() {
-                accounts.insert(
-                    pool_id.to_string(),
-                    SubscribeRequestFilterAccounts {
-                        owner: vec![DexType::MeteoraDLMM.get_ref_program_id().to_string()],
-                        filters: vec![
-                            // BinArray data大小为10136
-                            SubscribeRequestFilterAccountsFilter {
-                                filter: Some(Datasize(10136)),
-                            },
-                            // 订阅关注的池子的BinArray
-                            SubscribeRequestFilterAccountsFilter {
-                                filter: Some(
-                                    Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
-                                        offset: 24,
-                                        data: Some(
-                                            subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
-                                                pool_id.to_bytes().to_vec(),
-                                            ),
-                                        ),
-                                    }),
-                                ),
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-        // orca whirl tick array
-        if !orca_whirl_account_keys.is_empty() {
-            for pool_id in orca_whirl_account_keys.iter() {
-                accounts.insert(
-                    pool_id.to_string(),
-                    SubscribeRequestFilterAccounts {
-                        owner: vec![DexType::OrcaWhirl.get_ref_program_id().to_string()],
-                        filters: vec![
-                            // TickArray data大小为10136
-                            SubscribeRequestFilterAccountsFilter {
-                                filter: Some(Datasize(9988)),
-                            },
-                            // 订阅关注的池子的TickArray
-                            SubscribeRequestFilterAccountsFilter {
-                                filter: Some(
-                                    Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
-                                        offset: 9956,
-                                        data: Some(
-                                            subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
-                                                pool_id.to_bytes().to_vec(),
-                                            ),
-                                        ),
-                                    }),
-                                ),
-                            },
-                        ],
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-
-        // 交易订阅
-        if !accounts.is_empty() {
-            let mut transactions = HashMap::new();
-            transactions.insert(
-                "transactions".to_string(),
-                SubscribeRequestFilterTransactions {
-                    vote: Some(false),
-                    failed: Some(false),
-                    account_include: all_account_keys,
-                    ..Default::default()
-                },
-            );
-            let subscribe_request = SubscribeRequest {
-                accounts,
-                transactions,
-                commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
-                ..Default::default()
-            };
-            let (_, stream) = grpc_client
-                .subscribe_with_request(Some(subscribe_request))
-                .await?;
-            tokio::spawn(async move {
-                let mut ping = tokio::time::interval(Duration::from_secs(5));
-                ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-                ping.tick().await;
-                loop {
-                    tokio::select! {
-                        _ = ping.tick() => {
-                            if let Err(e)=grpc_client.ping(1).await{
-                                error!("GRPC PING 失败，{}",e);
-                            }
-                        },
+        let subscribers =
+            crate::interface::get_subscribers().map_or(Err(anyhow!("")), |s| Ok(s))?;
+        let mut unified_accounts: AHashSet<Pubkey> = AHashSet::with_capacity(dex_data.len() * 3);
+        let mut account_with_owner_and_filter: HashMap<String, SubscribeRequestFilterAccounts> =
+            HashMap::with_capacity(dex_data.len());
+        let mut tx_include_accounts: Vec<Pubkey> = Vec::with_capacity(dex_data.len() * 3);
+        for sub in subscribers {
+            match sub.get_subscription_accounts(dex_data.as_slice()) {
+                None => {}
+                Some(accounts) => {
+                    if accounts.unified_accounts.is_empty()
+                        && accounts.tx_include_accounts.is_empty()
+                        && accounts.account_with_owner_and_filter.as_ref().is_none()
+                    {
+                        continue;
                     }
+                    unified_accounts.extend(accounts.unified_accounts);
+                    tx_include_accounts.extend(accounts.tx_include_accounts);
+                    accounts
+                        .account_with_owner_and_filter
+                        .unwrap_or(HashMap::new())
+                        .into_iter()
+                        .for_each(|(k, v)| {
+                            account_with_owner_and_filter.insert(k, v);
+                        });
                 }
-            });
-            return Ok(stream);
+            }
         }
-        Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
+        if unified_accounts.is_empty() {
+            return Err(anyhow!("没有订阅账户"));
+        }
+        let mut accounts = HashMap::with_capacity(dex_data.len() * 3);
+        accounts.insert(
+            "unified_accounts".to_string(),
+            SubscribeRequestFilterAccounts {
+                account: unified_accounts
+                    .into_iter()
+                    .map(|k| k.to_string())
+                    .collect::<Vec<_>>(),
+                ..Default::default()
+            },
+        );
+        for (k, v) in account_with_owner_and_filter {
+            accounts.insert(k, v);
+        }
+        if tx_include_accounts.is_empty() {
+            return Err(anyhow!("未订阅tx"));
+        }
+        let mut transactions = HashMap::new();
+        transactions.insert(
+            "transactions".to_string(),
+            SubscribeRequestFilterTransactions {
+                vote: Some(false),
+                failed: Some(false),
+                account_include: tx_include_accounts
+                    .into_iter()
+                    .map(|k| k.to_string())
+                    .collect(),
+                ..Default::default()
+            },
+        );
+        let subscribe_request = SubscribeRequest {
+            accounts,
+            transactions,
+            commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
+            ..Default::default()
+        };
+        let mut grpc_client = create_grpc_client(grpc_url).await;
+        let (_, stream) = grpc_client
+            .subscribe_with_request(Some(subscribe_request))
+            .await?;
+        tokio::spawn(async move {
+            let mut ping = tokio::time::interval(Duration::from_secs(5));
+            ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            ping.tick().await;
+            loop {
+                tokio::select! {
+                    _ = ping.tick() => {
+                        if let Err(e)=grpc_client.ping(1).await{
+                            error!("GRPC PING 失败，{}",e);
+                        }
+                    },
+                }
+            }
+        });
+        Ok(stream)
+        // Err(anyhow::anyhow!("没有找到需要订阅的账户数据"))
     }
 }
 
