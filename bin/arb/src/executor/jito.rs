@@ -21,11 +21,10 @@ use spl_associated_token_account::instruction::create_associated_token_account_i
 use spl_associated_token_account::{get_associated_token_address_with_program_id, solana_program};
 use spl_token::instruction::transfer;
 use std::ops::{Div, Mul};
-use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
-use tracing::info;
 
 const DEFAULT_TIP_ACCOUNTS: [Pubkey; 8] = [
     pubkey!("3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT"),
@@ -44,7 +43,8 @@ fn get_jito_fee_account_with_rand() -> Pubkey {
 
 pub struct JitoExecutor {
     bot_name: Option<String>,
-    jito_url: String,
+    jito_url: Vec<String>,
+    used_url_index: Option<AtomicUsize>,
     client: Arc<Client>,
     tip_bps_numerator: u64,
     tip_bps_denominator: u64,
@@ -66,10 +66,14 @@ impl Executor for JitoExecutor {
         } else {
             format!("https://{}.mainnet.block-engine.jito.wtf", jito_region)
         };
-        let jito_url = if jito_uuid.is_none() {
-            format!("{}/api/v1/bundles", jito_host)
-        } else {
-            format!("{}/api/v1/bundles?uuid={}", jito_host, jito_uuid.unwrap())
+        let jito_url = match jito_uuid {
+            None => {
+                vec![format!("{}/api/v1/bundles", jito_host)]
+            }
+            Some(uuids) => uuids
+                .into_iter()
+                .map(|id| format!("{}/api/v1/bundles?uuid={}", jito_host, id))
+                .collect::<Vec<_>>(),
         };
         let client = Arc::new(
             Client::builder()
@@ -82,10 +86,15 @@ impl Executor for JitoExecutor {
                 .build()
                 .expect("Failed to build HTTP client"),
         );
-
+        let used_url_index = if jito_url.len() == 1 {
+            None
+        } else {
+            Some(AtomicUsize::new(0))
+        };
         Ok(Arc::new(Self {
             bot_name,
             jito_url,
+            used_url_index,
             client,
             tip_bps_numerator,
             tip_bps_denominator,
@@ -119,40 +128,45 @@ impl Executor for JitoExecutor {
                     "method":"sendBundle",
                     "params": params
                 });
-                let jito_response = self
-                    .client
-                    .post(self.jito_url.clone())
-                    .header("Content-Type", "application/json")
-                    .json(&data)
-                    .send()
-                    .await;
+                match self.pick_jito_url() {
+                    None => Err(anyhow!("获取JitoUrl失败")),
+                    Some(jito_url) => {
+                        let jito_response = self
+                            .client
+                            .post(jito_url)
+                            .header("Content-Type", "application/json")
+                            .json(&data)
+                            .send()
+                            .await;
 
-                let bundle_id = match jito_response {
-                    Ok(response) => {
-                        let v: serde_json::Value = response.json().await?;
-                        if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
-                            id.to_owned()
-                        } else if let Some(msg) = v
-                            .get("error")
-                            .and_then(|e| e.get("message"))
-                            .and_then(|m| m.as_str())
-                        {
-                            format!("Jito returned error: {}", msg)
-                        } else {
-                            format!("Unknown response format: {}", v)
-                        }
+                        let bundle_id = match jito_response {
+                            Ok(response) => {
+                                let v: serde_json::Value = response.json().await?;
+                                if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
+                                    id.to_owned()
+                                } else if let Some(msg) = v
+                                    .get("error")
+                                    .and_then(|e| e.get("message"))
+                                    .and_then(|m| m.as_str())
+                                {
+                                    format!("Jito returned error: {}", msg)
+                                } else {
+                                    format!("Unknown response format: {}", v)
+                                }
+                            }
+                            Err(e) => {
+                                format!("Jito returned error: {}", e)
+                            }
+                        };
+                        Ok(format!(
+                            "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, BundleId : {} \n\nBase64 : {}",
+                            instruction_cost.as_nanos() as f64 / 1000.0,
+                            jito_request_start.elapsed().as_micros() as f64 / 1000.0,
+                            bundle_id,
+                            bundles.first().unwrap_or(&"".to_string()),
+                        ))
                     }
-                    Err(e) => {
-                        format!("Jito returned error: {}", e)
-                    }
-                };
-                Ok(format!(
-                    "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, BundleId : {} \n\nBase64 : {}",
-                    instruction_cost.as_nanos() as f64 / 1000.0,
-                    jito_request_start.elapsed().as_micros() as f64 / 1000.0,
-                    bundle_id,
-                    bundles.first().unwrap_or(&"".to_string()),
-                ))
+                }
             }
             Err(e) => Err(anyhow!("Jito生成bundle失败, {}", e)),
         }
@@ -160,6 +174,18 @@ impl Executor for JitoExecutor {
 }
 
 impl JitoExecutor {
+    fn pick_jito_url(&self) -> Option<&str> {
+        let len = self.jito_url.len();
+        if len == 0 {
+            return None;
+        }
+        let index = match self.used_url_index.as_ref() {
+            None => 0,
+            Some(url_index) => url_index.fetch_add(1, Ordering::Relaxed) % len,
+        };
+        self.jito_url.get(index).map(|s| s.as_str())
+    }
+
     fn calculate_compute_unit() -> u32 {
         200_000
     }
