@@ -17,6 +17,7 @@ impl DataSliceInitializer for PumpFunAMMDataSlicer {
     fn try_init_data_slice_config(&self) -> anyhow::Result<()> {
         init_pool_data_slice()?;
         init_global_config_slice()?;
+        self.try_init_mint_vault_data_slice()?;
         Ok(())
     }
 

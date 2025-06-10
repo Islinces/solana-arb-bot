@@ -11,7 +11,7 @@ use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::SysvarId;
 use std::ptr;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, SetError};
 
 static DATA_SLICE_PROCESSOR: OnceCell<AHashMap<DexType, DataSlice>> = OnceCell::const_new();
 // ========================= dynamic data 账户订阅的数据切片 =========================
@@ -35,8 +35,11 @@ pub trait DataSliceInitializer {
 
     fn try_init_mint_vault_data_slice(&self) -> anyhow::Result<()> {
         // amount
-        DYNAMIC_MINT_VAULT_SLICE.set(([(64, 64 + 8)], 8))?;
-        Ok(())
+        match DYNAMIC_MINT_VAULT_SLICE.set(([(64, 64 + 8)], 8)) {
+            Ok(_) => Ok(()),
+            Err(SetError::AlreadyInitializedError(_)) => Ok(()),
+            Err(e) => Err(anyhow!(e)),
+        }
     }
 
     fn try_mint_vault_slice_data(&self, data: Vec<u8>) -> anyhow::Result<Vec<u8>> {
