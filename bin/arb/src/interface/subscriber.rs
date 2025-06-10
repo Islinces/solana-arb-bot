@@ -26,11 +26,11 @@ pub trait AccountSubscriber {
 
 #[enum_dispatch(AccountSubscriber)]
 pub enum Subscriber {
-    MeteoraDLMMAccountSubscriber,
-    PumpFunAMMAccountSubscriber,
-    RaydiumAMMAccountSubscriber,
-    RaydiumCLMMAccountSubscriber,
-    OrcaWhirlAccountSubscriber,
+    MeteoraDLMM(MeteoraDLMMAccountSubscriber),
+    PumpFunAMM(PumpFunAMMAccountSubscriber),
+    RaydiumAMM(RaydiumAMMAccountSubscriber),
+    RaydiumCLMM(RaydiumCLMMAccountSubscriber),
+    OrcaWhirl(OrcaWhirlAccountSubscriber),
 }
 
 pub async fn grpc_subscribe(
