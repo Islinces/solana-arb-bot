@@ -1,10 +1,13 @@
 use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
-use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
+use crate::dex::raydium_clmm::state::pda_bit_map_extension_key;
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
+use crate::global_cache::get_account_data;
 use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -81,6 +84,55 @@ impl SnapshotInitializer for MeteoraDLMMSnapshotInitializer {
                 .chain(all_bin_array_account_data.into_iter())
                 .collect::<Vec<_>>()
         }
+    }
+
+    fn print_snapshot(&self, dex_json: &[DexJson]) -> anyhow::Result<()> {
+        if let Some(json) = dex_json
+            .iter()
+            .find(|json| json.owner == METEORA_DLMM_PROGRAM_ID)
+        {
+            let lb_pair = get_account_data::<LbPair>(&json.pool)
+                .ok_or(anyhow!("{}找不到缓存数据", json.pool))?;
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::MeteoraDLMM,
+                AccountType::Pool,
+                json.pool,
+                lb_pair
+            );
+            let bitmap_extension_key = pda_bit_map_extension_key(&json.pool);
+            let bitmap_extension =
+                get_account_data::<BinArrayBitmapExtension>(&bitmap_extension_key);
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::MeteoraDLMM,
+                AccountType::BinArrayBitmap,
+                bitmap_extension_key,
+                bitmap_extension
+            );
+            let _ = get_bin_array_pubkeys_for_swap(
+                &json.pool,
+                &lb_pair,
+                bitmap_extension.as_ref(),
+                true,
+                1,
+            )?
+            .pop()
+            .ok_or(anyhow!("池子{}未找到BinArray", json.pool))
+            .and_then(|key| {
+                let bin_array = get_account_data::<BinArray>(&key)
+                    .ok_or(anyhow!("BinArray{}找不到数据", key))?;
+                info!(
+                    "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                    DexType::MeteoraDLMM,
+                    AccountType::BinArray,
+                    key,
+                    bin_array
+                );
+                Ok(())
+            });
+        }
+        Ok(())
     }
 }
 

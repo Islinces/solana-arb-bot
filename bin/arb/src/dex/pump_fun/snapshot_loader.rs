@@ -1,9 +1,13 @@
 use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
+use crate::dex::pump_fun::state::Pool;
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
+use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::{AccountType, DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
 use crate::dex_data::DexJson;
+use crate::global_cache::get_account_data;
 use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -155,6 +159,24 @@ impl SnapshotInitializer for PumpFunAMMSnapshotInitializer {
         } else {
             accounts.unwrap()
         }
+    }
+
+    fn print_snapshot(&self, dex_json: &[DexJson]) -> anyhow::Result<()> {
+        if let Some(json) = dex_json
+            .iter()
+            .find(|json| &json.owner == DexType::PumpFunAMM.get_ref_program_id())
+        {
+            let pool = get_account_data::<Pool>(&json.pool)
+                .ok_or(anyhow!("{}找不到缓存数据", json.pool))?;
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::PumpFunAMM,
+                AccountType::Pool,
+                json.pool,
+                pool
+            );
+        }
+        Ok(())
     }
 }
 

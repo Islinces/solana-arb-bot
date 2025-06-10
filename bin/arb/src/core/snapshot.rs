@@ -1,6 +1,7 @@
 use crate::dex::meteora_dlmm::MeteoraDLMMSnapshotInitializer;
 use crate::dex::orca_whirlpools::OrcaWhirlpoolsSnapshotInitializer;
 use crate::dex::pump_fun::PumpFunAMMSnapshotInitializer;
+use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_amm::RaydiumAmmSnapshotInitializer;
 use crate::dex::raydium_clmm::RaydiumCLMMSnapshotInitializer;
 use crate::dex::{AccountType, DexType, CLOCK_ID};
@@ -30,6 +31,8 @@ pub trait SnapshotInitializer {
         dex_json: &mut Vec<DexJson>,
         rpc_client: Arc<RpcClient>,
     ) -> Vec<AccountDataSlice>;
+
+    fn print_snapshot(&self, dex_json: &[DexJson]) -> anyhow::Result<()>;
 
     async fn get_account_data_with_data_slice(
         &self,
@@ -111,10 +114,10 @@ pub async fn init_snapshot(
         // 缓存账户
         accounts.into_iter().for_each(|account| {
             account
-                .dynamic_slice_data
-                .and_then(|data| cache.upsert_dynamic(account.account_key, data));
-            account
                 .static_slice_data
+                .and_then(|data| cache.upsert_static(account.account_key, data));
+            account
+                .dynamic_slice_data
                 .and_then(|data| cache.upsert_dynamic(account.account_key, data));
         })
     }
@@ -125,11 +128,27 @@ pub async fn init_snapshot(
     // 加载clock
     cache_clock(dex_data.as_slice(), rpc_client.clone(), &cache).await;
     info!("初始化Snapshot结束, 数量 : {}", dex_data.len());
+    #[cfg(feature = "print_slice_data")]
+    print_slice_data(dex_data);
     if dex_data.is_empty() {
         Err(anyhow!("所有DexJson均加载失败"))
     } else {
         Ok(())
     }
+}
+
+fn print_slice_data(dex_json: &[DexJson]) {
+    vec![
+        SnapshotType::from(MeteoraDLMMSnapshotInitializer),
+        SnapshotType::from(OrcaWhirlpoolsSnapshotInitializer),
+        SnapshotType::from(PumpFunAMMSnapshotInitializer),
+        SnapshotType::from(RaydiumAmmSnapshotInitializer),
+        SnapshotType::from(RaydiumCLMMSnapshotInitializer),
+    ]
+    .into_iter()
+    .for_each(|snapshot| {
+        snapshot.print_snapshot(dex_json).unwrap();
+    })
 }
 
 async fn cache_lookup_table_accounts(

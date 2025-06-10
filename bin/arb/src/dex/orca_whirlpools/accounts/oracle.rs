@@ -50,8 +50,8 @@ impl FromCache for Oracle {
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(account_key).unwrap();
-        let dynamic_data = dynamic_cache.get(account_key).unwrap();
+        let static_data = static_cache.get(account_key)?;
+        let dynamic_data = dynamic_cache.get(account_key)?;
         let dynamic_data = dynamic_data.value().as_slice();
         unsafe {
             let whirlpool = read_from::<Pubkey>(&static_data[0..32]);

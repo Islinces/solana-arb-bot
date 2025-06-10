@@ -1,20 +1,11 @@
 [
   {
-    "pool": "6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c",
-    "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+    "pool": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+    "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
     "mintA": "So11111111111111111111111111111111111111112",
     "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "2P6xseti7bdTSkECNod9myYbY92WFAg4PUwYSkQUyUoD",
-    "vaultB": "1i3HWdz8Yphfy9jWizbSK2f6cX1em8ANU6xhHLfuzsE",
-    "addressLookupTableAddress": "9RDJFu8AzKituXzkciF8u7MGWRdVYKEAbjZw8X2vRFYx"
-  },
-  {
-    "pool": "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
-    "owner": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz",
-    "vaultB": "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz",
-    "addressLookupTableAddress": "E59uBXGqn83xN17kMbBVfU1M7T4wHG91eiygHb88Aovb"
+    "vaultA": "dY5cups8EYbDSrNL8EpJuPiXX2rbDNRuJXaZatSpW5N",
+    "vaultB": "CQxdPWr2Xbe1uq5sFDoTyBAXujZexhEPuNxpYSyPNQwm",
+    "addressLookupTableAddress": "BUJkP9HARGjQfHxdQ2fy3LXXiWGMK8QP4FX85P68FAhM"
   }
 ]

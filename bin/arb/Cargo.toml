@@ -6,6 +6,8 @@ license = "MIT"
 authors = ["solana"]
 build = "build.rs"
 
+[features]
+print_slice_data = []
 
 [lib]
 doctest = false

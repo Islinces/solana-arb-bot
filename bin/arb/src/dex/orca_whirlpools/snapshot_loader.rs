@@ -1,10 +1,17 @@
+use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
+use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
 use crate::dex::orca_whirlpools::{
-    get_oracle_address, get_tick_array_keys, Whirlpool, WHIRLPOOL_ID,
+    get_oracle_address, get_tick_array_address, get_tick_array_keys,
+    get_tick_array_start_tick_index, Oracle, TickArray, Whirlpool, WHIRLPOOL_ID,
 };
+use crate::dex::raydium_clmm::state::pda_bit_map_extension_key;
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
+use crate::global_cache::get_account_data;
 use crate::{get_data_slice_size, AccountDataSlice, SliceType, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -74,6 +81,49 @@ impl SnapshotInitializer for OrcaWhirlpoolsSnapshotInitializer {
                 .chain(tick_array_account_data.into_iter())
                 .collect::<Vec<_>>()
         }
+    }
+
+    // #[cfg(feature = "print_slice_data")]
+    fn print_snapshot(&self, dex_json: &[DexJson]) -> anyhow::Result<()> {
+        if let Some(json) = dex_json
+            .iter()
+            .find(|json| &json.owner == DexType::OrcaWhirl.get_ref_program_id())
+        {
+            let pool = get_account_data::<Whirlpool>(&json.pool).unwrap();
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::OrcaWhirl,
+                AccountType::Pool,
+                json.pool,
+                pool
+            );
+
+            let oracle_key = get_oracle_address(&json.pool)?;
+            let oracle = get_account_data::<Oracle>(&oracle_key);
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::OrcaWhirl,
+                AccountType::Oracle,
+                oracle_key,
+                oracle
+            );
+
+            let tick_array_key = get_tick_array_address(
+                &json.pool,
+                get_tick_array_start_tick_index(pool.tick_current_index, pool.tick_spacing),
+            )?
+            .0;
+            let tick_array = get_account_data::<TickArray>(&tick_array_key)
+                .ok_or(anyhow!("TickArray{}找不到数据", tick_array_key))?;
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::OrcaWhirl,
+                AccountType::TickArray,
+                tick_array_key,
+                tick_array,
+            );
+        }
+        Ok(())
     }
 }
 

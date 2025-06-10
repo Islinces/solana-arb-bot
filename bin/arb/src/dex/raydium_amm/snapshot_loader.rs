@@ -1,9 +1,12 @@
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
+use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_amm::RAYDIUM_AMM_PROGRAM_ID;
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
+use crate::global_cache::get_account_data;
 use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
@@ -92,5 +95,23 @@ impl SnapshotInitializer for RaydiumAmmSnapshotInitializer {
                 .chain(all_vault_account_data.into_iter())
                 .collect()
         }
+    }
+
+    fn print_snapshot(&self, dex_json: &[DexJson]) -> anyhow::Result<()> {
+        if let Some(json) = dex_json
+            .iter()
+            .find(|json| &json.owner == DexType::RaydiumAMM.get_ref_program_id())
+        {
+            let pool = get_account_data::<AmmInfo>(&json.pool)
+                .ok_or(anyhow!("{}找不到缓存数据", json.pool))?;
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::RaydiumAMM,
+                AccountType::Pool,
+                json.pool,
+                pool
+            );
+        }
+        Ok(())
     }
 }

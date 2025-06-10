@@ -1,10 +1,17 @@
-use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
+use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
+use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
+use crate::dex::raydium_clmm::state::{
+    pda_bit_map_extension_key, PoolState, TickArrayBitmapExtension, TickArrayState,
+};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID;
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
+use crate::global_cache::get_account_data;
 use crate::{AccountDataSlice, SliceType, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -97,6 +104,53 @@ impl SnapshotInitializer for RaydiumCLMMSnapshotInitializer {
                 .chain(tick_array_account_data.into_iter())
                 .collect::<Vec<_>>()
         }
+    }
+
+    // #[cfg(feature = "print_slice_data")]
+    fn print_snapshot(&self, dex_json: &[DexJson]) -> anyhow::Result<()> {
+        if let Some(json) = dex_json
+            .iter()
+            .find(|json| &json.owner == DexType::RaydiumCLMM.get_ref_program_id())
+        {
+            let pool = get_account_data::<PoolState>(&json.pool).unwrap();
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::RaydiumCLMM,
+                AccountType::Pool,
+                json.pool,
+                pool
+            );
+            let bitmap_extension_key = pda_bit_map_extension_key(&json.pool);
+            let bitmap_extension =
+                get_account_data::<TickArrayBitmapExtension>(&bitmap_extension_key);
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::RaydiumCLMM,
+                AccountType::BinArrayBitmap,
+                bitmap_extension_key,
+                bitmap_extension
+            );
+            let key = load_cur_and_next_specify_count_tick_array_key(
+                0,
+                &json.pool,
+                &pool,
+                &bitmap_extension,
+                true,
+            )
+            .ok_or(anyhow!("池子{}获取TickArray失败", json.pool))?
+            .pop()
+            .ok_or(anyhow!("池子{}获取TickArray失败", json.pool))?;
+
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::RaydiumCLMM,
+                AccountType::TickArray,
+                key,
+                get_account_data::<TickArrayState>(&key)
+                    .ok_or(anyhow!("TickArray{}无法找到数据", key))?
+            );
+        }
+        Ok(())
     }
 }
 
