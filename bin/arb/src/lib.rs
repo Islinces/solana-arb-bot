@@ -8,10 +8,10 @@ pub mod global_cache;
 mod graph;
 pub mod grpc_processor;
 pub mod grpc_subscribe;
-mod interface;
+mod core;
 mod jupiter;
 mod keypair;
 mod metadata;
 mod quoter;
 
-pub use interface::*;
+pub use core::*;

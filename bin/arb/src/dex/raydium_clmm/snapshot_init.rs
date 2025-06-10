@@ -132,7 +132,7 @@ impl RaydiumCLMMSnapshotInitializer {
         all_amm_config_account_data.retain(|account| {
             if account.static_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::interface::get_data_slice_size(
+                    != crate::core::get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::AmmConfig,
                         SliceType::Unsubscribed,
@@ -184,7 +184,7 @@ impl RaydiumCLMMSnapshotInitializer {
         all_bitmap_extension_account_data.retain(|account| {
             if account.dynamic_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::interface::get_data_slice_size(
+                    != crate::core::get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::TickArrayBitmap,
                         SliceType::Subscribed,

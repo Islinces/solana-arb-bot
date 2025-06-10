@@ -97,7 +97,7 @@ impl MessageProcessor {
     fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, data: Vec<u8>) -> anyhow::Result<()> {
         let account_key = Pubkey::try_from(account_key)
             .map_or(Err(anyhow!("转换account_key失败")), |a| Ok(a))?;
-        let sliced_data = crate::interface::slice_data_auto_get_dex_type(
+        let sliced_data = crate::core::slice_data_auto_get_dex_type(
             &account_key,
             &Pubkey::try_from(owner).map_or(Err(anyhow!("转换owner失败")), |a| Ok(a))?,
             data,
