@@ -1,6 +1,5 @@
 use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
 use crate::dex_data::DexJson;
-use crate::interface1::DexType;
 use crate::{AccountSubscriber, SubscriptionAccounts};
 use solana_sdk::clock::Clock;
 use solana_sdk::sysvar::SysvarId;
@@ -37,9 +36,9 @@ impl AccountSubscriber for OrcaWhirlAccountSubscriber {
         let mut tick_array_sub_accounts = HashMap::with_capacity(dex_json.len());
         for pool_id in orca_whirl_account_keys.iter() {
             tick_array_sub_accounts.insert(
-                pool_id.to_string(),
+                format!("{}:{}","WH-TK",pool_id.to_string()),
                 SubscribeRequestFilterAccounts {
-                    owner: vec![DexType::OrcaWhirl.get_ref_program_id().to_string()],
+                    owner: vec![WHIRLPOOL_ID.to_string()],
                     filters: vec![
                         // TickArray data大小为10136
                         SubscribeRequestFilterAccountsFilter {

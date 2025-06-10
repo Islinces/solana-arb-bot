@@ -1,6 +1,5 @@
 use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
 use crate::dex_data::DexJson;
-use crate::interface1::DexType;
 use crate::{AccountSubscriber, SubscriptionAccounts};
 use solana_sdk::clock::Clock;
 use solana_sdk::sysvar::SysvarId;
@@ -39,9 +38,9 @@ impl AccountSubscriber for MeteoraDLMMAccountSubscriber {
         let mut bin_array_sub_accounts = HashMap::with_capacity(dex_json.len());
         for pool_id in pool_keys.iter() {
             bin_array_sub_accounts.insert(
-                pool_id.to_string(),
+                format!("{}:{}","DLMM-BIN",pool_id.to_string()),
                 SubscribeRequestFilterAccounts {
-                    owner: vec![DexType::MeteoraDLMM.get_ref_program_id().to_string()],
+                    owner: vec![METEORA_DLMM_PROGRAM_ID.to_string()],
                     filters: vec![
                         // BinArray data大小为10136
                         SubscribeRequestFilterAccountsFilter {

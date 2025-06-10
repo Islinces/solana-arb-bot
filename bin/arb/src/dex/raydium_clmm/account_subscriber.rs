@@ -1,8 +1,6 @@
-use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID;
 use crate::dex_data::DexJson;
 use crate::grpc_subscribe::POOL_TICK_ARRAY_BITMAP_SEED;
-use crate::interface1::DexType;
 use crate::{AccountSubscriber, SubscriptionAccounts};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
@@ -34,7 +32,7 @@ impl AccountSubscriber for RaydiumCLMMAccountSubscriber {
             bitmap_extension_keys.push(
                 Pubkey::find_program_address(
                     &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), json.pool.as_ref()],
-                    DexType::RaydiumCLMM.get_ref_program_id(),
+                    &RAYDIUM_CLMM_PROGRAM_ID,
                 )
                 .0,
             );
@@ -42,9 +40,9 @@ impl AccountSubscriber for RaydiumCLMMAccountSubscriber {
         let mut tick_array_sub_accounts = HashMap::with_capacity(dex_json.len());
         for pool_id in pool_keys.iter() {
             tick_array_sub_accounts.insert(
-                pool_id.to_string(),
+                format!("{}:{}","CLMM-TK",pool_id.to_string()),
                 SubscribeRequestFilterAccounts {
-                    owner: vec![DexType::MeteoraDLMM.get_ref_program_id().to_string()],
+                    owner: vec![RAYDIUM_CLMM_PROGRAM_ID.to_string()],
                     filters: vec![
                         // TickArrayState data大小为10240
                         SubscribeRequestFilterAccountsFilter {
