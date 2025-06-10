@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter};
+use std::ops::Sub;
 use crate::dex::byte_utils::read_u64;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::raydium_amm::state::AmmInfo;
@@ -5,7 +7,6 @@ use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension, TickA
 use crate::dex::FromCache;
 use crate::global_cache::get_account_data;
 use crate::interface1::{AccountType, DexType};
-use crate::state::{GrpcMessage, GrpcTransactionMsg};
 use crate::SliceType;
 use ahash::RandomState;
 use anyhow::anyhow;
@@ -22,6 +23,8 @@ use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
+use yellowstone_grpc_proto::prelude::TokenBalance;
+use crate::grpc_subscribe::{GrpcMessage, GrpcTransactionMsg};
 
 pub struct MessageProcessor {
     pub process_size: usize,
@@ -105,5 +108,50 @@ impl MessageProcessor {
             Ok(sliced_data) => crate::global_cache::update_cache(account_key, sliced_data),
             Err(e) => Err(anyhow!("账户数据切片失败，原因：{}", e)),
         }
+    }
+}
+
+pub struct BalanceChangeInfo {
+    pub dex_type: DexType,
+    pub pool_id: Pubkey,
+    pub account_index: usize,
+    pub vault_account: Pubkey,
+    pub change_value: f64,
+}
+
+impl BalanceChangeInfo {
+    pub fn new(pre: &TokenBalance, post: &TokenBalance, account_keys: &[Pubkey]) -> Option<Self> {
+        let account_index = pre.account_index as usize;
+        match (pre.ui_token_amount.as_ref(), post.ui_token_amount.as_ref()) {
+            (Some(pre_amount), Some(post_amount)) => {
+                if pre_amount.ui_amount == post_amount.ui_amount {
+                    None
+                } else {
+                    let vault_account = &account_keys[account_index];
+                    match crate::account_relation::is_follow_vault(vault_account) {
+                        Some((pool_id, dex_type)) => Some(Self {
+                            dex_type,
+                            pool_id,
+                            account_index,
+                            vault_account: vault_account.clone(),
+                            change_value: post_amount.ui_amount.sub(pre_amount.ui_amount),
+                        }),
+                        None => None,
+                    }
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Debug for BalanceChangeInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut formatter = f.debug_struct("BalanceChangeInfo");
+        formatter.field("dex_type", &self.dex_type);
+        formatter.field("pool_id", &self.pool_id);
+        formatter.field("vault_account", &self.vault_account.to_string());
+        formatter.field("change_value", &self.change_value.to_string());
+        formatter.finish()
     }
 }
