@@ -8,7 +8,7 @@ mod full_math;
 pub mod instruction;
 mod liquidity_math;
 pub mod quote;
-mod snapshot_init;
+mod snapshot_loader;
 mod sqrt_price_math;
 pub mod state;
 mod swap_math;
@@ -18,7 +18,7 @@ pub mod utils;
 
 pub use account_subscriber::*;
 pub use data_slice::*;
-pub use snapshot_init::*;
+pub use snapshot_loader::*;
 
 pub(super) const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 pub const RAYDIUM_CLMM_MEMO_PROGRAM_ID: Pubkey =
