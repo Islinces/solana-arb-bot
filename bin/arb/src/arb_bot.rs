@@ -1,8 +1,8 @@
-use crate::global_cache::{get_global_cache, init_global_cache, GlobalCache};
 use crate::arb::Arb;
 use crate::dex_data::DexJson;
 use crate::executor::jito::JitoExecutor;
 use crate::executor::Executor;
+use crate::global_cache::{get_global_cache, init_global_cache, GlobalCache};
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::GrpcSubscribe;
 use crate::keypair::KeypairVault;
@@ -149,14 +149,15 @@ pub async fn init_start_data(
     follow_mints: &[Pubkey],
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
-    // 初始化钱包
-    let keypair = get_keypair(keypair_path)?;
-    // 加载json
-    let mut dex_data = init_dex_json(dex_json_path, follow_mints)?;
-    // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
-    crate::data_slice::init_data_slice_config();
-    // 初始化snapshot，返回有效的DexJson
+    // 1.初始化钱包
+    let keypair = crate::keypair::get_keypair(keypair_path)?;
+    // 2.加载DexJson
+    let mut dex_data = crate::dex_data::load_dex_json(dex_json_path, follow_mints)?;
+    // 3.各个Dex的Account切片规则(需要订阅的，不需要订阅的)
+    crate::interface::init_data_slice_config()?;
+    // 4.初始化全局缓存，未填充数据
     init_global_cache();
+    // 5.初始化Snapshot，填充全局缓存，移除无效DexJson
     crate::interface::init_snapshot(&mut dex_data, rpc_client.clone(), get_global_cache()).await?;
     // 初始化钱包关联的ATA账户余额
     // 初始化blockhash
@@ -167,45 +168,4 @@ pub async fn init_start_data(
     // 构建边
     crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
     Ok(dex_data)
-}
-
-fn get_keypair(keypair_path: String) -> anyhow::Result<Keypair> {
-    loop {
-        println!("请输入密码：");
-        let input_password = read_password().expect("读取密码失败");
-        let keypair_vault = KeypairVault::load(PathBuf::from_str(&keypair_path)?)?;
-        if let Ok(k) = keypair_vault.decrypt(&input_password) {
-            let wallet = &k.pubkey();
-            println!("密码正确，Pubkey : {:?}, 继续执行...", wallet);
-            return Ok(k);
-        } else {
-            println!("密码错误，请重新输入。");
-        }
-    }
-}
-
-fn init_dex_json(dex_json_path: String, follow_mints: &[Pubkey]) -> anyhow::Result<Vec<DexJson>> {
-    info!("加载DexJson...");
-    let mut dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
-        Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
-        Err(e) => {
-            error!("{}", e);
-            vec![]
-        }
-    };
-    if dex_data.is_empty() {
-        Err(anyhow!("json文件无数据"))
-    } else {
-        // 删除不涉及关注的Mint的池子
-        dex_data.retain(|v| follow_mints.contains(&v.mint_a) || follow_mints.contains(&v.mint_b));
-        if dex_data.is_empty() {
-            Err(anyhow!(
-                "json文件中无涉及程序关注的Mint的池子，程序关注的Mint : {:?}",
-                follow_mints
-            ))
-        } else {
-            info!("涉及关注的Mint的池子数量 : {}", dex_data.len());
-            Ok(dex_data)
-        }
-    }
 }

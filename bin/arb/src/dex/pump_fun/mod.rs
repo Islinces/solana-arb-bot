@@ -1,14 +1,13 @@
-pub mod data_slice;
+mod account_subscriber;
+mod data_slice;
 pub mod instruction;
 pub mod quote;
-pub mod state;
-mod account_subscriber;
 mod snapshot_init;
+pub mod state;
 
 pub use account_subscriber::*;
+pub use data_slice::*;
 pub use snapshot_init::*;
-
-pub use account_subscriber::*;
 
 use rand::Rng;
 use solana_sdk::pubkey;

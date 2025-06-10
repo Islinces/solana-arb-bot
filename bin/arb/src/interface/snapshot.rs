@@ -1,4 +1,3 @@
-use crate::data_slice::{slice_data, SliceType};
 use crate::dex::meteora_dlmm::MeteoraDLMMSnapshotInitializer;
 use crate::dex::orca_whirlpools::OrcaWhirlpoolsSnapshotInitializer;
 use crate::dex::pump_fun::PumpFunAMMSnapshotInitializer;
@@ -21,6 +20,7 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{error, info};
+use crate::{try_slice_data, SliceType};
 
 #[async_trait]
 #[enum_dispatch(SnapshotType)]
@@ -60,14 +60,14 @@ pub trait SnapshotInitializer {
                     .zip(account_chunks)
                     .map(|(account, account_key)| {
                         account.map_or(AccountDataSlice::new(account_key, None, None), |acc| {
-                            let dynamic_data = slice_data(
+                            let dynamic_data = try_slice_data(
                                 dex_type.clone(),
                                 account_type.clone(),
                                 acc.data.clone(),
                                 SliceType::Subscribed,
                             )
                             .map_or(None, |v| Some(v));
-                            let static_data = slice_data(
+                            let static_data = try_slice_data(
                                 dex_type.clone(),
                                 account_type.clone(),
                                 acc.data,

@@ -1,10 +1,9 @@
-use crate::data_slice::SliceType;
 use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID;
 use crate::dex_data::DexJson;
 use crate::interface1::{AccountType, DexType};
-use crate::{AccountDataSlice, SnapshotInitializer};
+use crate::{AccountDataSlice, SliceType, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -133,7 +132,7 @@ impl RaydiumCLMMSnapshotInitializer {
         all_amm_config_account_data.retain(|account| {
             if account.static_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::data_slice::get_slice_size(
+                    != crate::interface::get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::AmmConfig,
                         SliceType::Unsubscribed,
@@ -185,7 +184,7 @@ impl RaydiumCLMMSnapshotInitializer {
         all_bitmap_extension_account_data.retain(|account| {
             if account.dynamic_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::data_slice::get_slice_size(
+                    != crate::interface::get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::TickArrayBitmap,
                         SliceType::Subscribed,

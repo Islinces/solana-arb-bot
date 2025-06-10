@@ -2,7 +2,6 @@ pub mod global_cache;
 mod account_relation;
 pub mod arb;
 pub mod arb_bot;
-mod data_slice;
 pub mod dex;
 pub mod dex_data;
 mod executor;

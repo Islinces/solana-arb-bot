@@ -1,12 +1,29 @@
-use std::fs;
-use std::path::Path;
-use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use anyhow::anyhow;
 use argon2::Argon2;
 use rand_core::OsRng;
-use solana_sdk::signature::Keypair;
 use rand_core::RngCore;
+use rpassword::read_password;
+use solana_sdk::signature::{Keypair, Signer};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
+pub fn get_keypair(keypair_path: String) -> anyhow::Result<Keypair> {
+    loop {
+        println!("请输入密码：");
+        let input_password = read_password().expect("读取密码失败");
+        let keypair_vault = KeypairVault::load(PathBuf::from_str(&keypair_path)?)?;
+        if let Ok(k) = keypair_vault.decrypt(&input_password) {
+            let wallet = &k.pubkey();
+            println!("密码正确，Pubkey : {:?}, 继续执行...", wallet);
+            return Ok(k);
+        } else {
+            println!("密码错误，请重新输入。");
+        }
+    }
+}
 
 pub struct KeypairVault {
     encrypted_data: Vec<u8>,
@@ -31,7 +48,7 @@ impl KeypairVault {
                 4,          // p_cost: 4 parallel threads (better for modern CPUs)
                 Some(32),   // 32 bytes output for AES-256
             )
-                .unwrap(),
+            .unwrap(),
         );
 
         // Generate encryption key using Argon2
@@ -105,7 +122,7 @@ impl KeypairVault {
                 4,          // p_cost: 4 parallel threads (better for modern CPUs)
                 Some(32),   // 32 bytes output for AES-256
             )
-                .unwrap(),
+            .unwrap(),
         );
 
         // Recreate encryption key
@@ -145,8 +162,6 @@ mod tests {
         // // Create and save vault
         let vault = KeypairVault::create(password, &original_keypair)?;
         vault.save(&vault_path)?;
-
-
 
         // let vault_path=PathBuf::from_str("./src/keypair/keypair.bin").unwrap();
         // // Load and decrypt vault

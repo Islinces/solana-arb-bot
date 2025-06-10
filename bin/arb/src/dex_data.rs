@@ -1,6 +1,38 @@
+use anyhow::anyhow;
 use serde::{Deserialize, Deserializer};
 use solana_sdk::pubkey::Pubkey;
+use std::fs::File;
 use std::str::FromStr;
+use tracing::{error, info};
+
+pub fn load_dex_json(
+    dex_json_path: String,
+    follow_mints: &[Pubkey],
+) -> anyhow::Result<Vec<DexJson>> {
+    info!("加载DexJson...");
+    let mut dex_data: Vec<DexJson> = match File::open(dex_json_path.as_str()) {
+        Ok(file) => serde_json::from_reader(file).expect("解析【dex_data.json】失败"),
+        Err(e) => {
+            error!("{}", e);
+            vec![]
+        }
+    };
+    if dex_data.is_empty() {
+        Err(anyhow!("json文件无数据"))
+    } else {
+        // 删除不涉及关注的Mint的池子
+        dex_data.retain(|v| follow_mints.contains(&v.mint_a) || follow_mints.contains(&v.mint_b));
+        if dex_data.is_empty() {
+            Err(anyhow!(
+                "json文件中无涉及程序关注的Mint的池子，程序关注的Mint : {:?}",
+                follow_mints
+            ))
+        } else {
+            info!("涉及关注的Mint的池子数量 : {}", dex_data.len());
+            Ok(dex_data)
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DexJson {

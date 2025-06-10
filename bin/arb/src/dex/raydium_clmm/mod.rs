@@ -3,7 +3,7 @@ use solana_sdk::pubkey::Pubkey;
 
 mod account_subscriber;
 mod big_num;
-pub mod data_slice;
+mod data_slice;
 mod full_math;
 pub mod instruction;
 mod liquidity_math;
@@ -18,6 +18,7 @@ pub mod utils;
 
 pub use account_subscriber::*;
 pub use snapshot_init::*;
+pub use data_slice::*;
 
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 pub const RAYDIUM_CLMM_MEMO_PROGRAM_ID: Pubkey =

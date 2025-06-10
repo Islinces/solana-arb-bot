@@ -4,7 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 mod account_subscriber;
 pub mod commons;
 mod conversions;
-pub mod data_slice;
+mod data_slice;
 mod extensions;
 pub mod instruction;
 pub mod interface;
@@ -15,6 +15,7 @@ mod snapshot_init;
 
 pub use account_subscriber::*;
 pub use snapshot_init::*;
+pub use data_slice::*;
 
 pub const METEORA_DLMM_PROGRAM_ID: Pubkey = pubkey!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
 pub const METEORA_DLMM_EVENT_AUTHORITY_PROGRAM_ID: Pubkey =

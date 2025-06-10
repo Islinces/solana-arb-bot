@@ -1,10 +1,9 @@
-use crate::data_slice::SliceType;
 use crate::dex::orca_whirlpools::{
     get_oracle_address, get_tick_array_keys, Whirlpool, WHIRLPOOL_ID,
 };
 use crate::dex_data::DexJson;
 use crate::interface1::{AccountType, DexType};
-use crate::{AccountDataSlice, SnapshotInitializer};
+use crate::{get_data_slice_size, AccountDataSlice, SliceType, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -139,7 +138,7 @@ impl OrcaWhirlpoolsSnapshotInitializer {
         all_bitmap_extension_account_data.retain(|account| {
             if account.dynamic_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::data_slice::get_slice_size(
+                    != get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::TickArrayBitmap,
                         SliceType::Subscribed,
