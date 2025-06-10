@@ -14,7 +14,7 @@ use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
-pub const PUMP_FUN_AMM_PROGRAM_ID: Pubkey = pubkey!("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
+pub(super) const PUMP_FUN_AMM_PROGRAM_ID: Pubkey = pubkey!("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
 
 /// pump fun fee 钱包列表，随机取一个
 const PUMPSWAP_FEE_ACCOUNTS: [&str; 8] = [

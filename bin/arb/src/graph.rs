@@ -1,6 +1,6 @@
-use crate::global_cache::get_token_program;
+use crate::dex::{get_dex_type_with_program_id, DexType};
 use crate::dex_data::DexJson;
-use crate::interface1::{DexType, MINT_PROGRAM_ID};
+use crate::global_cache::get_token_program;
 use ahash::AHashMap;
 use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
@@ -30,7 +30,7 @@ pub struct EdgeIdentifier {
 
 impl EdgeIdentifier {
     fn new(dex_json: &DexJson) -> Vec<Self> {
-        let dex_type = crate::interface1::get_dex_type_with_program_id(&dex_json.owner).unwrap();
+        let dex_type = get_dex_type_with_program_id(&dex_json.owner).unwrap();
         let pool = find_pool_position(&dex_json.pool).unwrap();
         let mint_0 = find_mint_position(&dex_json.mint_a).unwrap();
         let mint_1 = find_mint_position(&dex_json.mint_b).unwrap();

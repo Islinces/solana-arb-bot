@@ -1,15 +1,14 @@
 use arb::dex::orca_whirlpools::accounts::{
-    get_oracle_address, get_tick_array_address, Oracle, TickArray, TickArrayFacade, TickFacade,
-    WhirlpoolFacade, TICK_ARRAY_SIZE,
+    get_oracle_address, get_tick_array_address, Oracle, TickArray, TickArrayFacade, TickFacade
+    , TICK_ARRAY_SIZE,
 };
 use arb::dex::orca_whirlpools::error::CoreError;
 use arb::dex::orca_whirlpools::{
     get_tick_array_start_tick_index, swap_quote_by_input_token, ExactInSwapQuote, TransferFee,
-    Whirlpool, WHIRLPOOL_ID,
+    Whirlpool,
 };
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::account::Account;
-use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};

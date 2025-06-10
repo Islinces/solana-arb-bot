@@ -1,7 +1,7 @@
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
 use crate::dex::raydium_amm::RAYDIUM_AMM_PROGRAM_ID;
+use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
-use crate::interface1::{AccountType, DexType};
 use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;

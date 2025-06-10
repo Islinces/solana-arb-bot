@@ -1,4 +1,4 @@
-use crate::interface1::AccountType;
+use crate::dex::AccountType;
 use crate::{retain_intervals_unsafe, DataSliceInitializer, SliceType};
 use anyhow::anyhow;
 use tokio::sync::OnceCell;

@@ -9,7 +9,6 @@ mod graph;
 pub mod grpc_processor;
 pub mod grpc_subscribe;
 mod interface;
-pub mod interface1;
 mod jupiter;
 mod keypair;
 mod metadata;

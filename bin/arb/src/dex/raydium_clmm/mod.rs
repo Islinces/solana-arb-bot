@@ -17,10 +17,10 @@ mod unsafe_math;
 pub mod utils;
 
 pub use account_subscriber::*;
-pub use snapshot_init::*;
 pub use data_slice::*;
+pub use snapshot_init::*;
 
-pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+pub(super) const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 pub const RAYDIUM_CLMM_MEMO_PROGRAM_ID: Pubkey =
     pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 

@@ -1,6 +1,6 @@
+use arb::arb_bot;
 use chrono::Local;
 use mimalloc::MiMalloc;
-use arb::arb_bot;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;

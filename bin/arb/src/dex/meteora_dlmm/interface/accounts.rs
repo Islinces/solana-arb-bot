@@ -1,9 +1,9 @@
-use crate::global_cache::{DynamicCache, StaticCache};
 use crate::dex::byte_utils::read_from;
 use crate::dex::meteora_dlmm::interface::typedefs::{
     Bin, StaticParameters, VariableParameters, S_PARAMETER_LEN, V_PARAMETER_LEN,
 };
 use crate::dex::FromCache;
+use crate::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;
 use std::{mem, ptr};

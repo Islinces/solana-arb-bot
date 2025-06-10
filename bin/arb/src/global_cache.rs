@@ -1,6 +1,5 @@
 use crate::dex::byte_utils::read_from;
-use crate::dex::FromCache;
-use crate::interface1::{CLOCK_ID, MINT2022_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::dex::{FromCache, CLOCK_ID, MINT2022_PROGRAM_ID, MINT_PROGRAM_ID};
 use ahash::{AHashMap, RandomState};
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;

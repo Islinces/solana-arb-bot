@@ -1,6 +1,6 @@
 use crate::dex_data::DexJson;
+use crate::grpc_subscribe;
 use crate::interface::AccountSubscriber;
-use crate::interface1::DexType;
 use ahash::AHashSet;
 use anyhow::anyhow;
 use chrono::{DateTime, Local};
@@ -21,7 +21,6 @@ use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
 use yellowstone_grpc_proto::tonic::service::Interceptor;
 use yellowstone_grpc_proto::tonic::transport::ClientTlsConfig;
 use yellowstone_grpc_proto::tonic::Status;
-use crate::grpc_subscribe;
 
 pub struct GrpcSubscribe;
 

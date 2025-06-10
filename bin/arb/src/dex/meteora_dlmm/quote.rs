@@ -1,9 +1,8 @@
-use crate::global_cache::get_token2022_data;
 use crate::dex::meteora_dlmm::commons::quote::{get_bin_array_pubkeys_for_swap, quote_exact_in};
 use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use crate::dex::raydium_clmm::state::TickArrayState;
-use crate::interface1::MINT2022_PROGRAM_ID;
+use crate::global_cache::get_token2022_data;
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::array;

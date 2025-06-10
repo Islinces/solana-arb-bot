@@ -1,8 +1,8 @@
 use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension};
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID;
+use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
-use crate::interface1::{AccountType, DexType};
 use crate::{AccountDataSlice, SliceType, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;

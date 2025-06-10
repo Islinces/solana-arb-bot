@@ -3,7 +3,7 @@ use crate::dex::orca_whirlpools::OrcaWhirlDataSlicer;
 use crate::dex::pump_fun::PumpFunAMMDataSlicer;
 use crate::dex::raydium_amm::RaydiumAMMDataSlicer;
 use crate::dex::raydium_clmm::RaydiumCLMMDataSlicer;
-use crate::interface1::{AccountType, DexType};
+use crate::dex::{AccountType, DexType};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use enum_dispatch::enum_dispatch;

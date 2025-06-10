@@ -1,8 +1,8 @@
 use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
 use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
+use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
-use crate::interface1::{AccountType, DexType};
 use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;

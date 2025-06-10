@@ -1,7 +1,7 @@
 use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
+use crate::dex::{AccountType, DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
 use crate::dex_data::DexJson;
-use crate::interface1::{AccountType, DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
@@ -79,7 +79,7 @@ impl SnapshotInitializer for PumpFunAMMSnapshotInitializer {
                 // 先提前生成coin_creator_vault_authority和coin_creator_vault_ata
                 let quote_mint = Pubkey::try_from(&pool_static_data[32..32 + 32]).unwrap();
                 let coin_creator = Pubkey::try_from(&pool_static_data[32 * 4..32 * 5]).unwrap();
-                let token_program = if quote_mint == MINT_PROGRAM_ID {
+                let token_program = if quote_mint == SYSTEM_PROGRAM_ID {
                     spl_token::ID
                 } else {
                     rpc_client

@@ -2,7 +2,7 @@ use crate::dex::raydium_clmm::state::{
     pda_bit_map_extension_key, PoolState, TickArrayBitmapExtension,
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
-use crate::interface1::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::dex::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::metadata::get_keypair;
 use anyhow::{anyhow, Result};
 use solana_sdk::instruction::AccountMeta;

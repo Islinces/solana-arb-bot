@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
 use crate::dex::meteora_dlmm::commons::constants::BASIS_POINT_MAX;
 use crate::dex::meteora_dlmm::math::u64x64_math::{pow, ONE, SCALE_OFFSET};
+use anyhow::{Context, Result};
 
 pub fn get_price_from_id(active_id: i32, bin_step: u16) -> Result<u128> {
     let bps = u128::from(bin_step)

@@ -1,6 +1,6 @@
-use crate::global_cache::get_token_program;
+use crate::dex::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::dex_data::DexJson;
-use crate::interface1::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::global_cache::get_token_program;
 use crate::keypair::KeypairVault;
 use ahash::{AHashMap, AHashSet};
 use futures_util::future::join_all;

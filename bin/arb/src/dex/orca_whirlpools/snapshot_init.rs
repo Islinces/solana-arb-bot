@@ -1,8 +1,8 @@
 use crate::dex::orca_whirlpools::{
     get_oracle_address, get_tick_array_keys, Whirlpool, WHIRLPOOL_ID,
 };
+use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
-use crate::interface1::{AccountType, DexType};
 use crate::{get_data_slice_size, AccountDataSlice, SliceType, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;

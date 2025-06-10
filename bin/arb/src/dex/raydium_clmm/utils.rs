@@ -1,4 +1,3 @@
-use crate::dex::get_transfer_fee;
 use crate::dex::raydium_clmm::big_num::U128;
 use crate::dex::raydium_clmm::state::{
     AmmConfig, PoolState, TickArrayBitmapExtension, TickArrayState, TickState,
@@ -6,7 +5,7 @@ use crate::dex::raydium_clmm::state::{
 };
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::raydium_clmm::{liquidity_math, swap_math, tick_math};
-use crate::interface1::DexType;
+use crate::dex::{get_transfer_fee, DexType};
 use anyhow::{anyhow, Result};
 use bincode::config;
 use borsh::BorshDeserialize;

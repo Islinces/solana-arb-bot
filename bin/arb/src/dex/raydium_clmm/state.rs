@@ -1,14 +1,12 @@
-use crate::global_cache::{get_global_cache, DynamicCache, StaticCache};
 use crate::dex::byte_utils::{
     read_from, read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64,
 };
 use crate::dex::raydium_clmm::big_num::{U1024, U512};
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
-use crate::dex::FromCache;
-use crate::interface1::DexType;
+use crate::dex::{DexType, FromCache};
+use crate::global_cache::{DynamicCache, StaticCache};
 use crate::{require, require_gt};
 use anyhow::anyhow;
-use borsh::BorshDeserialize;
 use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;
 use std::ptr;

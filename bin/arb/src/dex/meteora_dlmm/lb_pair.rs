@@ -7,7 +7,7 @@ use crate::dex::meteora_dlmm::conversions::status::PairStatusWrapper;
 use crate::dex::meteora_dlmm::conversions::token_program_flag::TokenProgramFlagWrapper;
 use crate::dex::meteora_dlmm::interface::accounts::LbPair;
 use crate::dex::meteora_dlmm::interface::typedefs::TokenProgramFlags;
-use crate::interface1::{MINT2022_PROGRAM_ID, MINT_PROGRAM_ID};
+use crate::dex::{MINT2022_PROGRAM_ID, MINT_PROGRAM_ID};
 use anyhow::{ensure, Context, Result};
 use ruint::aliases::U1024;
 use solana_sdk::pubkey::Pubkey;

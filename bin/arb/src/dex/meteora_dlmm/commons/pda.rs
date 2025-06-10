@@ -2,7 +2,7 @@ use crate::dex::meteora_dlmm::commons::seeds::{
     BIN_ARRAY, BIN_ARRAY_BITMAP_SEED, CLAIM_PROTOCOL_FEE_OPERATOR, ILM_BASE_KEY, ORACLE, POSITION,
     PRESET_PARAMETER, PRESET_PARAMETER2, TOKEN_BADGE,
 };
-use crate::interface1::DexType;
+use crate::dex::DexType;
 use solana_sdk::pubkey::Pubkey;
 use std::{cmp::max, cmp::min};
 
