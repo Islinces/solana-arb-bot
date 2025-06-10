@@ -1,3 +1,4 @@
+use crate::global_cache::{get_global_cache, init_global_cache, GlobalCache};
 use crate::arb::Arb;
 use crate::dex_data::DexJson;
 use crate::executor::jito::JitoExecutor;
@@ -151,11 +152,12 @@ pub async fn init_start_data(
     // 初始化钱包
     let keypair = get_keypair(keypair_path)?;
     // 加载json
-    let dex_data = init_dex_json(dex_json_path, follow_mints)?;
+    let mut dex_data = init_dex_json(dex_json_path, follow_mints)?;
     // 各个Dex的Account切片规则(需要订阅的，不需要订阅的)
     crate::data_slice::init_data_slice_config();
     // 初始化snapshot，返回有效的DexJson
-    let dex_data = crate::account_cache::init_snapshot(dex_data, rpc_client.clone()).await?;
+    init_global_cache();
+    crate::interface::init_snapshot(&mut dex_data, rpc_client.clone(), get_global_cache()).await?;
     // 初始化钱包关联的ATA账户余额
     // 初始化blockhash
     crate::metadata::init_metadata(keypair, arb_mint, dex_data.as_slice(), rpc_client.clone())

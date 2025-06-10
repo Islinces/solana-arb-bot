@@ -1,4 +1,4 @@
-pub mod account_cache;
+pub mod global_cache;
 mod account_relation;
 pub mod arb;
 pub mod arb_bot;

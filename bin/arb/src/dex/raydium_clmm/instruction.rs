@@ -11,7 +11,7 @@ use solana_sdk::signer::Signer;
 
 pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
-    let pool_state = crate::account_cache::get_account_data::<PoolState>(&pool_id).unwrap();
+    let pool_state = crate::global_cache::get_account_data::<PoolState>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(11);
     // 1. wallet
     accounts.push(AccountMeta::new(wallet, true));
@@ -64,7 +64,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
         2,
         &pool_id,
         &pool_state,
-        &crate::account_cache::get_account_data::<TickArrayBitmapExtension>(&bit_map_extension_key),
+        &crate::global_cache::get_account_data::<TickArrayBitmapExtension>(&bit_map_extension_key),
         swap_direction,
     )
     .map_or(

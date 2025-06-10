@@ -1,4 +1,4 @@
-use crate::account_cache::{DynamicCache, StaticCache};
+use crate::global_cache::{get_global_cache, DynamicCache, StaticCache};
 use crate::dex::byte_utils::{
     read_from, read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64,
 };

@@ -1,4 +1,4 @@
-use crate::account_cache::get_account_data;
+use crate::global_cache::get_account_data;
 use crate::data_slice;
 use crate::data_slice::SliceType;
 use crate::dex::byte_utils::read_u64;
@@ -103,7 +103,7 @@ impl MessageProcessor {
             SliceType::Subscribed,
         );
         match sliced_data {
-            Ok(sliced_data) => crate::account_cache::update_cache(account_key, sliced_data),
+            Ok(sliced_data) => crate::global_cache::update_cache(account_key, sliced_data),
             Err(e) => Err(anyhow!("账户数据切片失败，原因：{}", e)),
         }
     }

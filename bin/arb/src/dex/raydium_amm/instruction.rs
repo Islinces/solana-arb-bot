@@ -9,7 +9,7 @@ use solana_sdk::signer::Signer;
 
 pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
-    let amm_info = crate::account_cache::get_account_data::<AmmInfo>(&pool_id).unwrap();
+    let amm_info = crate::global_cache::get_account_data::<AmmInfo>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(17);
     // 1.mint program
     accounts.push(AccountMeta::new_readonly(MINT_PROGRAM_ID, false));

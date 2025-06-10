@@ -1,4 +1,4 @@
-use crate::account_cache::get_account_data;
+use crate::global_cache::get_account_data;
 use crate::dex::meteora_dlmm::interface::accounts::LbPair;
 use crate::dex::orca_whirlpools::Whirlpool;
 use crate::dex::pump_fun::state::Pool;
@@ -269,7 +269,7 @@ impl QuoteResult {
     fn single(edge: &EdgeIdentifier) -> Result<InstructionItem> {
         if let Some(pool_id) = edge.pool_id() {
             let pool_id = pool_id.clone();
-            crate::account_cache::get_alt(&pool_id).map_or(
+            crate::global_cache::get_alt(&pool_id).map_or(
                 Err(anyhow!("生成指令获取alt失败")),
                 |alt| {
                     match &edge.dex_type {

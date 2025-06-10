@@ -1,4 +1,4 @@
-use crate::account_cache::{DynamicCache, StaticCache};
+use crate::global_cache::{DynamicCache, StaticCache};
 use crate::interface1::DexType;
 use parking_lot::RwLockReadGuard;
 use solana_sdk::instruction::AccountMeta;
@@ -47,7 +47,7 @@ impl InstructionItem {
 }
 
 pub(crate) fn get_transfer_fee(mint: &Pubkey, epoch: u64, pre_fee_amount: u64) -> u64 {
-    if let Some(fee_config) = crate::account_cache::get_token2022_data(mint) {
+    if let Some(fee_config) = crate::global_cache::get_token2022_data(mint) {
         fee_config
             .calculate_epoch_fee(epoch, pre_fee_amount)
             .unwrap()

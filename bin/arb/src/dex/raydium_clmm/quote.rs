@@ -35,11 +35,11 @@ pub fn quote(
 }
 
 fn get_amm_config(amm_config_key: &Pubkey) -> Option<AmmConfig> {
-    crate::account_cache::get_account_data::<AmmConfig>(amm_config_key)
+    crate::global_cache::get_account_data::<AmmConfig>(amm_config_key)
 }
 
 fn get_bitmap_extension(pool_id: &Pubkey) -> Option<TickArrayBitmapExtension> {
-    crate::account_cache::get_account_data::<TickArrayBitmapExtension>(&pda_bit_map_extension_key(
+    crate::global_cache::get_account_data::<TickArrayBitmapExtension>(&pda_bit_map_extension_key(
         pool_id,
     ))
 }
@@ -65,7 +65,7 @@ fn get_tick_arrays(
     let deque = tick_array_keys?
         .into_iter()
         .filter_map(|key| {
-            let account_data = crate::account_cache::get_account_data::<TickArrayState>(&key);
+            let account_data = crate::global_cache::get_account_data::<TickArrayState>(&key);
             // info!("key : {:?}\n{:#?}", key, account_data);
             account_data
         })

@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 pub fn to_instruction(pool_id: Pubkey, _swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
-    let pool = crate::account_cache::get_account_data::<Pool>(&pool_id).unwrap();
+    let pool = crate::global_cache::get_account_data::<Pool>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(17);
     // 1.pool
     accounts.push(AccountMeta::new_readonly(pool_id, false));

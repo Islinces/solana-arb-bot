@@ -1,4 +1,4 @@
-use crate::account_cache::get_token2022_data;
+use crate::global_cache::get_token2022_data;
 use crate::dex::meteora_dlmm::commons::quote::{get_bin_array_pubkeys_for_swap, quote_exact_in};
 use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
@@ -21,7 +21,7 @@ pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPai
                 amount_in,
                 swap_direction,
                 bin_arrays,
-                crate::account_cache::get_clock()?,
+                crate::global_cache::get_clock()?,
                 token_transfer_configs[0],
                 token_transfer_configs[1],
             ) {
@@ -36,7 +36,7 @@ pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPai
 }
 
 fn get_bitmap_extension(pool_id: &Pubkey) -> Option<BinArrayBitmapExtension> {
-    crate::account_cache::get_account_data::<BinArrayBitmapExtension>(
+    crate::global_cache::get_account_data::<BinArrayBitmapExtension>(
         &crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(pool_id),
     )
 }
@@ -67,7 +67,7 @@ fn get_bin_arrays(
             let bin_array_map = keys
                 .into_iter()
                 .filter_map(|key| {
-                    let bin_array = crate::account_cache::get_account_data::<BinArray>(&key);
+                    let bin_array = crate::global_cache::get_account_data::<BinArray>(&key);
                     if let Some(bin_array) = bin_array {
                         Some(bin_array)
                     } else {

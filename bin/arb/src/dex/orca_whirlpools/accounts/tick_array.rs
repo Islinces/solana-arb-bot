@@ -1,4 +1,4 @@
-use crate::account_cache::{DynamicCache, StaticCache};
+use crate::global_cache::{DynamicCache, StaticCache};
 use crate::dex::byte_utils::read_from;
 use crate::dex::orca_whirlpools::{get_tick_array_start_tick_index, Whirlpool, WHIRLPOOL_ID};
 use crate::dex::FromCache;

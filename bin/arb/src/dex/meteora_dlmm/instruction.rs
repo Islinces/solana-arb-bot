@@ -1,4 +1,4 @@
-use crate::account_cache::get_token_program;
+use crate::global_cache::get_token_program;
 use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
 use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::{METEORA_DLMM_EVENT_AUTHORITY_PROGRAM_ID, METEORA_DLMM_PROGRAM_ID};
@@ -11,7 +11,7 @@ use solana_sdk::signature::Signer;
 
 pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<AccountMeta>> {
     let wallet = get_keypair().pubkey();
-    let lb_pair = crate::account_cache::get_account_data::<LbPair>(&pool_id).unwrap();
+    let lb_pair = crate::global_cache::get_account_data::<LbPair>(&pool_id).unwrap();
     let mut accounts = Vec::with_capacity(20);
     // 1.lb pair
     accounts.push(AccountMeta::new(pool_id, false));
@@ -19,7 +19,7 @@ pub fn to_instruction(pool_id: Pubkey, swap_direction: bool) -> Result<Vec<Accou
     let bitmap_extension_key =
         crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(&pool_id);
     let bitmap_extension =
-        crate::account_cache::get_account_data::<BinArrayBitmapExtension>(&bitmap_extension_key);
+        crate::global_cache::get_account_data::<BinArrayBitmapExtension>(&bitmap_extension_key);
     accounts.push(AccountMeta::new_readonly(
         bitmap_extension
             .as_ref()
