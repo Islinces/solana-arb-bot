@@ -1,4 +1,3 @@
-use crate::global_cache::GlobalCache;
 use crate::data_slice::{slice_data, SliceType};
 use crate::dex::meteora_dlmm::MeteoraDLMMSnapshotInitializer;
 use crate::dex::orca_whirlpools::OrcaWhirlpoolsSnapshotInitializer;
@@ -6,6 +5,7 @@ use crate::dex::pump_fun::PumpFunAMMSnapshotInitializer;
 use crate::dex::raydium_amm::RaydiumAmmSnapshotInitializer;
 use crate::dex::raydium_clmm::RaydiumCLMMSnapshotInitializer;
 use crate::dex_data::DexJson;
+use crate::global_cache::GlobalCache;
 use crate::interface1::{AccountType, DexType, CLOCK_ID};
 use ahash::AHashSet;
 use anyhow::anyhow;
@@ -86,11 +86,11 @@ pub trait SnapshotInitializer {
 
 #[enum_dispatch]
 pub enum SnapshotType {
-    MeteoraDLMMSnapshotInitializer,
-    OrcaWhirlpoolsSnapshotInitializer,
-    PumpFunAMMSnapshotInitializer,
-    RaydiumAmmSnapshotInitializer,
-    RaydiumCLMMSnapshotInitializer,
+    MeteoraDLMM(MeteoraDLMMSnapshotInitializer),
+    OrcaWhirl(OrcaWhirlpoolsSnapshotInitializer),
+    PumpFunAMM(PumpFunAMMSnapshotInitializer),
+    RaydiumAmm(RaydiumAmmSnapshotInitializer),
+    RaydiumCLMM(RaydiumCLMMSnapshotInitializer),
 }
 
 pub async fn init_snapshot(
