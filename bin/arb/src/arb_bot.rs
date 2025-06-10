@@ -127,12 +127,9 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     .await;
     join_set.spawn(async move {
         // 订阅GRPC
-        GrpcSubscribe {
-            grpc_url,
-            standard_program: command.standard_program,
-        }
-        .subscribe(dex_data, grpc_message_sender)
-        .await;
+        GrpcSubscribe
+            .subscribe(grpc_url, dex_data, grpc_message_sender)
+            .await;
     });
     while let Some(event) = join_set.join_next().await {
         if let Err(err) = event {
