@@ -2,32 +2,41 @@ use crate::dex::meteora_dlmm::commons::quote::{get_bin_array_pubkeys_for_swap, q
 use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use crate::dex::raydium_clmm::state::TickArrayState;
-use crate::global_cache::get_token2022_data;
+use crate::global_cache::{get_account_data, get_token2022_data};
+use crate::{QuoteResult, Quoter};
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::array;
 use std::collections::{HashMap, VecDeque};
 use tracing::error;
 
-pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPair) -> Option<u64> {
-    let bitmap_extension = get_bitmap_extension(pool_id);
-    let token_transfer_configs = get_token_transfer_config(&pool);
-    match get_bin_arrays(pool_id, &pool, bitmap_extension.as_ref(), swap_direction, 3) {
-        None => None,
-        Some(bin_arrays) => {
-            match quote_exact_in(
-                pool,
-                amount_in,
-                swap_direction,
-                bin_arrays,
-                crate::global_cache::get_clock()?,
-                token_transfer_configs[0],
-                token_transfer_configs[1],
-            ) {
-                Ok(quote) => Some(quote.amount_out),
-                Err(e) => {
-                    // error!("DLMM[{}] quote 失败：{}", pool_id, e);
-                    None
+#[derive(Debug)]
+pub struct MeteoraDLMMQuoter;
+
+impl Quoter for MeteoraDLMMQuoter {
+    fn quote(&self, amount_in: u64, swap_direction: bool, pool_id: &Pubkey) -> Option<QuoteResult> {
+        let pool = get_account_data::<LbPair>(pool_id)?;
+        let bitmap_extension = get_bitmap_extension(pool_id);
+        let token_transfer_configs = get_token_transfer_config(&pool);
+        match get_bin_arrays(pool_id, &pool, bitmap_extension.as_ref(), swap_direction, 3) {
+            None => None,
+            Some(bin_arrays) => {
+                match quote_exact_in(
+                    pool,
+                    amount_in,
+                    swap_direction,
+                    bin_arrays,
+                    crate::global_cache::get_clock()?,
+                    token_transfer_configs[0],
+                    token_transfer_configs[1],
+                ) {
+                    Ok(quote) => Some(QuoteResult {
+                        amount_out: quote.amount_out,
+                    }),
+                    Err(e) => {
+                        // error!("DLMM[{}] quote 失败：{}", pool_id, e);
+                        None
+                    }
                 }
             }
         }
@@ -35,7 +44,7 @@ pub fn quote(amount_in: u64, swap_direction: bool, pool_id: &Pubkey, pool: LbPai
 }
 
 fn get_bitmap_extension(pool_id: &Pubkey) -> Option<BinArrayBitmapExtension> {
-    crate::global_cache::get_account_data::<BinArrayBitmapExtension>(
+    get_account_data::<BinArrayBitmapExtension>(
         &crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(pool_id),
     )
 }

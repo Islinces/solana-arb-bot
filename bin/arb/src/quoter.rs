@@ -1,10 +1,4 @@
-use crate::dex::meteora_dlmm::interface::accounts::LbPair;
-use crate::dex::orca_whirlpools::Whirlpool;
-use crate::dex::pump_fun::state::Pool;
-use crate::dex::raydium_amm::state::AmmInfo;
-use crate::dex::raydium_clmm::state::PoolState;
 use crate::dex::{DexType, InstructionItem};
-use crate::global_cache::get_account_data;
 use crate::graph::{find_mint_position, find_pool_position, EdgeIdentifier, TwoHopPath};
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -20,35 +14,36 @@ pub async fn find_best_hop_path(
     max_amount_in: u64,
     min_profit: u64,
 ) -> Option<QuoteResult> {
-    let pool_index = find_pool_position(&pool_id)?;
-    let hop_paths = crate::graph::get_graph_with_pool_index(pool_index)?;
-    let (use_ternary_search_hop_path, normal_hop_path): (Vec<_>, Vec<_>) = hop_paths
-        .iter()
-        .cloned()
-        .partition(|hop| hop.use_ternary_search(pool_index));
-    if use_ternary_search_hop_path.is_empty() && normal_hop_path.is_empty() {
-        return None;
-    }
-    let amount_in_mint_index = find_mint_position(arb_mint.as_ref())?;
-    let mut join_set = JoinSet::new();
-    join_set.spawn(async move {
-        normal_quote(
-            normal_hop_path,
-            pool_index,
-            amount_in_mint_index,
-            amount_in,
-            min_profit,
-        )
-    });
-    join_set.spawn(async move {
-        ternary_search_quote(use_ternary_search_hop_path, max_amount_in, min_profit)
-    });
-    join_set
-        .join_all()
-        .await
-        .into_iter()
-        .filter_map(|a| a)
-        .max_by_key(|a| a.profit)
+    None
+    // let pool_index = find_pool_position(&pool_id)?;
+    // let hop_paths = crate::graph::get_graph_with_pool_index(pool_index)?;
+    // let (use_ternary_search_hop_path, normal_hop_path): (Vec<_>, Vec<_>) = hop_paths
+    //     .iter()
+    //     .cloned()
+    //     .partition(|hop| hop.use_ternary_search(pool_index));
+    // if use_ternary_search_hop_path.is_empty() && normal_hop_path.is_empty() {
+    //     return None;
+    // }
+    // let amount_in_mint_index = find_mint_position(arb_mint.as_ref())?;
+    // let mut join_set = JoinSet::new();
+    // join_set.spawn(async move {
+    //     normal_quote(
+    //         normal_hop_path,
+    //         pool_index,
+    //         amount_in_mint_index,
+    //         amount_in,
+    //         min_profit,
+    //     )
+    // });
+    // join_set.spawn(async move {
+    //     ternary_search_quote(use_ternary_search_hop_path, max_amount_in, min_profit)
+    // });
+    // join_set
+    //     .join_all()
+    //     .await
+    //     .into_iter()
+    //     .filter_map(|a| a)
+    //     .max_by_key(|a| a.profit)
 }
 
 fn normal_quote(
@@ -144,34 +139,11 @@ fn quote(edge: &Arc<EdgeIdentifier>, amount_in: u64) -> Option<u64> {
     let pool_id = edge.pool_id()?;
     let dex_type = &edge.dex_type;
     match dex_type {
-        DexType::RaydiumAMM => crate::dex::raydium_amm::quote::quote(
-            amount_in,
-            edge.swap_direction,
-            get_account_data::<AmmInfo>(pool_id)?,
-        ),
-        DexType::RaydiumCLMM => crate::dex::raydium_clmm::quote::quote(
-            amount_in,
-            edge.swap_direction,
-            pool_id,
-            get_account_data::<PoolState>(pool_id)?,
-        ),
-        DexType::PumpFunAMM => crate::dex::pump_fun::quote::quote(
-            amount_in,
-            edge.swap_direction,
-            get_account_data::<Pool>(pool_id)?,
-        ),
-        DexType::MeteoraDLMM => crate::dex::meteora_dlmm::quote::quote(
-            amount_in,
-            edge.swap_direction,
-            pool_id,
-            get_account_data::<LbPair>(pool_id)?,
-        ),
-        DexType::OrcaWhirl => crate::dex::orca_whirlpools::quote(
-            amount_in,
-            edge.swap_direction,
-            pool_id,
-            get_account_data::<Whirlpool>(pool_id)?,
-        ),
+        DexType::RaydiumAMM => None,
+        DexType::RaydiumCLMM => None,
+        DexType::PumpFunAMM => None,
+        DexType::MeteoraDLMM => None,
+        DexType::OrcaWhirl => None,
     }
 }
 

@@ -3,33 +3,36 @@ use crate::dex::raydium_clmm::state::{
 };
 use crate::dex::raydium_clmm::utils;
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
+use crate::global_cache::get_account_data;
+use crate::{QuoteResult, Quoter};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 use tracing::error;
 
-pub fn quote(
-    amount_in: u64,
-    swap_direction: bool,
-    pool_id: &Pubkey,
-    pool_state: PoolState,
-) -> Option<u64> {
-    let bitmap_extension = Some(get_bitmap_extension(pool_id)?);
-    let mut tick_arrays =
-        get_tick_arrays(pool_id, &pool_state, &bitmap_extension, swap_direction, 2)?;
-    match utils::get_out_put_amount_and_remaining_accounts(
-        amount_in,
-        None,
-        swap_direction,
-        true,
-        &get_amm_config(&pool_state.amm_config)?,
-        &pool_state,
-        &bitmap_extension,
-        &mut tick_arrays,
-    ) {
-        Ok((amount_out, _, _)) => Some(amount_out),
-        Err(e) => {
-            error!("CLMM池子[{}]quote失败，原因 : {}", pool_id, e);
-            None
+#[derive(Debug)]
+pub struct RaydiumCLMMQuoter;
+
+impl Quoter for RaydiumCLMMQuoter {
+    fn quote(&self, amount_in: u64, swap_direction: bool, pool_id: &Pubkey) -> Option<QuoteResult> {
+        let pool_state = get_account_data::<PoolState>(pool_id)?;
+        let bitmap_extension = Some(get_bitmap_extension(pool_id)?);
+        let mut tick_arrays =
+            get_tick_arrays(pool_id, &pool_state, &bitmap_extension, swap_direction, 2)?;
+        match utils::get_out_put_amount_and_remaining_accounts(
+            amount_in,
+            None,
+            swap_direction,
+            true,
+            &get_amm_config(&pool_state.amm_config)?,
+            &pool_state,
+            &bitmap_extension,
+            &mut tick_arrays,
+        ) {
+            Ok((amount_out, _, _)) => Some(QuoteResult { amount_out }),
+            Err(e) => {
+                error!("CLMM池子[{}]quote失败，原因 : {}", pool_id, e);
+                None
+            }
         }
     }
 }

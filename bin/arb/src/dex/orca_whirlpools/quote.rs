@@ -5,43 +5,47 @@ use crate::dex::orca_whirlpools::{
     TickFacade, TransferFee, Whirlpool, WhirlpoolFacade, TICK_ARRAY_SIZE,
 };
 use crate::global_cache::{get_account_data, get_clock, get_token2022_data};
+use crate::{QuoteResult, Quoter};
 use solana_sdk::pubkey::Pubkey;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
 
-pub fn quote(
-    amount_in: u64,
-    swap_direction: bool,
-    pool_id: &Pubkey,
-    pool: Whirlpool,
-) -> Option<u64> {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let pool = WhirlpoolFacade::from(pool);
-    let tick_arrays = get_tick_arrays_or_default(
-        pool_id,
-        pool.tick_current_index,
-        pool.tick_spacing,
-        swap_direction,
-    )
-    .unwrap();
-    match swap_quote_by_input_token(
-        amount_in,
-        swap_direction,
-        pool,
-        get_oracle_account(pool_id, &pool),
-        tick_arrays.into(),
-        timestamp,
-        get_current_transfer_fee(&pool.token_mint_a),
-        get_current_transfer_fee(&pool.token_mint_b),
-    ) {
-        Ok(quote_result) => Some(quote_result.token_est_out),
-        Err(e) => {
-            error!("【OracWhirl】Quote失败，原因：{}", e);
-            None
+#[derive(Debug)]
+pub struct OrcaWhirlQuoter;
+
+impl Quoter for OrcaWhirlQuoter {
+    fn quote(&self, amount_in: u64, swap_direction: bool, pool_id: &Pubkey) -> Option<QuoteResult> {
+        let pool = get_account_data::<Whirlpool>(pool_id)?;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let pool = WhirlpoolFacade::from(pool);
+        let tick_arrays = get_tick_arrays_or_default(
+            pool_id,
+            pool.tick_current_index,
+            pool.tick_spacing,
+            swap_direction,
+        )
+        .unwrap();
+        match swap_quote_by_input_token(
+            amount_in,
+            swap_direction,
+            pool,
+            get_oracle_account(pool_id, &pool),
+            tick_arrays.into(),
+            timestamp,
+            get_current_transfer_fee(&pool.token_mint_a),
+            get_current_transfer_fee(&pool.token_mint_b),
+        ) {
+            Ok(quote_result) => Some(QuoteResult {
+                amount_out: quote_result.token_est_out,
+            }),
+            Err(e) => {
+                error!("【OracWhirl】Quote失败，原因：{}", e);
+                None
+            }
         }
     }
 }
