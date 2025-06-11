@@ -285,7 +285,6 @@ dependencies = [
  "ruint",
  "serde",
  "serde_json",
- "smallvec",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-sdk",
