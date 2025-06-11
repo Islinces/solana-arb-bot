@@ -148,9 +148,13 @@ pub fn get_keypair() -> Arc<Keypair> {
     KEYPAIR.get().unwrap().clone()
 }
 
-pub async fn remove_already_ata(instruction_atas: &mut Vec<(Pubkey, Pubkey)>) {
+pub fn remove_already_ata(instruction_atas: &mut Vec<MintAtaPair>) {
     let read_guard = WALLET_OF_ATA_AMOUNT.get().unwrap().read();
-    instruction_atas.retain(|(ata, _)| !read_guard.contains_key(ata));
+    instruction_atas.retain(|pair| !read_guard.contains_key(&pair.ata));
+}
+
+pub fn is_initialized_ata(key: &Pubkey) -> bool {
+    WALLET_OF_ATA_AMOUNT.get().unwrap().read().contains_key(key)
 }
 
 pub fn get_arb_mint_ata() -> Pubkey {
@@ -168,4 +172,15 @@ pub fn get_arb_mint_ata_amount() -> Option<u64> {
 
 pub fn get_last_blockhash() -> Hash {
     LAST_BLOCK_HASH.get().unwrap().read().clone()
+}
+
+pub struct MintAtaPair {
+    pub mint: Pubkey,
+    pub ata: Pubkey,
+}
+
+impl MintAtaPair {
+    pub fn new(mint: Pubkey, ata: Pubkey) -> Self {
+        Self { mint, ata }
+    }
 }

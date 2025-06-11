@@ -4,7 +4,7 @@ use crate::graph::{
     find_mint_by_index, find_mint_position, find_pool_position, EdgeIdentifier, HopPath,
 };
 use crate::HopPathSearchResult::TwoHop;
-use crate::{HopPathSearchResult, SearchResult};
+use crate::{HopPathSearchResult, InstructionMaterial, SearchResult};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use rayon::iter::IntoParallelIterator;
@@ -12,8 +12,10 @@ use rayon::iter::ParallelIterator;
 use solana_sdk::pubkey::Pubkey;
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use std::collections::hash_map::Entry;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
+use crate::metadata::MintAtaPair;
 
 /// 后续针对多hop可以改成枚举，针对不同的枚举实现不同的Trigger和Quoter
 static GRAPH: OnceCell<Arc<AHashMap<usize, Arc<Vec<Arc<Path>>>>>> = OnceCell::const_new();
@@ -188,25 +190,25 @@ impl Path {
         &self.first.pool == pool_index
     }
 
-    pub fn get_relate_mint_ata(&self, wallet: &Pubkey) -> Vec<(Pubkey, Pubkey)> {
+    pub(crate) fn get_used_mint_ata(&self, wallet: &Pubkey) -> Vec<MintAtaPair> {
         let mint_0 = find_mint_by_index(self.first.mint_0).unwrap();
         let mint_1 = find_mint_by_index(self.first.mint_1).unwrap();
         vec![
-            (
+            MintAtaPair::new(
+                mint_0,
                 get_associated_token_address_with_program_id(
                     wallet,
                     &mint_0,
                     &get_token_program(&mint_0),
                 ),
-                mint_0,
             ),
-            (
+            MintAtaPair::new(
+                mint_1,
                 get_associated_token_address_with_program_id(
                     wallet,
                     &mint_1,
                     &get_token_program(&mint_1),
                 ),
-                mint_1,
             ),
         ]
     }
@@ -232,6 +234,21 @@ impl TwoHopPathSearchResult {
 impl SearchResult for TwoHopPathSearchResult {
     fn profit(&self) -> i64 {
         self.profit
+    }
+
+    fn amount_in(&self) -> (u64, Pubkey) {
+        (self.amount_in, self.hop_path.swaped_mint().unwrap())
+    }
+
+    fn convert_to_instruction_materials(&self) -> anyhow::Result<Vec<InstructionMaterial>> {
+        Ok(vec![
+            self.hop_path.first.get_instruction_material()?,
+            self.hop_path.second.get_instruction_material()?,
+        ])
+    }
+
+    fn information(&self) -> String {
+        format!("{}", self)
     }
 }
 
@@ -405,96 +422,16 @@ where
     }
 }
 
-// #[derive(Debug)]
-// pub struct QuoteResult {
-//     pub hop_path: Arc<TwoHopPath>,
-//     pub amount_in: u64,
-//     pub profit: i64,
-// }
-//
-// impl QuoteResult {
-//     fn new(hop_path: Arc<TwoHopPath>, amount_in: u64, profit: i64) -> Self {
-//         Self {
-//             hop_path,
-//             amount_in,
-//             profit,
-//         }
-//     }
-//
-//     pub fn swaped_mint(&self) -> Option<Pubkey> {
-//         self.hop_path.swaped_mint()
-//     }
-//
-//     pub fn to_instructions(&self) -> Result<Vec<InstructionItem>> {
-//         Ok(vec![
-//             Self::single(self.hop_path.first.as_ref())?,
-//             Self::single(self.hop_path.second.as_ref())?,
-//         ])
-//     }
-//
-//     fn single(edge: &EdgeIdentifier) -> Result<InstructionItem> {
-//         if let Some(pool_id) = edge.pool_id() {
-//             let pool_id = pool_id.clone();
-//             crate::global_cache::get_alt(&pool_id).map_or(
-//                 Err(anyhow!("生成指令获取alt失败")),
-//                 |alt| {
-//                     match &edge.dex_type {
-//                         DexType::RaydiumAMM => {
-//                             crate::dex::raydium_amm::instruction::to_instruction(
-//                                 pool_id,
-//                                 edge.swap_direction,
-//                             )
-//                         }
-//                         DexType::RaydiumCLMM => {
-//                             crate::dex::raydium_clmm::instruction::to_instruction(
-//                                 pool_id,
-//                                 edge.swap_direction,
-//                             )
-//                         }
-//                         DexType::PumpFunAMM => crate::dex::pump_fun::instruction::to_instruction(
-//                             pool_id,
-//                             edge.swap_direction,
-//                         ),
-//                         DexType::MeteoraDLMM => {
-//                             crate::dex::meteora_dlmm::instruction::to_instruction(
-//                                 pool_id,
-//                                 edge.swap_direction,
-//                             )
-//                         }
-//                         DexType::OrcaWhirl => crate::dex::orca_whirlpools::to_instruction(
-//                             pool_id,
-//                             edge.swap_direction,
-//                         ),
-//                     }
-//                     .map_or(
-//                         Err(anyhow!("生成指令获取AccountMetadata失败")),
-//                         |accounts| {
-//                             Ok(InstructionItem::new(
-//                                 edge.dex_type,
-//                                 edge.swap_direction,
-//                                 accounts,
-//                                 alt,
-//                             ))
-//                         },
-//                     )
-//                 },
-//             )
-//         } else {
-//             Err(anyhow!("生成指令获取pool_id失败"))
-//         }
-//     }
-// }
-//
-// impl Display for QuoteResult {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         let binding = Pubkey::default();
-//         let first_pool = self.hop_path.first.pool_id().unwrap_or(&binding);
-//         let second_pool = self.hop_path.second.pool_id().unwrap_or(&binding);
-//         let f_dex_type = &self.hop_path.first.dex_type;
-//         let s_dex_type = &self.hop_path.second.dex_type;
-//         f.write_str(&format!(
-//             "[{} {}] -> [{} {}], amount_in : {}, profit : {}",
-//             f_dex_type, first_pool, s_dex_type, second_pool, self.amount_in, self.profit
-//         ))
-//     }
-// }
+impl Display for TwoHopPathSearchResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let binding = Pubkey::default();
+        let first_pool = self.hop_path.first.pool_id().unwrap_or(&binding);
+        let second_pool = self.hop_path.second.pool_id().unwrap_or(&binding);
+        let f_dex_type = &self.hop_path.first.dex_type;
+        let s_dex_type = &self.hop_path.second.dex_type;
+        f.write_str(&format!(
+            "[{} {}] -> [{} {}], amount_in : {}, profit : {}",
+            f_dex_type, first_pool, s_dex_type, second_pool, self.amount_in, self.profit
+        ))
+    }
+}

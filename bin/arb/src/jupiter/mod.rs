@@ -1,8 +1,14 @@
-use crate::dex::{DexType, InstructionItem, MINT_PROGRAM_ID};
+use crate::dex::{DexType, MINT_PROGRAM_ID};
+use crate::graph::SearchResult;
+use crate::jupiter::accounts_type::AccountsType;
 use crate::jupiter::jupiter_route::RouteBuilder;
+use crate::jupiter::remaining_accounts_info::RemainingAccountsInfo;
+use crate::jupiter::remaining_accounts_slice::RemainingAccountsSlice;
 use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;
-use crate::metadata::{get_arb_mint_ata, get_keypair};
+use crate::metadata::{get_arb_mint_ata, get_keypair, remove_already_ata, MintAtaPair};
+use crate::{HopPathSearchResult, InstructionMaterial};
+use anyhow::Result;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey;
@@ -22,36 +28,43 @@ const JUPITER_ID: Pubkey = pubkey!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
 const JUPITER_EVENT_AUTHORITY: Pubkey = pubkey!("D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf");
 
 pub fn build_jupiter_swap_ix(
-    instructions: Vec<InstructionItem>,
-    amount_in_mint: Pubkey,
-    amount_in: u64,
+    hop_path_search_result: HopPathSearchResult,
     tip: u64,
-) -> Option<(Instruction, Vec<AddressLookupTableAccount>)> {
-    let mut route_builder = RouteBuilder::new();
+) -> Result<(
+    Instruction,
+    Vec<MintAtaPair>,
+    Vec<AddressLookupTableAccount>,
+)> {
     let mut remaining_accounts = Vec::with_capacity(100);
     let mut route_plan = Vec::with_capacity(2);
     let mut alts = Vec::with_capacity(2);
-    for (index, instruction_item) in instructions.into_iter().enumerate() {
-        let swap =
-            get_jupiter_swap_type(&instruction_item.dex_type, instruction_item.swap_direction);
+    let instruction_materials: Vec<InstructionMaterial> =
+        hop_path_search_result.convert_to_instruction_materials()?;
+    let mut used_atas = Vec::with_capacity(instruction_materials.len() * 2);
+    for (index, mut material) in instruction_materials.into_iter().enumerate() {
+        let (swap, append_jup_program) = get_jupiter_swap_type(&mut material);
         remaining_accounts.push(AccountMeta::new_readonly(
-            instruction_item.dex_type.get_ref_program_id().clone(),
+            material.dex_type.get_ref_program_id().clone(),
             false,
         ));
-        remaining_accounts.extend(instruction_item.account_meta);
-        if swap == Swap::MeteoraDlmm || swap == Swap::RaydiumClmm {
+        remaining_accounts.extend(material.account_meta);
+        if append_jup_program {
             remaining_accounts.push(AccountMeta::new_readonly(JUPITER_ID, false));
         }
-        alts.extend(instruction_item.alts);
+        alts.extend(material.alts.unwrap_or(vec![]));
         route_plan.push(RoutePlanStep {
             swap,
             percent: 100,
+            // TODO 多跳的时候index如何确定
             input_index: if index == 0 { 0 } else { 1 },
             output_index: if index == 0 { 1 } else { 0 },
-        })
+        });
+        used_atas.extend(material.used_atas);
     }
+    remove_already_ata(&mut used_atas);
     let arb_mint_ata = get_arb_mint_ata();
-    route_builder
+    let (amount_in, amount_in_mint): (u64, Pubkey) = hop_path_search_result.amount_in();
+    let instruction = RouteBuilder::new()
         .user_transfer_authority(get_keypair().pubkey())
         .user_source_token_account(arb_mint_ata)
         .user_destination_token_account(arb_mint_ata)
@@ -66,27 +79,43 @@ pub fn build_jupiter_swap_ix(
         .slippage_bps(0)
         .platform_fee_bps(0)
         .route_plan(route_plan)
-        .add_remaining_accounts(remaining_accounts.as_slice());
-    Some((route_builder.instruction(), alts))
+        .add_remaining_accounts(remaining_accounts.as_slice())
+        .instruction();
+    Ok((instruction, used_atas, alts))
 }
 
-fn get_jupiter_swap_type(dex_type: &DexType, swap_direction: bool) -> Swap {
-    match dex_type {
-        DexType::RaydiumAMM => Swap::Raydium,
+fn get_jupiter_swap_type(instruction_material: &mut InstructionMaterial) -> (Swap, bool) {
+    match instruction_material.dex_type {
+        DexType::RaydiumAMM => (Swap::Raydium, false),
         // DexType::RaydiumCLMM => Swap::RaydiumClmmV2,
-        DexType::RaydiumCLMM => Swap::RaydiumClmm,
-        DexType::PumpFunAMM => {
-            if swap_direction {
+        DexType::RaydiumCLMM => (Swap::RaydiumClmm, true),
+        DexType::PumpFunAMM => (
+            if instruction_material.swap_direction {
                 Swap::PumpdotfunAmmSell
             } else {
                 Swap::PumpdotfunAmmBuy
-            }
-        }
-        DexType::MeteoraDLMM => Swap::MeteoraDlmm,
-        DexType::OrcaWhirl => Swap::WhirlpoolSwapV2 {
-            //TODO:
-            a_to_b: swap_direction,
-            remaining_accounts_info: None,
-        },
+            },
+            false,
+        ),
+        DexType::MeteoraDLMM => (Swap::MeteoraDlmm, true),
+        DexType::OrcaWhirl => (
+            Swap::WhirlpoolSwapV2 {
+                a_to_b: instruction_material.swap_direction,
+                // 设置remaining account的数量&类型
+                remaining_accounts_info: {
+                    instruction_material
+                        .remaining_account_num
+                        .map_or(None, |num| {
+                            Some(RemainingAccountsInfo {
+                                slices: vec![RemainingAccountsSlice {
+                                    accounts_type: AccountsType::SupplementalTickArrays,
+                                    length: num,
+                                }],
+                            })
+                        })
+                },
+            },
+            false,
+        ),
     }
 }

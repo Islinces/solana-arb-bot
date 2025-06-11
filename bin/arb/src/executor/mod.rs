@@ -1,5 +1,5 @@
 use crate::arb_bot::Command;
-use crate::quoter::QuoteResult;
+use crate::HopPathSearchResult;
 use std::sync::Arc;
 
 pub mod jito;
@@ -12,7 +12,7 @@ pub trait Executor: Sync + Send {
 
     async fn execute(
         &self,
-        quote_result: QuoteResult,
+        hop_path_search_result: HopPathSearchResult,
         tx: String,
         slot: u64,
     ) -> anyhow::Result<String>;

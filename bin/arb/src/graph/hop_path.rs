@@ -1,11 +1,17 @@
+use crate::core::InstructionMaterialConverter;
 use crate::core::Quoter;
 use crate::dex::{get_dex_type_with_program_id, DexType};
 use crate::dex_data::DexJson;
-use crate::{get_quoter_type, QuoteResult, TwoHopPath, TwoHopPathSearchResult};
+use crate::{
+    get_instruction_builder, get_quoter_type, InstructionMaterial, QuoteResult, TwoHopPath,
+    TwoHopPathSearchResult,
+};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use parking_lot::RwLock;
 use solana_sdk::pubkey::Pubkey;
+use std::fmt::Display;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tracing::info;
@@ -41,6 +47,12 @@ pub enum HopPathTypes {
 #[enum_dispatch(HopPathSearchResult)]
 pub trait SearchResult {
     fn profit(&self) -> i64;
+
+    fn amount_in(&self) -> (u64, Pubkey);
+
+    fn convert_to_instruction_materials(&self) -> anyhow::Result<Vec<InstructionMaterial>>;
+
+    fn information(&self) -> String;
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +92,8 @@ pub fn init_graph(
         .collect::<Vec<_>>();
     // 构建图(2 hop)
     hop_paths.iter().for_each(|mut hop_path| {
-        hop_path.write()
+        hop_path
+            .write()
             .build_graph(edge_identifiers.as_slice(), follow_mint_index.as_slice())
             .expect("初始化Graph失败");
     });
@@ -128,6 +141,14 @@ impl EdgeIdentifier {
         let quoter = get_quoter_type(self.dex_type).ok()?;
         let quote_result: QuoteResult = quoter.quote(amount_in, self.swap_direction, pool_id)?;
         Some(quote_result.amount_out)
+    }
+
+    pub(crate) fn get_instruction_material(&self) -> anyhow::Result<InstructionMaterial> {
+        let pool_id = self
+            .pool_id()
+            .ok_or(anyhow!("无法通过index[{}]找到PoolId", self.pool))?;
+        get_instruction_builder(&self.dex_type)?
+            .convert_to_instruction_material(pool_id, self.swap_direction)
     }
 
     #[inline]

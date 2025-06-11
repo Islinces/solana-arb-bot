@@ -2,8 +2,9 @@ use crate::arb_bot::Command;
 use crate::dex::{MEMO_PROGRAM, MINT_PROGRAM_ID};
 use crate::executor::Executor;
 use crate::global_cache::get_token_program;
-use crate::metadata::{get_arb_mint_ata, get_keypair, get_last_blockhash, remove_already_ata};
-use crate::quoter::QuoteResult;
+use crate::graph::SearchResult;
+use crate::metadata::{get_arb_mint_ata, get_keypair, get_last_blockhash};
+use crate::HopPathSearchResult;
 use anyhow::anyhow;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -103,11 +104,14 @@ impl Executor for JitoExecutor {
 
     async fn execute(
         &self,
-        quote_result: QuoteResult,
+        hop_path_search_result: HopPathSearchResult,
         tx: String,
         slot: u64,
     ) -> anyhow::Result<String> {
-        match self.create_jito_bundle(quote_result, tx, slot).await {
+        match self
+            .create_jito_bundle(hop_path_search_result, tx, slot)
+            .await
+        {
             Ok((bundle, instruction_cost)) => {
                 let jito_request_start = Instant::now();
                 let bundles = bundle
@@ -192,7 +196,7 @@ impl JitoExecutor {
 
     async fn create_jito_bundle(
         &self,
-        quote_result: QuoteResult,
+        hop_path_search_result: HopPathSearchResult,
         tx: String,
         slot: u64,
     ) -> anyhow::Result<(Vec<VersionedTransaction>, Duration)> {
@@ -200,7 +204,7 @@ impl JitoExecutor {
         let keypair = get_keypair();
         let wallet = keypair.pubkey();
         // ======================第一个Transaction====================
-        let tip = (quote_result.profit as u64)
+        let tip = (hop_path_search_result.profit() as u64)
             .mul(self.tip_bps_numerator)
             .div(self.tip_bps_denominator);
 
@@ -210,24 +214,14 @@ impl JitoExecutor {
             Self::calculate_compute_unit(),
         ));
         // 设置 swap
-        let mut used_atas = quote_result.hop_path.get_relate_mint_ata(&wallet);
-        let jupiter_swap_result = crate::jupiter::build_jupiter_swap_ix(
-            quote_result.to_instructions()?,
-            quote_result.swaped_mint().unwrap(),
-            quote_result.amount_in,
-            tip,
-        );
-        if jupiter_swap_result.is_none() {
-            return Err(anyhow!("生成 Swap ix 失败"));
-        }
-        let (jupiter_swap_ix, alts) = jupiter_swap_result.unwrap();
-        remove_already_ata(&mut used_atas).await;
-        for (_, mint) in used_atas {
+        let (jupiter_swap_ix, uninitialized_atas, alts) =
+            crate::jupiter::build_jupiter_swap_ix(hop_path_search_result, tip)?;
+        for mint_ata_pair in uninitialized_atas {
             first_instructions.push(create_associated_token_account_idempotent(
                 &wallet,
                 &wallet,
-                &mint,
-                &get_token_program(&mint),
+                &mint_ata_pair.mint,
+                &get_token_program(&mint_ata_pair.mint),
             ));
         }
         first_instructions.push(jupiter_swap_ix);
@@ -274,15 +268,13 @@ impl JitoExecutor {
             2039280 + 5000,
         ));
         // 生成Transaction
-        let latest_blockhash = get_last_blockhash().await;
+        let latest_blockhash = get_last_blockhash();
         let first_message = Message::try_compile(
             &wallet,
             &first_instructions,
             alts.as_slice(),
             latest_blockhash,
         )?;
-        // info!("alt {:#?}", alts.as_slice());
-        // info!("first_message {:#?}", first_message);
         let first_transaction = VersionedTransaction::try_new(
             solana_sdk::message::VersionedMessage::V0(first_message),
             &[keypair.as_ref()],
