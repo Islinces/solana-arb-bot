@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use parking_lot::RwLockReadGuard;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::message::AddressLookupTableAccount;
@@ -6,7 +7,6 @@ use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Display, Formatter};
 
 mod account_relation;
-mod utils;
 mod data_slice;
 mod global_cache;
 mod meteora_dlmm;
@@ -18,6 +18,7 @@ mod raydium_clmm;
 mod snapshot;
 mod subscriber;
 mod swap_instruction;
+mod utils;
 
 pub use account_relation::*;
 pub use data_slice::*;
@@ -84,6 +85,26 @@ pub enum DexType {
     PumpFunAMM,
     MeteoraDLMM,
     OrcaWhirl,
+}
+
+impl TryFrom<&Pubkey> for DexType {
+    type Error = anyhow::Error;
+
+    fn try_from(owner: &Pubkey) -> Result<Self, Self::Error> {
+        if owner == &spl_token::ID || owner == DexType::RaydiumAMM.get_ref_program_id() {
+            Ok(DexType::RaydiumAMM)
+        } else if owner == DexType::PumpFunAMM.get_ref_program_id() {
+            Ok(DexType::PumpFunAMM)
+        } else if owner == DexType::RaydiumCLMM.get_ref_program_id() {
+            Ok(DexType::RaydiumCLMM)
+        } else if owner == DexType::MeteoraDLMM.get_ref_program_id() {
+            Ok(DexType::MeteoraDLMM)
+        } else if owner == DexType::OrcaWhirl.get_ref_program_id() {
+            Ok(DexType::OrcaWhirl)
+        } else {
+            Err(anyhow!("无效的Owner"))
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

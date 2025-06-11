@@ -7,5 +7,14 @@
     "vaultA": "dY5cups8EYbDSrNL8EpJuPiXX2rbDNRuJXaZatSpW5N",
     "vaultB": "CQxdPWr2Xbe1uq5sFDoTyBAXujZexhEPuNxpYSyPNQwm",
     "addressLookupTableAddress": "BUJkP9HARGjQfHxdQ2fy3LXXiWGMK8QP4FX85P68FAhM"
+  },
+  {
+    "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
+    "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+    "mintA": "So11111111111111111111111111111111111111112",
+    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "vaultA": "dY5cups8EYbDSrNL8EpJuPiXX2rbDNRuJXaZatSpW5N",
+    "vaultB": "CQxdPWr2Xbe1uq5sFDoTyBAXujZexhEPuNxpYSyPNQwm",
+    "addressLookupTableAddress": "BUJkP9HARGjQfHxdQ2fy3LXXiWGMK8QP4FX85P68FAhM"
   }
 ]

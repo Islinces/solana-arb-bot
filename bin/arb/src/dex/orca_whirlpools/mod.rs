@@ -8,16 +8,18 @@ pub mod error;
 mod instruction;
 mod math;
 mod quote;
+mod relation;
 mod snapshot_loader;
 mod swap;
 
-pub use account_subscriber::*;
+pub(super) use account_subscriber::*;
 pub(super) use accounts::*;
-pub use data_slice::*;
-pub use instruction::*;
+pub(super) use data_slice::*;
+pub(super) use instruction::*;
 pub use math::*;
-pub use quote::*;
-pub use snapshot_loader::*;
+pub(super) use quote::*;
+pub(super) use relation::*;
+pub(super) use snapshot_loader::*;
 pub use swap::*;
 
 pub(super) const WHIRLPOOL_ID: Pubkey = pubkey!("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc");
