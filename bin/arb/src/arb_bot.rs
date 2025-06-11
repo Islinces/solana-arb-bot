@@ -3,11 +3,15 @@ use crate::dex_data::DexJson;
 use crate::executor::jito::JitoExecutor;
 use crate::executor::Executor;
 use crate::global_cache::{get_global_cache, init_global_cache, GlobalCache};
+use crate::graph::HopPathTypes;
+use crate::graph::HopPathTypes::TwoHop;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::{GrpcMessage, GrpcSubscribe, GrpcTransactionMsg};
 use crate::keypair::KeypairVault;
+use crate::TwoHopPath;
 use anyhow::anyhow;
 use clap::Parser;
+use parking_lot::RwLock;
 use rpassword::read_password;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -83,6 +87,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     // Account本地缓存更新后广播通道容量
     let arb_channel_capacity = command.arb_channel_capacity;
     let rpc_client = Arc::new(RpcClient::new(rpc_url));
+    let hop_path_types = Arc::new(vec![RwLock::new(TwoHop(TwoHopPath))]);
     // 0.初始化钱包，ata账户，blockhash
     // 1.初始化各个Account的切片规则
     // 2.初始化snapshot，返回有效的DexJson(所有数据都合法的)
@@ -93,6 +98,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         dex_json_path,
         &arb_mint,
         follow_mints.as_slice(),
+        hop_path_types.clone(),
         rpc_client,
     )
     .await?;
@@ -122,6 +128,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         arb_mint_bps_numerator,
         arb_mint_bps_denominator,
         JitoExecutor::initialize(&command)?,
+        hop_path_types,
     )
     .start(&mut join_set, cached_message_receiver)
     .await;
@@ -146,6 +153,7 @@ pub async fn init_start_data(
     dex_json_path: String,
     arb_mint: &Pubkey,
     follow_mints: &[Pubkey],
+    hop_paths: Arc<Vec<RwLock<HopPathTypes>>>,
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Vec<DexJson>> {
     // 1.初始化钱包
@@ -164,7 +172,7 @@ pub async fn init_start_data(
         .await?;
     // 初始化account之间的关系，用于解析GRPC推送数据
     crate::account_relation::init(dex_data.as_slice())?;
-    // 构建边
-    crate::graph::init_graph(dex_data.as_slice(), follow_mints)?;
+    // 构建图
+    crate::graph::init_graph(dex_data.as_slice(), follow_mints, hop_paths)?;
     Ok(dex_data)
 }

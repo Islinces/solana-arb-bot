@@ -157,7 +157,7 @@ pub fn get_arb_mint_ata() -> Pubkey {
     ARB_MINT_ATA_ACCOUNT.get().unwrap().clone()
 }
 
-pub async fn get_arb_mint_ata_amount() -> Option<u64> {
+pub fn get_arb_mint_ata_amount() -> Option<u64> {
     WALLET_OF_ATA_AMOUNT
         .get()
         .unwrap()
@@ -166,6 +166,6 @@ pub async fn get_arb_mint_ata_amount() -> Option<u64> {
         .cloned()
 }
 
-pub async fn get_last_blockhash() -> Hash {
+pub fn get_last_blockhash() -> Hash {
     LAST_BLOCK_HASH.get().unwrap().read().clone()
 }

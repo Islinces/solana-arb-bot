@@ -1,11 +1,15 @@
 use crate::executor::Executor;
+use crate::graph::HopPath;
 use crate::grpc_processor::BalanceChangeInfo;
 use crate::grpc_subscribe::GrpcTransactionMsg;
 use crate::metadata::get_arb_mint_ata_amount;
-use crate::quoter::QuoteResult;
+use crate::{HopPathSearchResult, HopPathTypes, SearchResult};
 use base58::ToBase58;
+use parking_lot::RwLock;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
 use std::ops::{Div, Mul};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
@@ -22,6 +26,7 @@ pub struct Arb {
     arb_mint_bps_numerator: u64,
     arb_mint_bps_denominator: u64,
     executor: Arc<dyn Executor>,
+    hop_paths: Arc<Vec<RwLock<HopPathTypes>>>,
 }
 
 impl Arb {
@@ -33,6 +38,7 @@ impl Arb {
         arb_mint_bps_numerator: u64,
         arb_mint_bps_denominator: u64,
         executor: Arc<dyn Executor>,
+        hop_paths: Arc<Vec<RwLock<HopPathTypes>>>,
     ) -> Self {
         Self {
             arb_size,
@@ -42,6 +48,7 @@ impl Arb {
             arb_mint_bps_numerator,
             arb_mint_bps_denominator,
             executor,
+            hop_paths,
         }
     }
 
@@ -59,6 +66,7 @@ impl Arb {
             let arb_mint_bps_numerator = self.arb_mint_bps_numerator.clone();
             let arb_mint_bps_denominator = self.arb_mint_bps_denominator.clone();
             let mut receiver = cached_message_receiver.clone();
+            let hop_paths = self.hop_paths.clone();
             join_set.spawn(async move {
                 loop {
                     match receiver.recv_async().await {
@@ -86,6 +94,7 @@ impl Arb {
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
                                 if let Some(quote_result) = Self::trigger_quote(
+                                    hop_paths.clone(),
                                     arb_mint.clone(),
                                     arb_amount_in,
                                     arb_min_profit,
@@ -95,36 +104,36 @@ impl Arb {
                                 )
                                 .await
                                 {
-                                    let trigger_quote_cost = trigger_instant.elapsed();
-                                    let quote_info = format!("{}", quote_result);
-                                    let tx = transaction_msg
-                                        .signature
-                                        .as_slice()
-                                        .to_base58()
-                                        .chars()
-                                        .take(4)
-                                        .collect::<String>();
-                                    // 有获利路径后生成指令，发送指令
-                                    let msg = executor
-                                        .execute(quote_result, tx.clone(), transaction_msg.slot)
-                                        .await
-                                        .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
-                                    let all_cost = transaction_msg.instant.elapsed().as_millis();
-                                    let quote_cost = trigger_quote_cost.as_micros();
-                                    info!(
-                                        "\nArb_{index} ==> 耗时 : {:>4.2}ms, \
-                                        路由 : {:>4.2}μs, \
-                                        {} \n路径 : {}, tx : {},  Slot : {}, Time: {}",
-                                        all_cost,
-                                        quote_cost,
-                                        msg,
-                                        quote_info,
-                                        tx,
-                                        transaction_msg.slot,
-                                        transaction_msg
-                                            .received_timestamp
-                                            .format("%Y-%m-%d %H:%M:%S.%3f")
-                                    );
+                                    // let trigger_quote_cost = trigger_instant.elapsed();
+                                    // let quote_info = format!("{}", quote_result);
+                                    // let tx = transaction_msg
+                                    //     .signature
+                                    //     .as_slice()
+                                    //     .to_base58()
+                                    //     .chars()
+                                    //     .take(4)
+                                    //     .collect::<String>();
+                                    // // 有获利路径后生成指令，发送指令
+                                    // let msg = executor
+                                    //     .execute(quote_result, tx.clone(), transaction_msg.slot)
+                                    //     .await
+                                    //     .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
+                                    // let all_cost = transaction_msg.instant.elapsed().as_millis();
+                                    // let quote_cost = trigger_quote_cost.as_micros();
+                                    // info!(
+                                    //     "\nArb_{index} ==> 耗时 : {:>4.2}ms, \
+                                    //     路由 : {:>4.2}μs, \
+                                    //     {} \n路径 : {}, tx : {},  Slot : {}, Time: {}",
+                                    //     all_cost,
+                                    //     quote_cost,
+                                    //     msg,
+                                    //     quote_info,
+                                    //     tx,
+                                    //     transaction_msg.slot,
+                                    //     transaction_msg
+                                    //         .received_timestamp
+                                    //         .format("%Y-%m-%d %H:%M:%S.%3f")
+                                    // );
                                 }
                             }
                         }
@@ -139,24 +148,28 @@ impl Arb {
     }
 
     async fn trigger_quote(
+        hop_paths: Arc<Vec<RwLock<HopPathTypes>>>,
         arb_mint: Arc<Pubkey>,
         arb_amount_in: u64,
         arb_min_profit: u64,
         arb_mint_bps_numerator: u64,
         arb_mint_bps_denominator: u64,
         balances: Vec<BalanceChangeInfo>,
-    ) -> Option<QuoteResult> {
-        let arb_max_amount_in = get_arb_mint_ata_amount()
-            .await?
+    ) -> Option<HopPathSearchResult> {
+        let arb_max_amount_in = get_arb_mint_ata_amount()?
             .mul(arb_mint_bps_numerator)
             .div(arb_mint_bps_denominator);
-        crate::quoter::find_best_hop_path(
-            balances.first().unwrap().pool_id,
-            arb_mint,
-            arb_amount_in,
-            arb_max_amount_in,
-            arb_min_profit,
-        )
-        .await
+        hop_paths
+            .par_iter()
+            .filter_map(|best_hop_path_searcher| {
+                best_hop_path_searcher.read().find_best_hop_path(
+                    balances.first().unwrap().pool_id,
+                    arb_mint.clone(),
+                    arb_amount_in,
+                    arb_max_amount_in,
+                    arb_min_profit,
+                )
+            })
+            .max_by_key(|a| a.profit())
     }
 }
