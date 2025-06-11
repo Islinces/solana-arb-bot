@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::quote::MeteoraDLMMQuoter;
+use crate::dex::meteora_dlmm::MeteoraDLMMQuoter;
 use crate::dex::orca_whirlpools::OrcaWhirlQuoter;
 use crate::dex::pump_fun::quote::PumpFunAMMQuoter;
 use crate::dex::raydium_amm::quote::RaydiumAMMQuoter;

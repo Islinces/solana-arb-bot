@@ -1,3 +1,4 @@
+use crate::dex::InstructionMaterial;
 use crate::dex::{DexType, MINT_PROGRAM_ID};
 use crate::graph::SearchResult;
 use crate::jupiter::accounts_type::AccountsType;
@@ -7,7 +8,7 @@ use crate::jupiter::remaining_accounts_slice::RemainingAccountsSlice;
 use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;
 use crate::metadata::{get_arb_mint_ata, get_keypair, remove_already_ata, MintAtaPair};
-use crate::{HopPathSearchResult, InstructionMaterial};
+use crate::HopPathSearchResult;
 use anyhow::Result;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction};

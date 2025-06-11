@@ -28,6 +28,6 @@ const PUMPSWAP_FEE_ACCOUNTS: [&str; 8] = [
     "FWsW1xNtWscwNmKv6wVsU1iTzRN6wmmk3MjxRP5tT7hz",
 ];
 
-pub(crate) fn get_fee_account_with_rand() -> Pubkey {
+fn get_fee_account_with_rand() -> Pubkey {
     Pubkey::from_str(PUMPSWAP_FEE_ACCOUNTS[rand::rng().random_range(0..=7)]).unwrap()
 }

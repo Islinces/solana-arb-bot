@@ -6,8 +6,7 @@ use crate::dex::raydium_amm::RaydiumAmmSnapshotInitializer;
 use crate::dex::raydium_clmm::RaydiumCLMMSnapshotInitializer;
 use crate::dex::{AccountType, DexType, CLOCK_ID};
 use crate::dex_data::DexJson;
-use crate::global_cache::GlobalCache;
-use crate::{try_slice_data, SliceType};
+use crate::dex::global_cache::GlobalCache;
 use ahash::AHashSet;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -22,6 +21,7 @@ use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{error, info};
+use crate::dex::data_slice::{try_slice_data, SliceType};
 
 #[async_trait]
 #[enum_dispatch(SnapshotType)]

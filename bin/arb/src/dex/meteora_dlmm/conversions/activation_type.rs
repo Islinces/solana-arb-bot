@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::interface::typedefs::ActivationType;
+use crate::dex::meteora_dlmm::interface::ActivationType;
 use std::ops::Deref;
 
 pub struct ActivationTypeWrapper(ActivationType);

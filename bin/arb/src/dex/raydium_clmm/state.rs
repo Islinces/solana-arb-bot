@@ -1,10 +1,8 @@
-use crate::dex::byte_utils::{
-    read_from, read_i32, read_pubkey, read_u128, read_u16, read_u32, read_u64,
-};
+use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::raydium_clmm::big_num::{U1024, U512};
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
+use crate::dex::utils::read_from;
 use crate::dex::{DexType, FromCache};
-use crate::global_cache::{DynamicCache, StaticCache};
 use crate::{require, require_gt};
 use anyhow::anyhow;
 use parking_lot::RwLockReadGuard;
@@ -36,9 +34,9 @@ impl FromCache for AmmConfig {
         let static_data = static_cache.get(account_key)?;
         unsafe {
             Some(Self {
-                protocol_fee_rate: read_u32(&static_data[0..4]),
-                trade_fee_rate: read_u32(&static_data[4..8]),
-                fund_fee_rate: read_u32(&static_data[8..12]),
+                protocol_fee_rate: read_from::<u32>(&static_data[0..4]),
+                trade_fee_rate: read_from::<u32>(&static_data[4..8]),
+                fund_fee_rate: read_from::<u32>(&static_data[8..12]),
             })
         }
     }
@@ -100,17 +98,17 @@ impl FromCache for PoolState {
 impl PoolState {
     pub fn from_slice_data(static_data: &[u8], dynamic_data: &[u8]) -> Self {
         unsafe {
-            let amm_config = read_pubkey(&static_data[0..32]);
-            let token_mint_0 = read_pubkey(&static_data[32..64]);
-            let token_mint_1 = read_pubkey(&static_data[64..96]);
-            let token_vault_0 = read_pubkey(&static_data[96..128]);
-            let token_vault_1 = read_pubkey(&static_data[128..160]);
-            let observation_key = read_pubkey(&static_data[160..192]);
-            let tick_spacing = read_u16(&static_data[192..194]);
+            let amm_config = read_from::<Pubkey>(&static_data[0..32]);
+            let token_mint_0 = read_from::<Pubkey>(&static_data[32..64]);
+            let token_mint_1 = read_from::<Pubkey>(&static_data[64..96]);
+            let token_vault_0 = read_from::<Pubkey>(&static_data[96..128]);
+            let token_vault_1 = read_from::<Pubkey>(&static_data[128..160]);
+            let observation_key = read_from::<Pubkey>(&static_data[160..192]);
+            let tick_spacing = read_from::<u16>(&static_data[192..194]);
 
-            let liquidity = read_u128(&dynamic_data[0..16]);
-            let sqrt_price_x64 = read_u128(&dynamic_data[16..32]);
-            let tick_current = read_i32(&dynamic_data[32..36]);
+            let liquidity = read_from::<u128>(&dynamic_data[0..16]);
+            let sqrt_price_x64 = read_from::<u128>(&dynamic_data[16..32]);
+            let tick_current = read_from::<i32>(&dynamic_data[32..36]);
             let tick_array_bitmap = ptr::read_unaligned(
                 dynamic_data[36..16 + 16 + 4 + 8 * 16].as_ptr() as *const [u64; 16],
             );
@@ -571,7 +569,7 @@ impl FromCache for TickArrayBitmapExtension {
 impl TickArrayBitmapExtension {
     pub fn from_slice_data(dynamic_data: &[u8]) -> Self {
         unsafe {
-            let pool_id = read_pubkey(&dynamic_data[0..32]);
+            let pool_id = read_from::<Pubkey>(&dynamic_data[0..32]);
             let mut positive_tick_array_bitmap = [[0; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE];
             let mut negative_tick_array_bitmap = [[0; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE];
             let tick_array_bitmap_data = &dynamic_data[32..];
@@ -583,7 +581,7 @@ impl TickArrayBitmapExtension {
                 for (i, d1) in data.chunks(8 * 8).enumerate() {
                     let mut bitmap = [0; 8];
                     for (j, d2) in d1.chunks(8).enumerate() {
-                        bitmap[j] = read_u64(&d2[0..8]);
+                        bitmap[j] = read_from::<u64>(&d2[0..8]);
                     }
                     bitmap_array[i] = bitmap;
                 }

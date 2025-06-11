@@ -1,10 +1,11 @@
 use crate::dex::DexType;
-use crate::global_cache::get_token_program;
+use crate::dex::get_token_program;
 use crate::graph::{
     find_mint_by_index, find_mint_position, find_pool_position, EdgeIdentifier, HopPath,
 };
+use crate::metadata::MintAtaPair;
 use crate::HopPathSearchResult::TwoHop;
-use crate::{HopPathSearchResult, InstructionMaterial, SearchResult};
+use crate::{HopPathSearchResult, SearchResult};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use rayon::iter::IntoParallelIterator;
@@ -15,7 +16,7 @@ use std::collections::hash_map::Entry;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-use crate::metadata::MintAtaPair;
+use crate::dex::InstructionMaterial;
 
 /// 后续针对多hop可以改成枚举，针对不同的枚举实现不同的Trigger和Quoter
 static GRAPH: OnceCell<Arc<AHashMap<usize, Arc<Vec<Arc<Path>>>>>> = OnceCell::const_new();

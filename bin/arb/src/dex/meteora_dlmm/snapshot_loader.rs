@@ -1,11 +1,11 @@
-use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
-use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
+use crate::dex::global_cache::get_account_data;
+use crate::dex::meteora_dlmm::commons::get_bin_array_pubkeys_for_swap;
+use crate::dex::meteora_dlmm::interface::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
 use crate::dex::raydium_clmm::state::pda_bit_map_extension_key;
+use crate::dex::snapshot::{AccountDataSlice, SnapshotInitializer};
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
-use crate::global_cache::get_account_data;
-use crate::{AccountDataSlice, SnapshotInitializer};
 use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -147,7 +147,7 @@ impl MeteoraDLMMSnapshotInitializer {
             .iter()
             .map(|account| {
                 (
-                    crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
+                    crate::dex::meteora_dlmm::derive_bin_array_bitmap_extension(
                         &account.account_key,
                     ),
                     account.account_key,
@@ -181,9 +181,7 @@ impl MeteoraDLMMSnapshotInitializer {
                 let pool_id = &account.account_key;
                 // bitmap extension
                 let bitmap_extension_key =
-                    crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
-                        pool_id,
-                    );
+                    crate::dex::meteora_dlmm::derive_bin_array_bitmap_extension(pool_id);
                 let bitmap_extension =
                     all_bitmap_extension_account_data
                         .iter()

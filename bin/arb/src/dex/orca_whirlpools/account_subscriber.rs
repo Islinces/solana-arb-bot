@@ -1,6 +1,6 @@
 use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
+use crate::dex::subscriber::{AccountSubscriber, SubscriptionAccounts};
 use crate::dex_data::DexJson;
-use crate::{AccountSubscriber, SubscriptionAccounts};
 use solana_sdk::clock::Clock;
 use solana_sdk::sysvar::SysvarId;
 use std::collections::HashMap;

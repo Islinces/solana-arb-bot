@@ -2,7 +2,9 @@ use crate::arb_bot::Command;
 use crate::HopPathSearchResult;
 use std::sync::Arc;
 
-pub mod jito;
+mod jito;
+
+pub use jito::*;
 
 #[async_trait::async_trait]
 pub trait Executor: Sync + Send {

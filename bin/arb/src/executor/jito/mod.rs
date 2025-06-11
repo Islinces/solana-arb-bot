@@ -1,7 +1,7 @@
 use crate::arb_bot::Command;
+use crate::dex::get_token_program;
 use crate::dex::{MEMO_PROGRAM, MINT_PROGRAM_ID};
 use crate::executor::Executor;
-use crate::global_cache::get_token_program;
 use crate::graph::SearchResult;
 use crate::metadata::{get_arb_mint_ata, get_keypair, get_last_blockhash};
 use crate::HopPathSearchResult;

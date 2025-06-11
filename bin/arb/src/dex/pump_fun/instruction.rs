@@ -1,9 +1,9 @@
 use crate::dex::pump_fun::state::{global_config_key, Pool};
+use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
 use crate::dex::DexType::PumpFunAMM;
 use crate::dex::{ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
-use crate::global_cache::get_alt;
+use crate::dex::global_cache::get_alt;
 use crate::metadata::{get_keypair, MintAtaPair};
-use crate::{InstructionMaterial, InstructionMaterialConverter};
 use anyhow::Result;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
@@ -19,7 +19,7 @@ impl InstructionMaterialConverter for PumpFunAMMInstructionMaterialConverter {
         swap_direction: bool,
     ) -> Result<InstructionMaterial> {
         let wallet = get_keypair().pubkey();
-        let pool = crate::global_cache::get_account_data::<Pool>(pool_id).unwrap();
+        let pool = crate::dex::global_cache::get_account_data::<Pool>(pool_id).unwrap();
         let mut accounts = Vec::with_capacity(17);
         // 1.pool
         accounts.push(AccountMeta::new_readonly(pool_id.clone(), false));

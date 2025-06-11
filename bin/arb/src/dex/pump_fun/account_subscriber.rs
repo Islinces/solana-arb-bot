@@ -1,6 +1,6 @@
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
+use crate::dex::subscriber::{AccountSubscriber, SubscriptionAccounts};
 use crate::dex_data::DexJson;
-use crate::{AccountSubscriber, SubscriptionAccounts};
 
 pub struct PumpFunAMMAccountSubscriber;
 

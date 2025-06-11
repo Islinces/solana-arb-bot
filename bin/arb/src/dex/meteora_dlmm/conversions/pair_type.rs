@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::interface::typedefs::PairType;
+use crate::dex::meteora_dlmm::interface::PairType;
 use std::ops::Deref;
 
 pub struct PairTypeWrapper(PairType);

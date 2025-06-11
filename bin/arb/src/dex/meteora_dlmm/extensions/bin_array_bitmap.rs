@@ -1,5 +1,5 @@
-use crate::dex::meteora_dlmm::commons::constants::{BIN_ARRAY_BITMAP_SIZE, EXTENSION_BINARRAY_BITMAP_SIZE};
-use crate::dex::meteora_dlmm::interface::accounts::BinArrayBitmapExtension;
+use crate::dex::meteora_dlmm::commons::{BIN_ARRAY_BITMAP_SIZE, EXTENSION_BINARRAY_BITMAP_SIZE};
+use crate::dex::meteora_dlmm::interface::BinArrayBitmapExtension;
 use anyhow::{anyhow, Context, Result};
 use ruint::aliases::U512;
 

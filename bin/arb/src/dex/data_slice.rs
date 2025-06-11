@@ -128,7 +128,7 @@ pub fn slice_data_auto_get_dex_type(
     if account_key == &Clock::id() {
         Ok(data)
     } else {
-        match crate::account_relation::get_dex_type_and_account_type(owner, account_key) {
+        match crate::dex::account_relation::get_dex_type_and_account_type(owner, account_key) {
             None => Err(anyhow!("")),
             Some((dex_type, account_type)) => {
                 try_slice_data(dex_type, account_type, data, slice_type)

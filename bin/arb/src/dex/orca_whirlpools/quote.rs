@@ -4,8 +4,8 @@ use crate::dex::orca_whirlpools::{
     swap_quote_by_input_token, ExactInSwapQuote, Oracle, OracleFacade, TickArray, TickArrayFacade,
     TickFacade, TransferFee, Whirlpool, WhirlpoolFacade, TICK_ARRAY_SIZE,
 };
-use crate::global_cache::{get_account_data, get_clock, get_token2022_data};
-use crate::{QuoteResult, Quoter};
+use crate::dex::quoter::{QuoteResult, Quoter};
+use crate::dex::global_cache::{get_account_data, get_clock, get_token2022_data};
 use solana_sdk::pubkey::Pubkey;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};

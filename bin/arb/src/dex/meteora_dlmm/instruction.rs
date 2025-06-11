@@ -1,11 +1,11 @@
-use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
-use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::commons::get_bin_array_pubkeys_for_swap;
+use crate::dex::meteora_dlmm::interface::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::{METEORA_DLMM_EVENT_AUTHORITY_PROGRAM_ID, METEORA_DLMM_PROGRAM_ID};
+use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
 use crate::dex::DexType::MeteoraDLMM;
 use crate::dex::ATA_PROGRAM_ID;
-use crate::global_cache::{get_alt, get_token_program};
+use crate::dex::global_cache::{get_alt, get_token_program};
 use crate::metadata::{get_keypair, MintAtaPair};
-use crate::{InstructionMaterial, InstructionMaterialConverter};
 use anyhow::Result;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
@@ -20,15 +20,15 @@ impl InstructionMaterialConverter for MeteoraDLMMInstructionMaterialConverter {
         swap_direction: bool,
     ) -> Result<InstructionMaterial> {
         let wallet = get_keypair().pubkey();
-        let lb_pair = crate::global_cache::get_account_data::<LbPair>(pool_id).unwrap();
+        let lb_pair = crate::dex::global_cache::get_account_data::<LbPair>(pool_id).unwrap();
         let mut accounts = Vec::with_capacity(20);
         // 1.lb pair
         accounts.push(AccountMeta::new(pool_id.clone(), false));
         // 2.bitmap extension
         let bitmap_extension_key =
-            crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(pool_id);
+            crate::dex::meteora_dlmm::commons::derive_bin_array_bitmap_extension(pool_id);
         let bitmap_extension =
-            crate::global_cache::get_account_data::<BinArrayBitmapExtension>(&bitmap_extension_key);
+            crate::dex::global_cache::get_account_data::<BinArrayBitmapExtension>(&bitmap_extension_key);
         accounts.push(AccountMeta::new_readonly(
             bitmap_extension
                 .as_ref()
@@ -111,7 +111,7 @@ impl InstructionMaterialConverter for MeteoraDLMMInstructionMaterialConverter {
             get_alt(pool_id),
             vec![
                 MintAtaPair::new(lb_pair.token_x_mint, token_x_ata),
-                MintAtaPair::new(lb_pair.token_y_mint, token_y_ata)
+                MintAtaPair::new(lb_pair.token_y_mint, token_y_ata),
             ],
         ))
     }

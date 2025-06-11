@@ -1,10 +1,10 @@
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_amm::SERUM_PROGRAM_ID;
+use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
 use crate::dex::DexType::RaydiumAMM;
 use crate::dex::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
-use crate::global_cache::get_alt;
+use crate::dex::global_cache::get_alt;
 use crate::metadata::{get_keypair, MintAtaPair};
-use crate::{InstructionMaterial, InstructionMaterialConverter};
 use anyhow::Result;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
@@ -19,7 +19,7 @@ impl InstructionMaterialConverter for RaydiumAMMInstructionMaterialConverter {
         swap_direction: bool,
     ) -> Result<InstructionMaterial> {
         let wallet = get_keypair().pubkey();
-        let amm_info = crate::global_cache::get_account_data::<AmmInfo>(pool_id).unwrap();
+        let amm_info = crate::dex::global_cache::get_account_data::<AmmInfo>(pool_id).unwrap();
         let mut accounts = Vec::with_capacity(17);
         // 1.mint program
         accounts.push(AccountMeta::new_readonly(MINT_PROGRAM_ID, false));

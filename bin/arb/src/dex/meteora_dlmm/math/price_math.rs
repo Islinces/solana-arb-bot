@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::commons::constants::BASIS_POINT_MAX;
+use crate::dex::meteora_dlmm::commons::BASIS_POINT_MAX;
 use crate::dex::meteora_dlmm::math::u64x64_math::{pow, ONE, SCALE_OFFSET};
 use anyhow::{Context, Result};
 

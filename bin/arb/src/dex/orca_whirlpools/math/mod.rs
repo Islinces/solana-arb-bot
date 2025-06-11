@@ -3,7 +3,7 @@ mod tick;
 mod tick_array;
 mod token;
 
-pub use adaptive_fee::*;
-pub use tick::*;
-pub use tick_array::*;
-pub use token::*;
+pub(super) use adaptive_fee::*;
+pub(super) use tick::*;
+pub(super) use tick_array::*;
+pub(super) use token::*;

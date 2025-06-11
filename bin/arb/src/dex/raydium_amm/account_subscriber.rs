@@ -1,6 +1,6 @@
 use crate::dex::raydium_amm::RAYDIUM_AMM_PROGRAM_ID;
+use crate::dex::subscriber::{AccountSubscriber, SubscriptionAccounts};
 use crate::dex_data::DexJson;
-use crate::{AccountSubscriber, SubscriptionAccounts};
 
 pub struct RaydiumAMMAccountSubscriber;
 

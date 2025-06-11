@@ -1,7 +1,7 @@
 use crate::dex::AccountType;
-use crate::{retain_intervals_unsafe, DataSliceInitializer, SliceType};
 use anyhow::anyhow;
 use tokio::sync::OnceCell;
+use crate::dex::data_slice::{retain_intervals_unsafe, DataSliceInitializer, SliceType};
 
 // ========================= dynamic data 账户订阅的数据切片 =========================
 // amm pool

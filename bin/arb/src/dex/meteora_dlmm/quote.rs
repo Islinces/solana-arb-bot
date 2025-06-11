@@ -1,9 +1,9 @@
-use crate::dex::meteora_dlmm::commons::quote::{get_bin_array_pubkeys_for_swap, quote_exact_in};
-use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::commons::{get_bin_array_pubkeys_for_swap, quote_exact_in};
+use crate::dex::meteora_dlmm::interface::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
+use crate::dex::quoter::{QuoteResult, Quoter};
 use crate::dex::raydium_clmm::state::TickArrayState;
-use crate::global_cache::{get_account_data, get_token2022_data};
-use crate::{QuoteResult, Quoter};
+use crate::dex::global_cache::{get_account_data, get_token2022_data};
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::array;
@@ -26,7 +26,7 @@ impl Quoter for MeteoraDLMMQuoter {
                     amount_in,
                     swap_direction,
                     bin_arrays,
-                    crate::global_cache::get_clock()?,
+                    crate::dex::global_cache::get_clock()?,
                     token_transfer_configs[0],
                     token_transfer_configs[1],
                 ) {
@@ -45,7 +45,7 @@ impl Quoter for MeteoraDLMMQuoter {
 
 fn get_bitmap_extension(pool_id: &Pubkey) -> Option<BinArrayBitmapExtension> {
     get_account_data::<BinArrayBitmapExtension>(
-        &crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(pool_id),
+        &crate::dex::meteora_dlmm::commons::derive_bin_array_bitmap_extension(pool_id),
     )
 }
 
@@ -75,7 +75,7 @@ fn get_bin_arrays(
             let bin_array_map = keys
                 .into_iter()
                 .filter_map(|key| {
-                    let bin_array = crate::global_cache::get_account_data::<BinArray>(&key);
+                    let bin_array = crate::dex::global_cache::get_account_data::<BinArray>(&key);
                     if let Some(bin_array) = bin_array {
                         Some(bin_array)
                     } else {

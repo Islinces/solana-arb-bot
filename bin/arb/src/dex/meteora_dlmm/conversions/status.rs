@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::interface::typedefs::PairStatus;
+use crate::dex::meteora_dlmm::interface::PairStatus;
 use std::ops::Deref;
 
 pub struct PairStatusWrapper(PairStatus);

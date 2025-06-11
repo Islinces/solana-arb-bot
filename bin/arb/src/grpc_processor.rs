@@ -1,11 +1,7 @@
-use crate::dex::byte_utils::read_u64;
-use crate::dex::pump_fun::state::Pool;
-use crate::dex::raydium_amm::state::AmmInfo;
-use crate::dex::raydium_clmm::state::{PoolState, TickArrayBitmapExtension, TickArrayState};
+use crate::dex::{get_account_data, is_follow_vault, update_cache};
+use crate::dex::{slice_data_auto_get_dex_type, SliceType};
 use crate::dex::{DexType, FromCache};
-use crate::global_cache::get_account_data;
 use crate::grpc_subscribe::{GrpcMessage, GrpcTransactionMsg};
-use crate::SliceType;
 use ahash::RandomState;
 use anyhow::anyhow;
 use borsh::BorshDeserialize;
@@ -58,7 +54,6 @@ impl MessageProcessor {
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
                                 match cached_message_sender.try_send(transaction_msg) {
-                                    Ok(_) => {}
                                     Err(TrySendError::Full(msg)) => {
                                         cached_msg_drop_receiver.try_recv().ok();
                                         info!("Processor_{index} Channel丢弃消息");
@@ -81,6 +76,7 @@ impl MessageProcessor {
                                         error!("Processor_{index} 发送消息到Arb失败，原因：所有Arb关闭");
                                         break;
                                     }
+                                    _=>{}
                                 }
                             }
                         },
@@ -97,16 +93,15 @@ impl MessageProcessor {
     fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, data: Vec<u8>) -> anyhow::Result<()> {
         let account_key = Pubkey::try_from(account_key)
             .map_or(Err(anyhow!("转换account_key失败")), |a| Ok(a))?;
-        let sliced_data = crate::core::slice_data_auto_get_dex_type(
-            &account_key,
-            &Pubkey::try_from(owner).map_or(Err(anyhow!("转换owner失败")), |a| Ok(a))?,
-            data,
-            SliceType::Subscribed,
-        );
-        match sliced_data {
-            Ok(sliced_data) => crate::global_cache::update_cache(account_key, sliced_data),
-            Err(e) => Err(anyhow!("账户数据切片失败，原因：{}", e)),
-        }
+        update_cache(
+            account_key,
+            slice_data_auto_get_dex_type(
+                &account_key,
+                &Pubkey::try_from(owner).map_or(Err(anyhow!("转换owner失败")), |a| Ok(a))?,
+                data,
+                SliceType::Subscribed,
+            )?,
+        )
     }
 }
 
@@ -127,16 +122,15 @@ impl BalanceChangeInfo {
                     None
                 } else {
                     let vault_account = &account_keys[account_index];
-                    match crate::account_relation::is_follow_vault(vault_account) {
-                        Some((pool_id, dex_type)) => Some(Self {
+                    is_follow_vault(vault_account).map_or(None, |(pool_id, dex_type)| {
+                        Some(Self {
                             dex_type,
                             pool_id,
                             account_index,
                             vault_account: vault_account.clone(),
                             change_value: post_amount.ui_amount.sub(pre_amount.ui_amount),
-                        }),
-                        None => None,
-                    }
+                        })
+                    })
                 }
             }
             _ => None,

@@ -1,4 +1,4 @@
-use crate::dex::byte_utils::read_from;
+use crate::dex::utils::read_from;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 #[repr(C)]

@@ -1,14 +1,17 @@
 use crate::arb::Arb;
+use crate::dex::init_snapshot;
+use crate::dex::{get_global_cache, init_global_cache, GlobalCache};
+use crate::dex::{init_account_relations, init_data_slice_config};
 use crate::dex_data::DexJson;
-use crate::executor::jito::JitoExecutor;
 use crate::executor::Executor;
-use crate::global_cache::{get_global_cache, init_global_cache, GlobalCache};
+use crate::executor::JitoExecutor;
 use crate::graph::HopPathTypes;
 use crate::graph::HopPathTypes::TwoHop;
 use crate::grpc_processor::MessageProcessor;
 use crate::grpc_subscribe::{GrpcMessage, GrpcSubscribe, GrpcTransactionMsg};
 use crate::keypair::KeypairVault;
-use crate::TwoHopPath;
+use crate::metadata::init_metadata;
+use crate::{init_graph, TwoHopPath};
 use anyhow::anyhow;
 use clap::Parser;
 use parking_lot::RwLock;
@@ -93,7 +96,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     // 2.初始化snapshot，返回有效的DexJson(所有数据都合法的)
     // 3.初始化池子与DexType关系、金库与池子&DexType的关系，用于解析GRPC推送数据使用
     // 4.构建边
-    let dex_data = init_start_data(
+    let dex_data = init_program(
         keypair_path,
         dex_json_path,
         &arb_mint,
@@ -148,7 +151,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn init_start_data(
+pub async fn init_program(
     keypair_path: String,
     dex_json_path: String,
     arb_mint: &Pubkey,
@@ -161,18 +164,17 @@ pub async fn init_start_data(
     // 2.加载DexJson
     let mut dex_data = crate::dex_data::load_dex_json(dex_json_path, follow_mints)?;
     // 3.各个Dex的Account切片规则(需要订阅的，不需要订阅的)
-    crate::core::init_data_slice_config()?;
+    init_data_slice_config()?;
     // 4.初始化全局缓存，未填充数据
     init_global_cache();
     // 5.初始化Snapshot，填充全局缓存，移除无效DexJson
-    crate::core::init_snapshot(&mut dex_data, rpc_client.clone(), get_global_cache()).await?;
+    init_snapshot(&mut dex_data, rpc_client.clone(), get_global_cache()).await?;
     // 初始化钱包关联的ATA账户余额
     // 初始化blockhash
-    crate::metadata::init_metadata(keypair, arb_mint, dex_data.as_slice(), rpc_client.clone())
-        .await?;
+    init_metadata(keypair, arb_mint, dex_data.as_slice(), rpc_client.clone()).await?;
     // 初始化account之间的关系，用于解析GRPC推送数据
-    crate::account_relation::init(dex_data.as_slice())?;
+    init_account_relations(dex_data.as_slice())?;
     // 构建图
-    crate::graph::init_graph(dex_data.as_slice(), follow_mints, hop_paths)?;
+    init_graph(dex_data.as_slice(), follow_mints, hop_paths)?;
     Ok(dex_data)
 }

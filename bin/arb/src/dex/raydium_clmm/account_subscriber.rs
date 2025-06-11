@@ -1,7 +1,7 @@
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID;
+use crate::dex::subscriber::{AccountSubscriber, SubscriptionAccounts};
 use crate::dex_data::DexJson;
 use crate::grpc_subscribe::POOL_TICK_ARRAY_BITMAP_SEED;
-use crate::{AccountSubscriber, SubscriptionAccounts};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;

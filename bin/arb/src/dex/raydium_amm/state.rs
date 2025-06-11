@@ -1,6 +1,6 @@
-use crate::dex::byte_utils::{read_pubkey, read_u64};
+use crate::dex::utils::read_from;
+use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::FromCache;
-use crate::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;
 
@@ -37,21 +37,21 @@ impl FromCache for AmmInfo {
         let pool_dynamic_data = pool_dynamic_data_ref.value().as_slice();
 
         unsafe {
-            let swap_fee_numerator = read_u64(&pool_static_data[0..8]);
-            let swap_fee_denominator = read_u64(&pool_static_data[8..16]);
-            let coin_vault = read_pubkey(&pool_static_data[16..48]);
-            let pc_vault = read_pubkey(&pool_static_data[48..80]);
-            let coin_vault_mint = read_pubkey(&pool_static_data[80..112]);
-            let pc_vault_mint = read_pubkey(&pool_static_data[112..144]);
+            let swap_fee_numerator = read_from::<u64>(&pool_static_data[0..8]);
+            let swap_fee_denominator = read_from::<u64>(&pool_static_data[8..16]);
+            let coin_vault = read_from::<Pubkey>(&pool_static_data[16..48]);
+            let pc_vault = read_from::<Pubkey>(&pool_static_data[48..80]);
+            let coin_vault_mint = read_from::<Pubkey>(&pool_static_data[80..112]);
+            let pc_vault_mint = read_from::<Pubkey>(&pool_static_data[112..144]);
 
-            let need_take_pnl_coin = read_u64(&pool_dynamic_data[0..8]);
-            let need_take_pnl_pc = read_u64(&pool_dynamic_data[8..16]);
+            let need_take_pnl_coin = read_from::<u64>(&pool_dynamic_data[0..8]);
+            let need_take_pnl_pc = read_from::<u64>(&pool_dynamic_data[8..16]);
 
             let coin_vault_amount_bytes = dynamic_cache.get(&coin_vault)?;
             let pc_vault_amount_bytes = dynamic_cache.get(&pc_vault)?;
 
-            let coin_vault_amount = read_u64(&coin_vault_amount_bytes[0..8]);
-            let pc_vault_amount = read_u64(&pc_vault_amount_bytes[0..8]);
+            let coin_vault_amount = read_from::<u64>(&coin_vault_amount_bytes[0..8]);
+            let pc_vault_amount = read_from::<u64>(&pc_vault_amount_bytes[0..8]);
 
             Some(Self {
                 swap_fee_numerator,

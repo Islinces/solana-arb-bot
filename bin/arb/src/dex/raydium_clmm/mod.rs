@@ -20,12 +20,11 @@ pub use account_subscriber::*;
 pub use data_slice::*;
 pub use snapshot_loader::*;
 
-pub(super) const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-pub const RAYDIUM_CLMM_MEMO_PROGRAM_ID: Pubkey =
-    pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+pub(super) const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
+    pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
-pub(crate) const Q64: u128 = (u64::MAX as u128) + 1; // 2^64
-pub(crate) const RESOLUTION: u8 = 64;
+const Q64: u128 = (u64::MAX as u128) + 1; // 2^64
+const RESOLUTION: u8 = 64;
 
 #[macro_export]
 macro_rules! require_gt {

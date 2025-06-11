@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::interface::typedefs::TokenProgramFlags;
+use crate::dex::meteora_dlmm::interface::TokenProgramFlags;
 use std::ops::Deref;
 
 pub struct TokenProgramFlagWrapper(TokenProgramFlags);

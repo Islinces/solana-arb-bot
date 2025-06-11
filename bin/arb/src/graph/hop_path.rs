@@ -1,11 +1,10 @@
-use crate::core::InstructionMaterialConverter;
-use crate::core::Quoter;
+use crate::dex::InstructionMaterialConverter;
+use crate::dex::Quoter;
 use crate::dex::{get_dex_type_with_program_id, DexType};
+use crate::dex::{get_instruction_builder, InstructionMaterial};
+use crate::dex::{get_quoter_type, QuoteResult};
 use crate::dex_data::DexJson;
-use crate::{
-    get_instruction_builder, get_quoter_type, InstructionMaterial, QuoteResult, TwoHopPath,
-    TwoHopPathSearchResult,
-};
+use crate::{TwoHopPath, TwoHopPathSearchResult};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;

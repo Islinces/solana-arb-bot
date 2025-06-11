@@ -1,10 +1,10 @@
+use crate::dex::quoter::{QuoteResult, Quoter};
 use crate::dex::raydium_clmm::state::{
     pda_bit_map_extension_key, AmmConfig, PoolState, TickArrayBitmapExtension, TickArrayState,
 };
 use crate::dex::raydium_clmm::utils;
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
-use crate::global_cache::get_account_data;
-use crate::{QuoteResult, Quoter};
+use crate::dex::global_cache::get_account_data;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 use tracing::error;
@@ -38,11 +38,11 @@ impl Quoter for RaydiumCLMMQuoter {
 }
 
 fn get_amm_config(amm_config_key: &Pubkey) -> Option<AmmConfig> {
-    crate::global_cache::get_account_data::<AmmConfig>(amm_config_key)
+    crate::dex::global_cache::get_account_data::<AmmConfig>(amm_config_key)
 }
 
 fn get_bitmap_extension(pool_id: &Pubkey) -> Option<TickArrayBitmapExtension> {
-    crate::global_cache::get_account_data::<TickArrayBitmapExtension>(&pda_bit_map_extension_key(
+    crate::dex::global_cache::get_account_data::<TickArrayBitmapExtension>(&pda_bit_map_extension_key(
         pool_id,
     ))
 }
@@ -68,7 +68,7 @@ fn get_tick_arrays(
     let deque = tick_array_keys?
         .into_iter()
         .filter_map(|key| {
-            let account_data = crate::global_cache::get_account_data::<TickArrayState>(&key);
+            let account_data = crate::dex::global_cache::get_account_data::<TickArrayState>(&key);
             // info!("key : {:?}\n{:#?}", key, account_data);
             account_data
         })

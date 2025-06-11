@@ -2,6 +2,9 @@
 #![allow(clippy::ptr_offset_with_cast)]
 #![allow(clippy::unknown_clippy_lints)]
 #![allow(clippy::manual_range_contains)]
+
+use std::ptr;
+
 pub trait CheckedCeilDiv: Sized {
     /// Perform ceiling division
     fn checked_ceil_div(&self, rhs: Self) -> Option<(Self, Self)>;
@@ -36,4 +39,9 @@ impl CheckedCeilDiv for u128 {
         }
         Some((quotient, rhs))
     }
+}
+
+#[inline(always)]
+pub unsafe fn read_from<T>(bytes: &[u8]) -> T {
+    ptr::read_unaligned(bytes.as_ptr() as *const T)
 }

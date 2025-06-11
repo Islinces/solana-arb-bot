@@ -66,7 +66,7 @@ impl Arb {
             let arb_mint_bps_numerator = self.arb_mint_bps_numerator.clone();
             let arb_mint_bps_denominator = self.arb_mint_bps_denominator.clone();
             let mut receiver = cached_message_receiver.clone();
-            let hop_paths = self.hop_paths.clone();
+            let best_hop_path_searcher = self.hop_paths.clone();
             join_set.spawn(async move {
                 loop {
                     match receiver.recv_async().await {
@@ -94,7 +94,7 @@ impl Arb {
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
                                 if let Some(best_path) = Self::trigger_quote(
-                                    hop_paths.clone(),
+                                    best_hop_path_searcher.clone(),
                                     arb_mint.clone(),
                                     arb_amount_in,
                                     arb_min_profit,

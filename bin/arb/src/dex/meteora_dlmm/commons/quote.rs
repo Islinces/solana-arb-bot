@@ -1,11 +1,11 @@
 use crate::dex::meteora_dlmm::commons::pda::derive_bin_array_pda;
 use crate::dex::meteora_dlmm::commons::token_2022::calculate_transfer_fee_excluded_amount;
 use crate::dex::meteora_dlmm::commons::typedefs::SwapResult;
-use crate::dex::meteora_dlmm::extensions::bin::BinExtension;
-use crate::dex::meteora_dlmm::extensions::bin_array::BinArrayExtension;
-use crate::dex::meteora_dlmm::extensions::bin_array_bitmap::BinArrayBitmapExtExtension;
-use crate::dex::meteora_dlmm::interface::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
-use crate::dex::meteora_dlmm::interface::typedefs::{ActivationType, PairStatus, PairType};
+use crate::dex::meteora_dlmm::extensions::BinExtension;
+use crate::dex::meteora_dlmm::extensions::BinArrayExtension;
+use crate::dex::meteora_dlmm::extensions::BinArrayBitmapExtExtension;
+use crate::dex::meteora_dlmm::interface::{BinArray, BinArrayBitmapExtension, LbPair};
+use crate::dex::meteora_dlmm::interface::{ActivationType, PairStatus, PairType};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use anyhow::Result;
 use anyhow::{ensure, Context};

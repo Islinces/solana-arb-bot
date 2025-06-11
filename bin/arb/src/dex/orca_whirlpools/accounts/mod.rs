@@ -3,5 +3,5 @@ mod tick_array;
 mod whirlpool;
 
 pub use oracle::*;
-pub use tick_array::*;
-pub use whirlpool::*;
+pub(super) use tick_array::*;
+pub(super) use whirlpool::*;

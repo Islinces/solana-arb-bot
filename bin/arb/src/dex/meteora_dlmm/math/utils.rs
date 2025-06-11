@@ -1,4 +1,4 @@
-use crate::dex::meteora_dlmm::interface::typedefs::Rounding;
+use crate::dex::meteora_dlmm::interface::Rounding;
 use crate::dex::meteora_dlmm::math::u128x128_math::{mul_div, mul_shr, shl_div};
 use anyhow::{Context, Result};
 use num_traits::FromPrimitive;

@@ -1,6 +1,6 @@
 use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
+use crate::dex::subscriber::{AccountSubscriber, SubscriptionAccounts};
 use crate::dex_data::DexJson;
-use crate::{AccountSubscriber, SubscriptionAccounts};
 use solana_sdk::clock::Clock;
 use solana_sdk::sysvar::SysvarId;
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ impl AccountSubscriber for MeteoraDLMMAccountSubscriber {
             pool_keys.push(json.pool);
             // BinArrayBitmapExtension
             bitmap_extension_keys.push(
-                crate::dex::meteora_dlmm::commons::pda::derive_bin_array_bitmap_extension(
+                crate::dex::meteora_dlmm::commons::derive_bin_array_bitmap_extension(
                     &json.pool,
                 ),
             );

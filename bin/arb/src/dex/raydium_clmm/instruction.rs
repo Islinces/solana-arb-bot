@@ -2,13 +2,12 @@ use crate::dex::raydium_clmm::state::{
     pda_bit_map_extension_key, PoolState, TickArrayBitmapExtension,
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
+use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
 use crate::dex::DexType::RaydiumCLMM;
 use crate::dex::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
-use crate::global_cache::get_alt;
+use crate::dex::global_cache::get_alt;
 use crate::metadata::{get_keypair, MintAtaPair};
-use crate::{InstructionMaterial, InstructionMaterialConverter};
 use anyhow::{anyhow, Result};
-use smallvec::smallvec;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::Signer;
@@ -22,7 +21,7 @@ impl InstructionMaterialConverter for RaydiumCLMMInstructionMaterialConverter {
         swap_direction: bool,
     ) -> Result<InstructionMaterial> {
         let wallet = get_keypair().pubkey();
-        let pool_state = crate::global_cache::get_account_data::<PoolState>(pool_id)
+        let pool_state = crate::dex::global_cache::get_account_data::<PoolState>(pool_id)
             .ok_or(anyhow!("缓存中找不到池子[{}]数据", pool_id))?;
         let mut accounts = Vec::with_capacity(11);
         // 1. wallet
@@ -76,7 +75,7 @@ impl InstructionMaterialConverter for RaydiumCLMMInstructionMaterialConverter {
             2,
             pool_id,
             &pool_state,
-            &crate::global_cache::get_account_data::<TickArrayBitmapExtension>(
+            &crate::dex::global_cache::get_account_data::<TickArrayBitmapExtension>(
                 &bit_map_extension_key,
             ),
             swap_direction,
@@ -102,7 +101,7 @@ impl InstructionMaterialConverter for RaydiumCLMMInstructionMaterialConverter {
             get_alt(pool_id),
             vec![
                 MintAtaPair::new(pool_state.token_mint_0, token_mint_0_ata),
-                MintAtaPair::new(pool_state.token_mint_1, token_mint_1_ata)
+                MintAtaPair::new(pool_state.token_mint_1, token_mint_1_ata),
             ],
         ))
     }

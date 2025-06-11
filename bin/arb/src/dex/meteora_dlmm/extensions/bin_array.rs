@@ -1,7 +1,7 @@
-use crate::dex::meteora_dlmm::commons::constants::MAX_BIN_PER_ARRAY;
-use crate::dex::meteora_dlmm::commons::pda::derive_bin_array_pda;
-use crate::dex::meteora_dlmm::interface::accounts::BinArray;
-use crate::dex::meteora_dlmm::interface::typedefs::Bin;
+use crate::dex::meteora_dlmm::commons::MAX_BIN_PER_ARRAY;
+use crate::dex::meteora_dlmm::commons::derive_bin_array_pda;
+use crate::dex::meteora_dlmm::interface::BinArray;
+use crate::dex::meteora_dlmm::interface::Bin;
 use anyhow::{ensure, Context, Result};
 use num_integer::Integer;
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};

@@ -1,5 +1,5 @@
-use crate::dex::meteora_dlmm::commons::pda;
-use crate::dex::meteora_dlmm::interface;
+use crate::dex::meteora_dlmm::derive_bin_array_bitmap_extension;
+use crate::dex::orca_whirlpools::get_oracle_address;
 use crate::dex::raydium_clmm::state::POOL_TICK_ARRAY_BITMAP_SEED;
 use crate::dex::{get_dex_type_with_program_id, AccountType, DexType};
 use crate::dex_data::DexJson;
@@ -44,15 +44,10 @@ impl AccountRelation {
                         json.pool,
                     );
                 } else if DexType::MeteoraDLMM == dex_type {
-                    bin_array_extension_bitmap.insert(
-                        pda::derive_bin_array_bitmap_extension(&json.pool),
-                        json.pool,
-                    );
+                    bin_array_extension_bitmap
+                        .insert(derive_bin_array_bitmap_extension(&json.pool), json.pool);
                 } else if DexType::OrcaWhirl == dex_type {
-                    oracle.insert(
-                        crate::dex::orca_whirlpools::get_oracle_address(&json.pool)?,
-                        json.pool,
-                    );
+                    oracle.insert(get_oracle_address(&json.pool)?, json.pool);
                 }
             }
         }
@@ -67,7 +62,7 @@ impl AccountRelation {
     }
 }
 
-pub(crate) fn init(dex_data: &[DexJson]) -> anyhow::Result<()> {
+pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()> {
     ACCOUNT_RELATION_CACHE
         .set(Arc::new(AccountRelation::new(dex_data)?))
         .map_or(Err(anyhow!("初始化AccountRelation失败")), |_| Ok(()))

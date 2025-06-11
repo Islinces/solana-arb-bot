@@ -1,15 +1,13 @@
-use crate::dex::meteora_dlmm::commons::quote::get_bin_array_pubkeys_for_swap;
-use crate::dex::meteora_dlmm::interface::accounts::{BinArrayBitmapExtension, LbPair};
-use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
+use crate::dex::data_slice::{get_data_slice_size, SliceType};
 use crate::dex::raydium_clmm::state::{
     pda_bit_map_extension_key, PoolState, TickArrayBitmapExtension, TickArrayState,
 };
 use crate::dex::raydium_clmm::utils::load_cur_and_next_specify_count_tick_array_key;
 use crate::dex::raydium_clmm::RAYDIUM_CLMM_PROGRAM_ID;
+use crate::dex::snapshot::{AccountDataSlice, SnapshotInitializer};
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
-use crate::global_cache::get_account_data;
-use crate::{AccountDataSlice, SliceType, SnapshotInitializer};
+use crate::dex::global_cache::get_account_data;
 use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -186,7 +184,7 @@ impl RaydiumCLMMSnapshotInitializer {
         all_amm_config_account_data.retain(|account| {
             if account.static_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::core::get_data_slice_size(
+                    != get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::AmmConfig,
                         SliceType::Unsubscribed,
@@ -238,7 +236,7 @@ impl RaydiumCLMMSnapshotInitializer {
         all_bitmap_extension_account_data.retain(|account| {
             if account.dynamic_slice_data.as_ref().is_none_or(|data| {
                 data.len()
-                    != crate::core::get_data_slice_size(
+                    != get_data_slice_size(
                         DexType::RaydiumCLMM,
                         AccountType::TickArrayBitmap,
                         SliceType::Subscribed,
