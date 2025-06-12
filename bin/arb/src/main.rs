@@ -21,14 +21,22 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let file_appender = RollingFileAppender::builder()
-    //     .filename_prefix("app")
-    //     .filename_suffix("log")
-    //     .rotation(Rotation::DAILY)
-    //     .build("./logs")
-    //     .expect("构建file_appender失败");
-    // let (non_blocking_writer, _guard) = non_blocking(file_appender);
-    let (non_blocking_writer, _guard) = non_blocking(std::io::stdout());
+    let (non_blocking_writer, _guard) = {
+        #[cfg(feature = "log_file")]
+        {
+            let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+                .filename_prefix("app")
+                .filename_suffix("log")
+                .rotation(tracing_appender::rolling::Rotation::DAILY)
+                .build("./logs")
+                .expect("构建 file_appender 失败");
+            non_blocking(file_appender)
+        }
+        #[cfg(not(feature = "log_file"))]
+        {
+            non_blocking(std::io::stdout())
+        }
+    };
     tracing_subscriber::registry()
         .with(
             fmt::layer()

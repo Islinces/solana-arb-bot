@@ -1,6 +1,4 @@
-use crate::dex::orca_whirlpools::accounts::{
-    AdaptiveFeeInfo, OracleFacade, TickArrays, TickFacade, WhirlpoolFacade,
-};
+use crate::dex::oracle::{AdaptiveFeeInfo, OracleFacade};
 use crate::dex::orca_whirlpools::error::{
     CoreError, AMOUNT_EXCEEDS_MAX_U64, ARITHMETIC_OVERFLOW, INVALID_ADAPTIVE_FEE_INFO,
     INVALID_SQRT_PRICE_LIMIT_DIRECTION, SQRT_PRICE_LIMIT_OUT_OF_BOUNDS, ZERO_TRADABLE_AMOUNT,
@@ -11,6 +9,8 @@ use crate::dex::orca_whirlpools::math::{
     try_get_next_sqrt_price_from_b, try_reverse_apply_swap_fee,
     FeeRateManager, TickArraySequence, TransferFee,
 };
+use crate::dex::tick_array::{TickArrays, TickFacade};
+use crate::dex::whirlpool::WhirlpoolFacade;
 
 pub const FEE_RATE_DENOMINATOR: u32 = 1_000_000;
 pub const MIN_SQRT_PRICE: u128 = 4295048016;

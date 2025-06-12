@@ -1,5 +1,5 @@
 use crate::dex::meteora_dlmm::commons::{BIN_ARRAY_BITMAP_SIZE, EXTENSION_BINARRAY_BITMAP_SIZE};
-use crate::dex::meteora_dlmm::interface::BinArrayBitmapExtension;
+use crate::dex::BinArrayBitmapExtension;
 use anyhow::{anyhow, Context, Result};
 use ruint::aliases::U512;
 
@@ -8,7 +8,7 @@ pub trait BinArrayBitmapExtExtension {
     fn get_bitmap_offset(bin_array_index: i32) -> Result<usize>;
     fn bin_array_offset_in_bitmap(bin_array_index: i32) -> Result<usize>;
     fn to_bin_array_index(offset: usize, bin_array_offset: usize, is_positive: bool)
-                          -> Result<i32>;
+        -> Result<i32>;
 
     fn get_bitmap(&self, bin_array_index: i32) -> Result<(usize, [u64; 8])>;
     fn bit(&self, bin_array_index: i32) -> Result<bool>;

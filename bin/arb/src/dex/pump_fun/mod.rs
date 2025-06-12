@@ -10,6 +10,7 @@ pub use account_subscriber::*;
 pub use data_slice::*;
 pub(super) use relation::*;
 pub use snapshot_loader::*;
+pub use state::*;
 
 use rand::Rng;
 use solana_sdk::pubkey;

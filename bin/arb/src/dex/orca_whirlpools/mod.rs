@@ -13,7 +13,6 @@ mod snapshot_loader;
 mod swap;
 
 pub(super) use account_subscriber::*;
-pub(super) use accounts::*;
 pub(super) use data_slice::*;
 pub(super) use instruction::*;
 pub use math::*;

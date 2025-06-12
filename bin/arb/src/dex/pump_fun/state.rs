@@ -1,5 +1,5 @@
-use crate::dex::utils::read_from;
 use crate::dex::global_cache::{DynamicCache, StaticCache};
+use crate::dex::utils::read_from;
 use crate::dex::{DexType, FromCache};
 use parking_lot::RwLockReadGuard;
 use solana_sdk::pubkey::Pubkey;

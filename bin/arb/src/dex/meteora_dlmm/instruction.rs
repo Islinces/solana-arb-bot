@@ -1,9 +1,8 @@
 use crate::dex::meteora_dlmm::commons::get_bin_array_pubkeys_for_swap;
-use crate::dex::meteora_dlmm::interface::{BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::{METEORA_DLMM_EVENT_AUTHORITY_PROGRAM_ID, METEORA_DLMM_PROGRAM_ID};
 use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
 use crate::dex::DexType::MeteoraDLMM;
-use crate::dex::ATA_PROGRAM_ID;
+use crate::dex::{BinArrayBitmapExtension, LbPair, ATA_PROGRAM_ID};
 use crate::dex::global_cache::{get_alt, get_token_program};
 use crate::metadata::{get_keypair, MintAtaPair};
 use anyhow::Result;

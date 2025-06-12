@@ -1,10 +1,11 @@
 use crate::dex::utils::read_from;
-use crate::dex::orca_whirlpools::{get_tick_array_start_tick_index, Whirlpool, WHIRLPOOL_ID};
+use crate::dex::orca_whirlpools::{get_tick_array_start_tick_index, WHIRLPOOL_ID};
 use crate::dex::FromCache;
 use crate::dex::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use crate::dex::whirlpool::Whirlpool;
 
 /// The number of ticks in a tick array.
 pub const TICK_ARRAY_SIZE: usize = 88;

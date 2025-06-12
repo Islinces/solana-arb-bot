@@ -8,6 +8,8 @@ build = "build.rs"
 
 [features]
 print_slice_data = []
+log_file = []
+print_data_after_update = []
 
 [lib]
 doctest = false

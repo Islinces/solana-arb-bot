@@ -2,13 +2,12 @@ use super::{
     get_initializable_tick_index, get_next_initializable_tick_index,
     get_prev_initializable_tick_index,
 };
-use crate::dex::orca_whirlpools::accounts::{
-    TickArrayFacade, TickFacade, MAX_TICK_INDEX, MIN_TICK_INDEX, TICK_ARRAY_SIZE,
-};
 use crate::dex::orca_whirlpools::error::{
     CoreError, INVALID_TICK_ARRAY_SEQUENCE, INVALID_TICK_INDEX, TICK_ARRAY_NOT_EVENLY_SPACED,
     TICK_INDEX_OUT_OF_BOUNDS, TICK_SEQUENCE_EMPTY,
 };
+use crate::dex::tick_array::{TickArrayFacade, TickFacade, MAX_TICK_INDEX, MIN_TICK_INDEX};
+use crate::dex::TICK_ARRAY_SIZE;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TickArraySequence<const SIZE: usize> {

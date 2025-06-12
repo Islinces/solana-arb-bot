@@ -1,9 +1,5 @@
 use crate::dex::data_slice::{get_data_slice_size, SliceType};
 use crate::dex::global_cache::get_account_data;
-use crate::dex::orca_whirlpools::{
-    get_oracle_address, get_tick_array_address, get_tick_array_keys,
-    get_tick_array_start_tick_index, Oracle, TickArray, Whirlpool, WHIRLPOOL_ID,
-};
 use crate::dex::raydium_clmm::state::pda_bit_map_extension_key;
 use crate::dex::snapshot::{AccountDataSlice, SnapshotInitializer};
 use crate::dex::{AccountType, DexType};
@@ -15,6 +11,11 @@ use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use tracing::info;
+use crate::dex::oracle::{get_oracle_address, Oracle};
+use crate::dex::orca_whirlpools::math::get_tick_array_start_tick_index;
+use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
+use crate::dex::tick_array::{get_tick_array_address, get_tick_array_keys, TickArray};
+use crate::dex::whirlpool::Whirlpool;
 
 pub struct OrcaWhirlpoolsSnapshotInitializer;
 

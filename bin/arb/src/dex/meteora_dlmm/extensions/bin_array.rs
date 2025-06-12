@@ -1,10 +1,10 @@
 use crate::dex::meteora_dlmm::commons::MAX_BIN_PER_ARRAY;
 use crate::dex::meteora_dlmm::commons::derive_bin_array_pda;
-use crate::dex::meteora_dlmm::interface::BinArray;
 use crate::dex::meteora_dlmm::interface::Bin;
 use anyhow::{ensure, Context, Result};
 use num_integer::Integer;
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+use crate::dex::BinArray;
 
 pub trait BinArrayExtension {
     fn is_bin_id_within_range(&self, bin_id: i32) -> Result<bool>;

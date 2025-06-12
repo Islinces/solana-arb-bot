@@ -1,8 +1,6 @@
-use crate::dex::orca_whirlpools::accounts::{
-    FULL_RANGE_ONLY_TICK_SPACING_THRESHOLD, MAX_TICK_INDEX, MIN_TICK_INDEX, TICK_ARRAY_SIZE,
-};
 use crate::dex::orca_whirlpools::error::{CoreError, TICK_INDEX_NOT_IN_ARRAY};
 use ethnum::U256;
+use crate::dex::tick_array::{FULL_RANGE_ONLY_TICK_SPACING_THRESHOLD, MAX_TICK_INDEX, MIN_TICK_INDEX, TICK_ARRAY_SIZE};
 
 const LOG_B_2_X32: i128 = 59543866431248i128;
 const BIT_PRECISION: u32 = 14;

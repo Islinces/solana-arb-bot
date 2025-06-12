@@ -10,6 +10,7 @@ use yellowstone_grpc_proto::geyser::{
     subscribe_request_filter_accounts_filter_memcmp, SubscribeRequestFilterAccounts,
     SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
 };
+use crate::dex::oracle::get_oracle_address;
 
 pub struct OrcaWhirlAccountSubscriber;
 
@@ -30,7 +31,7 @@ impl AccountSubscriber for OrcaWhirlAccountSubscriber {
             orca_whirl_account_keys.push(json.pool);
             // oracle
             orca_whirl_oracle_account_keys
-                .push(crate::dex::orca_whirlpools::get_oracle_address(&json.pool).unwrap());
+                .push(get_oracle_address(&json.pool).unwrap());
         }
         // orca whirl tick array
         let mut tick_array_sub_accounts = HashMap::with_capacity(dex_json.len());

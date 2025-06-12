@@ -1,15 +1,15 @@
 use crate::dex::global_cache::{get_account_data, get_clock, get_token2022_data};
 use crate::dex::orca_whirlpools::error::CoreError;
-use crate::dex::orca_whirlpools::{
-    get_oracle_address, get_tick_array_address, get_tick_array_start_tick_index,
-    swap_quote_by_input_token, ExactInSwapQuote, Oracle, OracleFacade, TickArray, TickArrayFacade,
-    TickFacade, TransferFee, Whirlpool, WhirlpoolFacade, TICK_ARRAY_SIZE,
-};
 use crate::dex::quoter::{QuoteResult, Quoter};
 use solana_sdk::pubkey::Pubkey;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
+use crate::dex::oracle::{get_oracle_address, Oracle, OracleFacade};
+use crate::dex::orca_whirlpools::math::{get_tick_array_start_tick_index, TransferFee};
+use crate::dex::orca_whirlpools::swap_quote_by_input_token;
+use crate::dex::tick_array::{get_tick_array_address, TickArray, TickArrayFacade, TickFacade, TICK_ARRAY_SIZE};
+use crate::dex::whirlpool::{Whirlpool, WhirlpoolFacade};
 
 #[derive(Debug)]
 pub struct OrcaWhirlQuoter;

@@ -1,11 +1,11 @@
 use super::{sqrt_price_to_tick_index, tick_index_to_sqrt_price};
-use crate::dex::orca_whirlpools::accounts::{
+use crate::dex::oracle::{
     AdaptiveFeeConstantsFacade, AdaptiveFeeInfo, AdaptiveFeeVariablesFacade,
     ADAPTIVE_FEE_CONTROL_FACTOR_DENOMINATOR, FEE_RATE_HARD_LIMIT, MAX_REFERENCE_AGE,
-    MAX_TICK_INDEX, MIN_TICK_INDEX, REDUCTION_FACTOR_DENOMINATOR,
-    VOLATILITY_ACCUMULATOR_SCALE_FACTOR,
+    REDUCTION_FACTOR_DENOMINATOR, VOLATILITY_ACCUMULATOR_SCALE_FACTOR,
 };
 use crate::dex::orca_whirlpools::error::{CoreError, INVALID_TIMESTAMP};
+use crate::dex::tick_array::{MAX_TICK_INDEX, MIN_TICK_INDEX};
 use ethnum::U256;
 
 #[derive(Debug)]

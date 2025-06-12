@@ -1,5 +1,4 @@
 use crate::dex::meteora_dlmm::commons::{get_bin_array_pubkeys_for_swap, quote_exact_in};
-use crate::dex::meteora_dlmm::interface::{BinArray, BinArrayBitmapExtension, LbPair};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use crate::dex::quoter::{QuoteResult, Quoter};
 use crate::dex::raydium_clmm::state::TickArrayState;
@@ -9,6 +8,7 @@ use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use std::array;
 use std::collections::{HashMap, VecDeque};
 use tracing::error;
+use crate::dex::{BinArray, BinArrayBitmapExtension, LbPair};
 
 #[derive(Debug)]
 pub struct MeteoraDLMMQuoter;

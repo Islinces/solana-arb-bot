@@ -1,11 +1,11 @@
 use crate::dex::meteora_dlmm::commons::{SwapResult, BASIS_POINT_MAX};
-use crate::dex::meteora_dlmm::interface::LbPair;
 use crate::dex::meteora_dlmm::interface::{Bin, Rounding};
 use crate::dex::meteora_dlmm::lb_pair::LbPairExtension;
 use crate::dex::meteora_dlmm::math::get_price_from_id;
 use crate::dex::meteora_dlmm::math::SCALE_OFFSET;
 use crate::dex::meteora_dlmm::math::{safe_mul_shr_cast, safe_shl_div_cast};
 use anyhow::{Context, Result};
+use crate::dex::LbPair;
 
 pub trait BinExtension {
     fn get_or_store_bin_price(&mut self, id: i32, bin_step: u16) -> Result<u128>;
