@@ -42,8 +42,8 @@ pub struct Command {
     rpc_url: String,
     #[arg(long, default_value = "mainnet")]
     pub jito_region: String,
-    #[arg(long,num_args = 1..)]
-    pub jito_uuid: Option<Vec<String>>,
+    #[arg(long)]
+    pub jito_uuid: Option<String>,
     #[arg(long, default_values = ["So11111111111111111111111111111111111111112"])]
     follow_mints: Vec<Pubkey>,
     #[arg(long)]

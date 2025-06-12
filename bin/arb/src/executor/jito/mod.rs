@@ -5,10 +5,14 @@ use crate::executor::Executor;
 use crate::graph::SearchResult;
 use crate::metadata::{get_arb_mint_ata, get_keypair, get_last_blockhash};
 use crate::HopPathSearchResult;
+use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
 use anyhow::anyhow;
 use base64::engine::general_purpose;
 use base64::Engine;
 use rand::Rng;
+use rand_core::OsRng;
+use rand_core::RngCore;
 use reqwest::Client;
 use serde_json::json;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
@@ -37,6 +41,8 @@ const DEFAULT_TIP_ACCOUNTS: [Pubkey; 8] = [
     pubkey!("ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt"),
     pubkey!("DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"),
 ];
+
+const JITO_UUID_KEYS: &[u8; 32] = b"00000000000000000000000020250611";
 
 fn get_jito_fee_account_with_rand() -> Pubkey {
     DEFAULT_TIP_ACCOUNTS[rand::rng().random_range(0..=7)]
@@ -71,8 +77,10 @@ impl Executor for JitoExecutor {
             None => {
                 vec![format!("{}/api/v1/bundles", jito_host)]
             }
-            Some(uuids) => uuids
-                .into_iter()
+            Some(uuid) => decrypt_base64(uuid.as_str(), JITO_UUID_KEYS)
+                .expect("解析jito_uuid失败")
+                .split(',')
+                .map(String::from)
                 .map(|id| format!("{}/api/v1/bundles?uuid={}", jito_host, id))
                 .collect::<Vec<_>>(),
         };
@@ -311,5 +319,66 @@ impl JitoExecutor {
             &[&dst_keypair],
         )?;
         Ok((vec![first_transaction, second_transaction], start.elapsed()))
+    }
+}
+
+/// 加密函数：输出 base64(nonce + ciphertext)
+fn encrypt_base64(plaintext: &str, key_bytes: &[u8; 32]) -> String {
+    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    // 随机 12 字节 nonce
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .expect("encryption failure!");
+
+    // 拼接 nonce + ciphertext
+    let mut combined = nonce_bytes.to_vec();
+    combined.extend(ciphertext);
+
+    // base64 编码
+    general_purpose::STANDARD.encode(combined)
+}
+
+/// 解密函数：输入 base64(nonce + ciphertext)，输出原文
+fn decrypt_base64(encoded: &str, key_bytes: &[u8; 32]) -> anyhow::Result<String> {
+    let combined = general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|e| anyhow!(format!("base64 decode error: {e}")))?;
+
+    if combined.len() < 12 {
+        return Err(anyhow!("输入的数据不合法"));
+    }
+
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
+    let key = Key::<Aes256Gcm>::from_slice(key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| anyhow!(format!("decryption failed: {e}")))?;
+
+    String::from_utf8(plaintext).map_or(Err(anyhow!("原因字符编码不是UTF-8")), |text| {
+        Ok(text)
+    })
+}
+
+mod test {
+    use crate::executor::jito::{decrypt_base64, encrypt_base64, JITO_UUID_KEYS};
+
+    #[test]
+    fn test_encrypt_base64() {
+        let text = "1234,45678";
+        let encrypt_text = encrypt_base64(text, JITO_UUID_KEYS);
+        println!("密文: {:?}", encrypt_text);
+        let origin_text = decrypt_base64(&encrypt_text, JITO_UUID_KEYS).unwrap();
+        assert_eq!(text, origin_text);
+        let vec = origin_text.split(',').map(String::from).collect::<Vec<_>>();
+        println!("{:?}", vec);
     }
 }
