@@ -42,7 +42,7 @@ const DEFAULT_TIP_ACCOUNTS: [Pubkey; 8] = [
     pubkey!("DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"),
 ];
 
-const JITO_UUID_KEYS: &[u8; 32] = b"00000000000000000000000020250611";
+const JITO_UUID_KEYS: &[u8; 32] = b"mBE5O1xpYfaxfuFT6mdFBxhHnnkW39X8";
 
 fn get_jito_fee_account_with_rand() -> Pubkey {
     DEFAULT_TIP_ACCOUNTS[rand::rng().random_range(0..=7)]
@@ -370,6 +370,7 @@ fn decrypt_base64(encoded: &str, key_bytes: &[u8; 32]) -> anyhow::Result<String>
 
 mod test {
     use crate::executor::jito::{decrypt_base64, encrypt_base64, JITO_UUID_KEYS};
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_encrypt_base64() {
