@@ -3,6 +3,7 @@ use crate::dex::DexType::MeteoraDLMM;
 use crate::dex::{AccountInfo, AccountRelationRecord, AccountType, DexType};
 use crate::dex_data::DexJson;
 
+#[derive(Debug)]
 pub struct MeteoraDLMMAccountRelation;
 
 impl AccountRelationRecord for MeteoraDLMMAccountRelation {

@@ -2,6 +2,7 @@ use crate::dex::DexType::RaydiumAMM;
 use crate::dex::{AccountInfo, AccountRelationRecord, AccountType, DexType};
 use crate::dex_data::DexJson;
 
+#[derive(Debug)]
 pub struct RaydiumAMMRelationRecord;
 
 impl AccountRelationRecord for RaydiumAMMRelationRecord {

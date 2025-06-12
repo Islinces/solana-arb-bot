@@ -4,6 +4,7 @@ use crate::dex::{AccountInfo, AccountRelationRecord, AccountType, DexType};
 use crate::dex_data::DexJson;
 use solana_sdk::pubkey::Pubkey;
 
+#[derive(Debug)]
 pub struct RaydiumCLMMRelationRecord;
 
 impl AccountRelationRecord for RaydiumCLMMRelationRecord {

@@ -24,6 +24,7 @@ pub trait AccountRelationRecord {
     ) -> anyhow::Result<Option<(Vec<AccountInfo>, Option<(DexType, AccountType)>)>>;
 }
 
+#[derive(Debug)]
 #[enum_dispatch(AccountRelationRecord)]
 pub enum AccountRelationRecordType {
     MeteoraDLMM(MeteoraDLMMAccountRelation),
@@ -45,14 +46,25 @@ pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()>
     ] {
         let relation_infos: Option<(Vec<AccountInfo>, Option<(DexType, AccountType)>)> =
             record_type.get_account_info(dex_data)?;
-        if let Some((relations, supplementary)) = relation_infos {
-            relations.into_iter().for_each(|rel| {
-                account_mapping.insert(rel.account_key, rel);
-            });
-            if let Some((dex_type, account_type)) = supplementary {
-                supplementary_account_mapping.insert(dex_type, account_type);
+        relation_infos.map_or(Ok(()), |(relations, supplementary)| {
+            if !relations.is_empty() {
+                if let Some((dex_type, account_type)) = supplementary {
+                    if supplementary_account_mapping
+                        .insert(dex_type, account_type)
+                        .is_some()
+                    {
+                        return Err(anyhow!("[{:?}][{:?}]数据重复", record_type, dex_type));
+                    }
+                }
             }
-        }
+            for rel in relations {
+                let account_key = rel.account_key;
+                if account_mapping.insert(account_key, rel).is_some() {
+                    return Err(anyhow!("[{:?}][{:?}]数据重复", record_type, account_key));
+                }
+            }
+            Ok(())
+        })?;
     }
     ACCOUNT_RELATION_CACHE
         .set(Arc::new(account_mapping))
@@ -74,8 +86,7 @@ pub fn get_dex_type_and_account_type(
     owner: &Pubkey,
     account_key: &Pubkey,
 ) -> Option<(DexType, AccountType)> {
-    let relation_info = ACCOUNT_RELATION_CACHE.get()?.get(account_key);
-    match relation_info {
+    match ACCOUNT_RELATION_CACHE.get()?.get(account_key) {
         None => {
             let dex_type = DexType::try_from(owner).ok()?;
             let account_type = SUPPLEMENTARY_ACCOUNT_RELATION_CACHE

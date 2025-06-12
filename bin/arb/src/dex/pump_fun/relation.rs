@@ -1,7 +1,8 @@
-use crate::dex::DexType::{MeteoraDLMM, PumpFunAMM};
+use crate::dex::DexType::PumpFunAMM;
 use crate::dex::{AccountInfo, AccountRelationRecord, AccountType, DexType};
 use crate::dex_data::DexJson;
 
+#[derive(Debug)]
 pub struct PumpFunAMMRelationRecord;
 
 impl AccountRelationRecord for PumpFunAMMRelationRecord {

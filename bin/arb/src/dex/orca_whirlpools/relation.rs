@@ -3,6 +3,7 @@ use crate::dex::DexType::OrcaWhirl;
 use crate::dex::{AccountInfo, AccountRelationRecord, AccountType, DexType};
 use crate::dex_data::DexJson;
 
+#[derive(Debug)]
 pub struct OrcaWhirlAccountRelationRecord;
 
 impl AccountRelationRecord for OrcaWhirlAccountRelationRecord {
