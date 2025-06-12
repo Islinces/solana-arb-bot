@@ -1,11 +1,11 @@
+use crate::dex::global_cache::{get_account_data, get_alt, get_token_program};
 use crate::dex::orca_whirlpools::{
     get_oracle_address, get_tick_array_address, get_tick_array_start_tick_index, Whirlpool,
     TICK_ARRAY_SIZE,
 };
 use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
 use crate::dex::DexType::OrcaWhirl;
-use crate::dex::{ATA_PROGRAM_ID, MEMO_PROGRAM, MINT_PROGRAM_ID};
-use crate::dex::global_cache::{get_account_data, get_alt, get_token_program};
+use crate::dex::{ATA_PROGRAM_ID, MEMO_PROGRAM_V2, MINT_PROGRAM_ID};
 use crate::metadata::{get_keypair, MintAtaPair};
 use anyhow::anyhow;
 use solana_sdk::instruction::AccountMeta;
@@ -31,7 +31,7 @@ impl InstructionMaterialConverter for OrcaWhirlInstructionMaterialConverter {
         // 2.token_program_b
         accounts.push(AccountMeta::new_readonly(token_program_b, false));
         // 3.memo
-        accounts.push(AccountMeta::new_readonly(MEMO_PROGRAM, false));
+        accounts.push(AccountMeta::new_readonly(MEMO_PROGRAM_V2, false));
         // 4.wallet
         accounts.push(AccountMeta::new(wallet, true));
         // 5.pool
