@@ -1,5 +1,6 @@
-use crate::dex::DexType;
 use crate::dex::get_token_program;
+use crate::dex::DexType;
+use crate::dex::InstructionMaterial;
 use crate::graph::{
     find_mint_by_index, find_mint_position, find_pool_position, EdgeIdentifier, HopPath,
 };
@@ -16,7 +17,6 @@ use std::collections::hash_map::Entry;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-use crate::dex::InstructionMaterial;
 
 /// 后续针对多hop可以改成枚举，针对不同的枚举实现不同的Trigger和Quoter
 static GRAPH: OnceCell<Arc<AHashMap<usize, Arc<Vec<Arc<Path>>>>>> = OnceCell::const_new();
@@ -91,13 +91,20 @@ impl HopPath for TwoHopPath {
     ) -> Option<HopPathSearchResult> {
         let pool_index = find_pool_position(&pool_id)?;
         let hop_paths = get_graph_with_pool_index(pool_index)?;
+        let mut use_ternary_search_hop_path = None;
+        let mut normal_hop_path = None;
+        if max_amount_in >= amount_in {
+            let (temp_use_ternary_search_hop_path, temp_normal_hop_path): (Vec<_>, Vec<_>) =
+                hop_paths
+                    .iter()
+                    .cloned()
+                    .partition(|hop| hop.use_ternary_search(pool_index));
+            use_ternary_search_hop_path = (!temp_use_ternary_search_hop_path.is_empty())
+                .then_some(temp_use_ternary_search_hop_path);
+            normal_hop_path = (!temp_normal_hop_path.is_empty()).then_some(temp_normal_hop_path);
+        }
 
-        let (use_ternary_search_hop_path, normal_hop_path): (Vec<_>, Vec<_>) = hop_paths
-            .iter()
-            .cloned()
-            .partition(|hop| hop.use_ternary_search(pool_index));
-
-        if use_ternary_search_hop_path.is_empty() && normal_hop_path.is_empty() {
+        if use_ternary_search_hop_path.is_none() && normal_hop_path.is_none() {
             return None;
         }
 
@@ -106,15 +113,25 @@ impl HopPath for TwoHopPath {
         // 并行执行两种报价逻辑
         let (res1, res2) = rayon::join(
             || {
-                normal_quote(
-                    normal_hop_path,
-                    pool_index,
-                    amount_in_mint_index,
-                    amount_in,
-                    min_profit,
-                )
+                if let Some(path) = normal_hop_path {
+                    normal_quote(
+                        path,
+                        pool_index,
+                        amount_in_mint_index,
+                        amount_in,
+                        min_profit,
+                    )
+                } else {
+                    None
+                }
             },
-            || ternary_search_quote(use_ternary_search_hop_path, max_amount_in, min_profit),
+            || {
+                if let Some(path) = use_ternary_search_hop_path {
+                    ternary_search_quote(path, max_amount_in, min_profit)
+                } else {
+                    None
+                }
+            },
         );
 
         [res1, res2]
