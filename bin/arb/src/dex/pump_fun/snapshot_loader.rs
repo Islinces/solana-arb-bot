@@ -1,11 +1,12 @@
+use crate::dex::global_cache::get_account_data;
 use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::snapshot::{AccountDataSlice, SnapshotInitializer};
+use crate::dex::utils::read_from;
 use crate::dex::{AccountType, DexType, ATA_PROGRAM_ID, MINT_PROGRAM_ID, SYSTEM_PROGRAM_ID};
 use crate::dex_data::DexJson;
-use crate::dex::global_cache::get_account_data;
 use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -49,10 +50,10 @@ impl SnapshotInitializer for PumpFunAMMSnapshotInitializer {
             // lp_fee_basis_points 和 protocol_fee_basis_points
             let global_config_account_data =
                 global_config_account.unwrap().static_slice_data.unwrap();
-            let mut invalid_pool = AHashSet::with_capacity(dex_json.len());
-            let mut pool_accounts = Vec::with_capacity(dex_json.len());
-            let mut vault_to_pool = AHashMap::with_capacity(dex_json.len() * 2);
-            for json in dex_json.iter() {
+            let mut invalid_pool = AHashSet::with_capacity(dex_data.len());
+            let mut pool_accounts = Vec::with_capacity(dex_data.len());
+            let mut vault_to_pool = AHashMap::with_capacity(dex_data.len() * 2);
+            for json in dex_data.iter() {
                 pool_accounts.push(json.pool);
                 vault_to_pool.insert(json.vault_a, json.pool);
                 vault_to_pool.insert(json.vault_b, json.pool);
@@ -114,7 +115,7 @@ impl SnapshotInitializer for PumpFunAMMSnapshotInitializer {
             let all_vault_accounts = all_pool_account_data
                 .iter()
                 .map(|account| {
-                    let option = dex_json
+                    let option = dex_data
                         .iter()
                         .find(|a| a.pool == account.account_key)
                         .unwrap();
