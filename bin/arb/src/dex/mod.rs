@@ -108,7 +108,7 @@ impl TryFrom<&Pubkey> for DexType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Copy)]
 pub enum AccountType {
     // common
     Pool,

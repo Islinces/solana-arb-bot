@@ -49,18 +49,21 @@ pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()>
         relation_infos.map_or(Ok(()), |(relations, supplementary)| {
             if !relations.is_empty() {
                 if let Some((dex_type, account_type)) = supplementary {
-                    if supplementary_account_mapping
-                        .insert(dex_type, account_type)
-                        .is_some()
+                    if let Some(previous) =
+                        supplementary_account_mapping.insert(dex_type, account_type)
                     {
-                        return Err(anyhow!("[{:?}][{:?}]数据重复", record_type, dex_type));
+                        if previous != account_type {
+                            return Err(anyhow!("[{:?}][{:?}]数据重复", record_type, dex_type));
+                        }
                     }
                 }
             }
             for rel in relations {
-                let account_key = rel.account_key;
-                if account_mapping.insert(account_key, rel).is_some() {
-                    return Err(anyhow!("[{:?}][{:?}]数据重复", record_type, account_key));
+                let rel_copy = rel.clone();
+                if let Some(previous) = account_mapping.insert(rel.account_key.clone(), rel) {
+                    if previous != rel_copy {
+                        return Err(anyhow!("[{:?}]数据重复，数据 : {:#?}", record_type, rel));
+                    }
                 }
             }
             Ok(())
@@ -99,7 +102,7 @@ pub fn get_dex_type_and_account_type(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AccountInfo {
     dex_type: DexType,
     account_type: AccountType,
