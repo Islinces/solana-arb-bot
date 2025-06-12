@@ -62,7 +62,7 @@ pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()>
                 let rel_copy = rel.clone();
                 if let Some(previous) = account_mapping.insert(rel.account_key.clone(), rel) {
                     if previous != rel_copy {
-                        return Err(anyhow!("[{:?}]数据重复，数据 : {:#?}", record_type, rel));
+                        return Err(anyhow!("[{:?}]数据重复，数据 : {:#?}", record_type, rel_copy));
                     }
                 }
             }
