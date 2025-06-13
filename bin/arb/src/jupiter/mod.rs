@@ -9,7 +9,7 @@ use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;
 use crate::metadata::{get_arb_mint_ata, get_keypair, remove_already_ata, MintAtaPair};
 use crate::HopPathSearchResult;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey;
@@ -43,7 +43,7 @@ pub fn build_jupiter_swap_ix(
         hop_path_search_result.convert_to_instruction_materials()?;
     let mut used_atas = Vec::with_capacity(instruction_materials.len() * 2);
     for (index, mut material) in instruction_materials.into_iter().enumerate() {
-        let (swap, append_jup_program) = get_jupiter_swap_type(&mut material);
+        let (swap, append_jup_program) = get_jupiter_swap_type(&mut material)?;
         remaining_accounts.push(AccountMeta::new_readonly(
             material.dex_type.get_ref_program_id().clone(),
             false,
@@ -85,21 +85,21 @@ pub fn build_jupiter_swap_ix(
     Ok((instruction, used_atas, alts))
 }
 
-fn get_jupiter_swap_type(instruction_material: &mut InstructionMaterial) -> (Swap, bool) {
+fn get_jupiter_swap_type(instruction_material: &mut InstructionMaterial) ->anyhow::Result< (Swap, bool)> {
     match instruction_material.dex_type {
-        DexType::RaydiumAMM => (Swap::Raydium, false),
+        DexType::RaydiumAMM =>Ok( (Swap::Raydium, false)),
         // DexType::RaydiumCLMM => Swap::RaydiumClmmV2,
-        DexType::RaydiumCLMM => (Swap::RaydiumClmm, true),
-        DexType::PumpFunAMM => (
+        DexType::RaydiumCLMM => Ok((Swap::RaydiumClmm, true)),
+        DexType::PumpFunAMM => Ok((
             if instruction_material.swap_direction {
                 Swap::PumpdotfunAmmSell
             } else {
                 Swap::PumpdotfunAmmBuy
             },
             false,
-        ),
-        DexType::MeteoraDLMM => (Swap::MeteoraDlmm, true),
-        DexType::OrcaWhirl => (
+        )),
+        DexType::MeteoraDLMM => Ok((Swap::MeteoraDlmm, true)),
+        DexType::OrcaWhirl => Ok((
             Swap::WhirlpoolSwapV2 {
                 a_to_b: instruction_material.swap_direction,
                 // 设置remaining account的数量&类型
@@ -117,7 +117,7 @@ fn get_jupiter_swap_type(instruction_material: &mut InstructionMaterial) -> (Swa
                 },
             },
             false,
-        ),
-        DexType::MeteoraDAMMV2 => (Swap::MeteoraDammV2, false),
+        )),
+        DexType::MeteoraDAMMV2 => Err(anyhow!("MeteoraDAMMV2不支持")),
     }
 }
