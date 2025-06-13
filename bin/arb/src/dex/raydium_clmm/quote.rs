@@ -29,8 +29,8 @@ impl Quoter for RaydiumCLMMQuoter {
             &mut tick_arrays,
         ) {
             Ok((amount_out, _, _)) => Some(QuoteResult { amount_out }),
-            Err(e) => {
-                error!("【RaydiumCLMM】池子[{}]quote失败，原因 : {}", pool_id, e);
+            Err(_e) => {
+                // error!("【RaydiumCLMM】池子[{}]quote失败，原因 : {}", pool_id, e);
                 None
             }
         }

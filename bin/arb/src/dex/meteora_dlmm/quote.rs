@@ -33,8 +33,8 @@ impl Quoter for MeteoraDLMMQuoter {
                     Ok(quote) => Some(QuoteResult {
                         amount_out: quote.amount_out,
                     }),
-                    Err(e) => {
-                        error!("【MeteoraDLMM】[{pool_id}]Quote失败，原因：{}", e);
+                    Err(_e) => {
+                        // error!("【MeteoraDLMM】[{pool_id}]Quote失败，原因：{}", e);
                         None
                     }
                 }
