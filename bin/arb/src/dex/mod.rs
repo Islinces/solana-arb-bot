@@ -9,6 +9,7 @@ use std::fmt::{Display, Formatter};
 mod account_relation;
 mod data_slice;
 mod global_cache;
+pub mod meteora_damm_v2;
 mod meteora_dlmm;
 mod orca_whirlpools;
 mod pump_fun;
@@ -33,49 +34,6 @@ pub use snapshot::*;
 pub use subscriber::*;
 pub use swap_instruction::*;
 
-pub trait FromCache {
-    fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
-    where
-        Self: Sized;
-}
-
-pub struct InstructionItem {
-    pub dex_type: DexType,
-    pub swap_direction: bool,
-    pub account_meta: Vec<AccountMeta>,
-    pub alts: Vec<AddressLookupTableAccount>,
-}
-
-impl InstructionItem {
-    pub fn new(
-        dex_type: DexType,
-        swap_direction: bool,
-        account_meta: Vec<AccountMeta>,
-        alts: Vec<AddressLookupTableAccount>,
-    ) -> Self {
-        Self {
-            dex_type,
-            swap_direction,
-            account_meta,
-            alts,
-        }
-    }
-}
-
-pub(crate) fn get_transfer_fee(mint: &Pubkey, epoch: u64, pre_fee_amount: u64) -> u64 {
-    if let Some(fee_config) = global_cache::get_token2022_data(mint) {
-        fee_config
-            .calculate_epoch_fee(epoch, pre_fee_amount)
-            .unwrap()
-    } else {
-        0
-    }
-}
-
 pub const ATA_PROGRAM_ID: Pubkey = pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 pub const SYSTEM_PROGRAM_ID: Pubkey = pubkey!("11111111111111111111111111111111");
 pub const MINT_PROGRAM_ID: Pubkey = spl_token::ID;
@@ -90,6 +48,7 @@ pub enum DexType {
     RaydiumCLMM,
     PumpFunAMM,
     MeteoraDLMM,
+    MeteoraDAMMV2,
     OrcaWhirl,
 }
 
@@ -107,6 +66,8 @@ impl TryFrom<&Pubkey> for DexType {
             Ok(DexType::MeteoraDLMM)
         } else if owner == DexType::OrcaWhirl.get_ref_program_id() {
             Ok(DexType::OrcaWhirl)
+        } else if owner == DexType::MeteoraDAMMV2.get_ref_program_id() {
+            Ok(DexType::MeteoraDAMMV2)
         } else {
             Err(anyhow!("无效的Owner"))
         }
@@ -139,6 +100,7 @@ impl Display for DexType {
             DexType::RaydiumCLMM => "RaydiumCLmm",
             DexType::PumpFunAMM => "PumpFunAMM",
             DexType::MeteoraDLMM => "MeteoraDLMM",
+            DexType::MeteoraDAMMV2 => "MeteoraDAMMV2",
             DexType::OrcaWhirl => "OrcaWhirl",
         })
     }
@@ -152,23 +114,50 @@ impl DexType {
             DexType::PumpFunAMM => &pump_fun::PUMP_FUN_AMM_PROGRAM_ID,
             DexType::MeteoraDLMM => &meteora_dlmm::METEORA_DLMM_PROGRAM_ID,
             DexType::OrcaWhirl => &orca_whirlpools::WHIRLPOOL_ID,
+            DexType::MeteoraDAMMV2 => &meteora_damm_v2::DAMM_V2_PROGRAM_ID,
         }
     }
 }
 
-#[inline]
-pub fn get_dex_type_with_program_id(program_id: &Pubkey) -> Option<DexType> {
-    if program_id == DexType::RaydiumCLMM.get_ref_program_id() {
-        Some(DexType::RaydiumCLMM)
-    } else if program_id == DexType::RaydiumAMM.get_ref_program_id() {
-        Some(DexType::RaydiumAMM)
-    } else if program_id == DexType::PumpFunAMM.get_ref_program_id() {
-        Some(DexType::PumpFunAMM)
-    } else if program_id == DexType::MeteoraDLMM.get_ref_program_id() {
-        Some(DexType::MeteoraDLMM)
-    } else if program_id == DexType::OrcaWhirl.get_ref_program_id() {
-        Some(DexType::OrcaWhirl)
+pub(crate) fn get_transfer_fee(mint: &Pubkey, epoch: u64, pre_fee_amount: u64) -> u64 {
+    if let Some(fee_config) = get_token2022_data(mint) {
+        fee_config
+            .calculate_epoch_fee(epoch, pre_fee_amount)
+            .unwrap()
     } else {
-        unreachable!()
+        0
+    }
+}
+
+pub trait FromCache {
+    fn from_cache(
+        account_key: &Pubkey,
+        static_cache: RwLockReadGuard<StaticCache>,
+        dynamic_cache: &DynamicCache,
+    ) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+pub struct InstructionItem {
+    pub dex_type: DexType,
+    pub swap_direction: bool,
+    pub account_meta: Vec<AccountMeta>,
+    pub alts: Vec<AddressLookupTableAccount>,
+}
+
+impl InstructionItem {
+    pub fn new(
+        dex_type: DexType,
+        swap_direction: bool,
+        account_meta: Vec<AccountMeta>,
+        alts: Vec<AddressLookupTableAccount>,
+    ) -> Self {
+        Self {
+            dex_type,
+            swap_direction,
+            account_meta,
+            alts,
+        }
     }
 }

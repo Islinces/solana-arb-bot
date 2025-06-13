@@ -1,3 +1,4 @@
+use crate::dex::meteora_damm_v2::MeteoraDAMMV2RelationRecord;
 use crate::dex::meteora_dlmm::MeteoraDLMMAccountRelation;
 use crate::dex::orca_whirlpools::OrcaWhirlAccountRelationRecord;
 use crate::dex::pump_fun::PumpFunAMMRelationRecord;
@@ -28,6 +29,7 @@ pub trait AccountRelationRecord {
 #[enum_dispatch(AccountRelationRecord)]
 pub enum AccountRelationRecordType {
     MeteoraDLMM(MeteoraDLMMAccountRelation),
+    MeteoraDAMMV2(MeteoraDAMMV2RelationRecord),
     OrcaWhirl(OrcaWhirlAccountRelationRecord),
     PumpFunAMM(PumpFunAMMRelationRecord),
     RaydiumAmm(RaydiumAMMRelationRecord),
@@ -43,6 +45,7 @@ pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()>
         AccountRelationRecordType::from(PumpFunAMMRelationRecord),
         AccountRelationRecordType::from(RaydiumAMMRelationRecord),
         AccountRelationRecordType::from(RaydiumCLMMRelationRecord),
+        AccountRelationRecordType::from(MeteoraDAMMV2RelationRecord),
     ] {
         let relation_infos: Option<(Vec<AccountInfo>, Option<(DexType, AccountType)>)> =
             record_type.get_account_info(dex_data)?;
@@ -62,7 +65,11 @@ pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()>
                 let rel_copy = rel.clone();
                 if let Some(previous) = account_mapping.insert(rel.account_key.clone(), rel) {
                     if previous != rel_copy {
-                        return Err(anyhow!("[{:?}]数据重复，数据 : {:#?}", record_type, rel_copy));
+                        return Err(anyhow!(
+                            "[{:?}]数据重复，数据 : {:#?}",
+                            record_type,
+                            rel_copy
+                        ));
                     }
                 }
             }

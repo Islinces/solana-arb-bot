@@ -1,3 +1,4 @@
+use crate::dex::meteora_damm_v2::MeteoraDAMMV2InstructionMaterialConverter;
 use crate::dex::meteora_dlmm::MeteoraDLMMInstructionMaterialConverter;
 use crate::dex::orca_whirlpools::OrcaWhirlInstructionMaterialConverter;
 use crate::dex::pump_fun::instruction::PumpFunAMMInstructionMaterialConverter;
@@ -22,6 +23,7 @@ pub trait InstructionMaterialConverter {
 #[enum_dispatch(InstructionMaterialConverter)]
 pub enum SwapInstructionType {
     MeteoraDLMM(MeteoraDLMMInstructionMaterialConverter),
+    MeteoraDAMMV2(MeteoraDAMMV2InstructionMaterialConverter),
     OrcaWhirl(OrcaWhirlInstructionMaterialConverter),
     PumpFunAMM(PumpFunAMMInstructionMaterialConverter),
     RaydiumAmm(RaydiumAMMInstructionMaterialConverter),
@@ -73,6 +75,9 @@ pub fn get_instruction_builder(dex_type: &DexType) -> anyhow::Result<SwapInstruc
         )),
         DexType::OrcaWhirl => Ok(SwapInstructionType::from(
             OrcaWhirlInstructionMaterialConverter,
+        )),
+        DexType::MeteoraDAMMV2 => Ok(SwapInstructionType::from(
+            MeteoraDAMMV2InstructionMaterialConverter,
         )),
     }
 }

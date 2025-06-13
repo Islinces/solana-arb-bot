@@ -1,3 +1,4 @@
+use crate::dex::meteora_damm_v2::MeteoraDAMMV2DataSlicer;
 use crate::dex::meteora_dlmm::MeteoraDLMMDataSlicer;
 use crate::dex::orca_whirlpools::OrcaWhirlDataSlicer;
 use crate::dex::pump_fun::PumpFunAMMDataSlicer;
@@ -65,6 +66,7 @@ pub trait DataSliceInitializer {
 #[enum_dispatch(DataSliceInitializer)]
 pub enum DataSlice {
     MeteoraDLMM(MeteoraDLMMDataSlicer),
+    MeteoraDAMMV2(MeteoraDAMMV2DataSlicer),
     OrcaWhirl(OrcaWhirlDataSlicer),
     PumpFunAMM(PumpFunAMMDataSlicer),
     RaydiumAmm(RaydiumAMMDataSlicer),
@@ -79,6 +81,10 @@ pub enum SliceType {
 pub fn init_data_slice_config() -> anyhow::Result<()> {
     let mut data_slicer = AHashMap::<DexType, DataSlice>::new();
     data_slicer.insert(DexType::MeteoraDLMM, DataSlice::from(MeteoraDLMMDataSlicer));
+    data_slicer.insert(
+        DexType::MeteoraDAMMV2,
+        DataSlice::from(MeteoraDAMMV2DataSlicer),
+    );
     data_slicer.insert(DexType::OrcaWhirl, DataSlice::from(OrcaWhirlDataSlicer));
     data_slicer.insert(DexType::PumpFunAMM, DataSlice::from(PumpFunAMMDataSlicer));
     data_slicer.insert(DexType::RaydiumAMM, DataSlice::from(RaydiumAMMDataSlicer));

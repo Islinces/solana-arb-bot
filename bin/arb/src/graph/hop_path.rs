@@ -1,6 +1,6 @@
+use crate::dex::DexType;
 use crate::dex::InstructionMaterialConverter;
 use crate::dex::Quoter;
-use crate::dex::{get_dex_type_with_program_id, DexType};
 use crate::dex::{get_instruction_builder, InstructionMaterial};
 use crate::dex::{get_quoter_type, QuoteResult};
 use crate::dex_data::DexJson;
@@ -113,7 +113,7 @@ pub struct EdgeIdentifier {
 
 impl EdgeIdentifier {
     pub(crate) fn new(dex_json: &DexJson) -> Vec<Self> {
-        let dex_type = get_dex_type_with_program_id(&dex_json.owner).unwrap();
+        let dex_type = DexType::try_from(&dex_json.owner).unwrap();
         let pool = find_pool_position(&dex_json.pool).unwrap();
         let mint_0 = find_mint_position(&dex_json.mint_a).unwrap();
         let mint_1 = find_mint_position(&dex_json.mint_b).unwrap();

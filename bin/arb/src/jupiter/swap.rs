@@ -43,6 +43,7 @@ pub enum Swap {
         x_to_y: bool,
     },
     Meteora,
+    MeteoraDammV2,
     GooseFX,
     DeltaFi {
         stable: bool,

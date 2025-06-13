@@ -1,3 +1,6 @@
+use crate::dex::data_slice::{try_slice_data, SliceType};
+use crate::dex::global_cache::GlobalCache;
+use crate::dex::meteora_damm_v2::MeteoraDAMMV2SnapshotLoader;
 use crate::dex::meteora_dlmm::MeteoraDLMMSnapshotInitializer;
 use crate::dex::orca_whirlpools::OrcaWhirlpoolsSnapshotInitializer;
 use crate::dex::pump_fun::PumpFunAMMSnapshotInitializer;
@@ -6,7 +9,6 @@ use crate::dex::raydium_amm::RaydiumAmmSnapshotInitializer;
 use crate::dex::raydium_clmm::RaydiumCLMMSnapshotInitializer;
 use crate::dex::{AccountType, DexType, CLOCK_ID};
 use crate::dex_data::DexJson;
-use crate::dex::global_cache::GlobalCache;
 use ahash::AHashSet;
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -19,9 +21,9 @@ use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::sync::Arc;
+use solana_sdk::clock::Clock;
 use tokio::task::JoinSet;
 use tracing::{error, info};
-use crate::dex::data_slice::{try_slice_data, SliceType};
 
 #[async_trait]
 #[enum_dispatch(SnapshotType)]
@@ -90,6 +92,7 @@ pub trait SnapshotInitializer {
 #[enum_dispatch]
 pub enum SnapshotType {
     MeteoraDLMM(MeteoraDLMMSnapshotInitializer),
+    MeteoraDAMMV2(MeteoraDAMMV2SnapshotLoader),
     OrcaWhirl(OrcaWhirlpoolsSnapshotInitializer),
     PumpFunAMM(PumpFunAMMSnapshotInitializer),
     RaydiumAmm(RaydiumAmmSnapshotInitializer),
@@ -104,6 +107,7 @@ pub async fn init_snapshot(
     info!("开始初始化Snapshot...");
     for snapshot in vec![
         SnapshotType::from(MeteoraDLMMSnapshotInitializer),
+        SnapshotType::from(MeteoraDAMMV2SnapshotLoader),
         SnapshotType::from(OrcaWhirlpoolsSnapshotInitializer),
         SnapshotType::from(PumpFunAMMSnapshotInitializer),
         SnapshotType::from(RaydiumAmmSnapshotInitializer),
@@ -140,6 +144,7 @@ pub async fn init_snapshot(
 fn print_slice_data(dex_json: &[DexJson]) {
     vec![
         SnapshotType::from(MeteoraDLMMSnapshotInitializer),
+        SnapshotType::from(MeteoraDAMMV2SnapshotLoader),
         SnapshotType::from(OrcaWhirlpoolsSnapshotInitializer),
         SnapshotType::from(PumpFunAMMSnapshotInitializer),
         SnapshotType::from(RaydiumAmmSnapshotInitializer),
@@ -275,6 +280,7 @@ async fn cache_clock(dex_data: &[DexJson], rpc_client: Arc<RpcClient>, cache: &G
     if dex_data.iter().any(|json| {
         &json.owner == DexType::MeteoraDLMM.get_ref_program_id()
             || &json.owner == DexType::OrcaWhirl.get_ref_program_id()
+            || &json.owner == DexType::MeteoraDAMMV2.get_ref_program_id()
     }) {
         let clock_data = rpc_client
             .clone()

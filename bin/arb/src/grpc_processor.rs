@@ -15,6 +15,7 @@ use borsh::BorshDeserialize;
 use dashmap::DashMap;
 use flume::{Receiver, RecvError, TrySendError};
 use futures_util::future::err;
+use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use spl_token::solana_program::program_pack::Pack;
 use spl_token::state::Account;
@@ -106,148 +107,7 @@ impl MessageProcessor {
             slice_data_auto_get_dex_type(&account_key, &owner, data, SliceType::Subscribed)?,
         )?;
         #[cfg(feature = "print_data_after_update")]
-        match get_dex_type_and_account_type(&owner, &account_key) {
-            None => Ok(()),
-            Some((dex_type, account_type)) => match dex_type {
-                DexType::RaydiumAMM => match account_type {
-                    AccountType::Pool => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::RaydiumAMM,
-                            AccountType::Pool,
-                            account_key,
-                            get_account_data::<AmmInfo>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::MintVault => {
-                        let pool_id = is_follow_vault(&account_key).unwrap().0;
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::RaydiumAMM,
-                            AccountType::MintVault,
-                            account_key,
-                            get_account_data::<AmmInfo>(&pool_id).unwrap()
-                        );
-                        Ok(())
-                    }
-                    _ => Err(anyhow!("RaydiumAMM")),
-                },
-                DexType::RaydiumCLMM => match account_type {
-                    AccountType::Pool => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::RaydiumCLMM,
-                            AccountType::Pool,
-                            account_key,
-                            get_account_data::<PoolState>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::TickArray => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::RaydiumCLMM,
-                            AccountType::TickArray,
-                            account_key,
-                            get_account_data::<TickArrayState>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::TickArrayBitmap => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::RaydiumCLMM,
-                            AccountType::TickArrayBitmap,
-                            account_key,
-                            get_account_data::<TickArrayBitmapExtension>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    _ => Err(anyhow!("RaydiumAMM")),
-                },
-                DexType::PumpFunAMM => match account_type {
-                    AccountType::MintVault => {
-                        let pool_id = is_follow_vault(&account_key).unwrap().0;
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::PumpFunAMM,
-                            AccountType::MintVault,
-                            account_key,
-                            get_account_data::<crate::dex::Pool>(&pool_id).unwrap()
-                        );
-                        Ok(())
-                    }
-                    _ => Err(anyhow!("PumpFunAMM")),
-                },
-                DexType::MeteoraDLMM => match account_type {
-                    AccountType::Pool => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::MeteoraDLMM,
-                            AccountType::Pool,
-                            account_key,
-                            get_account_data::<LbPair>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::BinArray => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::MeteoraDLMM,
-                            AccountType::BinArray,
-                            account_key,
-                            get_account_data::<BinArray>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::BinArrayBitmap => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::MeteoraDLMM,
-                            AccountType::BinArrayBitmap,
-                            account_key,
-                            get_account_data::<BinArrayBitmapExtension>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    _ => Err(anyhow!("MeteoraDLMM")),
-                },
-                DexType::OrcaWhirl => match account_type {
-                    AccountType::Pool => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::OrcaWhirl,
-                            AccountType::Pool,
-                            account_key,
-                            get_account_data::<Whirlpool>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::TickArray => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::OrcaWhirl,
-                            AccountType::TickArray,
-                            account_key,
-                            get_account_data::<TickArray>(&account_key).unwrap()
-                        );
-                        Ok(())
-                    }
-                    AccountType::Oracle => {
-                        info!(
-                            "{:?} {:?}, key : {:?}\n{:#?}",
-                            DexType::OrcaWhirl,
-                            AccountType::Oracle,
-                            account_key,
-                            get_account_data::<Oracle>(&account_key)
-                        );
-                        Ok(())
-                    }
-                    _ => Err(anyhow!("OrcaWhirl")),
-                },
-            },
-        }?;
+        print_data_from_cache(&owner, &account_key)?;
         Ok(())
     }
 }
@@ -293,5 +153,166 @@ impl Debug for BalanceChangeInfo {
         formatter.field("vault_account", &self.vault_account.to_string());
         formatter.field("change_value", &self.change_value.to_string());
         formatter.finish()
+    }
+}
+
+fn print_data_from_cache(owner: &Pubkey, account_key: &Pubkey) -> anyhow::Result<()> {
+    match get_dex_type_and_account_type(&owner, &account_key) {
+        None => Ok(()),
+        Some((dex_type, account_type)) => match dex_type {
+            DexType::RaydiumAMM => match account_type {
+                AccountType::Pool => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumAMM,
+                        AccountType::Pool,
+                        account_key,
+                        get_account_data::<AmmInfo>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::MintVault => {
+                    let pool_id = is_follow_vault(&account_key).unwrap().0;
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumAMM,
+                        AccountType::MintVault,
+                        account_key,
+                        get_account_data::<AmmInfo>(&pool_id).unwrap()
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("RaydiumAMM")),
+            },
+            DexType::RaydiumCLMM => match account_type {
+                AccountType::Pool => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumCLMM,
+                        AccountType::Pool,
+                        account_key,
+                        get_account_data::<PoolState>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::TickArray => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumCLMM,
+                        AccountType::TickArray,
+                        account_key,
+                        get_account_data::<TickArrayState>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::TickArrayBitmap => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumCLMM,
+                        AccountType::TickArrayBitmap,
+                        account_key,
+                        get_account_data::<TickArrayBitmapExtension>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("RaydiumAMM")),
+            },
+            DexType::PumpFunAMM => match account_type {
+                AccountType::MintVault => {
+                    let pool_id = is_follow_vault(&account_key).unwrap().0;
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::PumpFunAMM,
+                        AccountType::MintVault,
+                        account_key,
+                        get_account_data::<crate::dex::Pool>(&pool_id).unwrap()
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("PumpFunAMM")),
+            },
+            DexType::MeteoraDLMM => match account_type {
+                AccountType::Pool => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::MeteoraDLMM,
+                        AccountType::Pool,
+                        account_key,
+                        get_account_data::<LbPair>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::BinArray => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::MeteoraDLMM,
+                        AccountType::BinArray,
+                        account_key,
+                        get_account_data::<BinArray>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::BinArrayBitmap => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::MeteoraDLMM,
+                        AccountType::BinArrayBitmap,
+                        account_key,
+                        get_account_data::<BinArrayBitmapExtension>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("MeteoraDLMM")),
+            },
+            DexType::OrcaWhirl => match account_type {
+                AccountType::Pool => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::OrcaWhirl,
+                        AccountType::Pool,
+                        account_key,
+                        get_account_data::<Whirlpool>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::TickArray => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::OrcaWhirl,
+                        AccountType::TickArray,
+                        account_key,
+                        get_account_data::<TickArray>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::Oracle => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::OrcaWhirl,
+                        AccountType::Oracle,
+                        account_key,
+                        get_account_data::<Oracle>(&account_key)
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("OrcaWhirl")),
+            },
+            DexType::MeteoraDAMMV2 => match account_type {
+                AccountType::Pool => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::MeteoraDAMMV2,
+                        AccountType::Pool,
+                        account_key,
+                        get_account_data::<crate::dex::meteora_damm_v2::state::pool::Pool>(
+                            &account_key
+                        )
+                        .unwrap()
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("MeteoraDAMMV2")),
+            },
+        },
     }
 }

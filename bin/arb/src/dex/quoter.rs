@@ -1,3 +1,4 @@
+use crate::dex::meteora_damm_v2::MeteoraDAMMV2Quoter;
 use crate::dex::meteora_dlmm::MeteoraDLMMQuoter;
 use crate::dex::orca_whirlpools::OrcaWhirlQuoter;
 use crate::dex::pump_fun::quote::PumpFunAMMQuoter;
@@ -16,6 +17,7 @@ pub trait Quoter {
 #[enum_dispatch(Quoter)]
 pub enum QuoterType {
     MeteoraDLMM(MeteoraDLMMQuoter),
+    MeteoraDAMMV2(MeteoraDAMMV2Quoter),
     OrcaWhirl(OrcaWhirlQuoter),
     PumpFunAMM(PumpFunAMMQuoter),
     RaydiumAmm(RaydiumAMMQuoter),
@@ -29,9 +31,11 @@ pub fn get_quoter_type(dex_type: DexType) -> anyhow::Result<QuoterType> {
         DexType::PumpFunAMM => Ok(QuoterType::from(PumpFunAMMQuoter)),
         DexType::MeteoraDLMM => Ok(QuoterType::from(MeteoraDLMMQuoter)),
         DexType::OrcaWhirl => Ok(QuoterType::from(OrcaWhirlQuoter)),
+        DexType::MeteoraDAMMV2 => Ok(QuoterType::from(MeteoraDAMMV2Quoter)),
     }
 }
 
+#[derive(Debug)]
 pub struct QuoteResult {
     pub amount_out: u64,
 }

@@ -1,47 +1,11 @@
 [
   {
-    "pool": "Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v",
-    "owner": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
-    "mintA": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "pool": "gg3bSMJdNVeE8soaH4mbxh2hz1oyqaWoQtmTMYgAUn3",
+    "owner": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+    "mintA": "3Me8e8S8rzJD8z9HQdshSHg5q7cspyUUNJ8ygoa5iivQ",
     "mintB": "So11111111111111111111111111111111111111112",
-    "vaultA": "nML7msD1MiJHxFvhv4po1u6C4KpWr64ugKqc75DMuD2",
-    "vaultB": "EjHirXt2bQd2DDNveagHHCWYzUwtY1iwNbBrV5j84e6j",
-    "addressLookupTableAddress": "7KgsCbuJAXxELXhpzc9PwX7GenoF3UsuuW71qW1Gr3u9"
-  },
-  {
-    "pool": "5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6",
-    "owner": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "EYj9xKw6ZszwpyNibHY7JD5o3QgTVrSdcBp1fMJhrR9o",
-    "vaultB": "CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz",
-    "addressLookupTableAddress": "BUJkP9HARGjQfHxdQ2fy3LXXiWGMK8QP4FX85P68FAhM"
-  },
-  {
-    "pool": "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
-    "owner": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz",
-    "vaultB": "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz",
-    "addressLookupTableAddress": "E59uBXGqn83xN17kMbBVfU1M7T4wHG91eiygHb88Aovb"
-  },
-  {
-    "pool": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
-    "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "4ct7br2vTPzfdmY3S5HLtTxcGSBfn6pnw98hsS6v359A",
-    "vaultB": "5it83u57VRrVgc51oNV19TTmAJuffPx5GtGwQr7gQNUo",
-    "addressLookupTableAddress": "BDqppwFYeMpUicN9xbfoM7FgRnHVW1uTUtrGA7uG2vQg"
-  },
-  {
-    "pool": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
-    "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "EUuUbDcafPrmVTD5M6qoJAoyyNbihBhugADAxRMn5he9",
-    "vaultB": "2WLWEuKDgkDUccTpbwYp1GToYktiSB1cXvreHUwiSUVP",
+    "vaultA": "97bu5BkAdY42EzpuJJTDeACibnJEqmmYtAZLooj9YTwM",
+    "vaultB": "Dg9ybxpoj5qAaVa9g9uQqkP24FfH3LnMt34mpQgSkeqm",
     "addressLookupTableAddress": "BDqppwFYeMpUicN9xbfoM7FgRnHVW1uTUtrGA7uG2vQg"
   }
 ]

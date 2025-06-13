@@ -118,5 +118,6 @@ fn get_jupiter_swap_type(instruction_material: &mut InstructionMaterial) -> (Swa
             },
             false,
         ),
+        DexType::MeteoraDAMMV2 => (Swap::MeteoraDammV2, false),
     }
 }

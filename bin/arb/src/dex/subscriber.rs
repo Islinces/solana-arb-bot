@@ -1,3 +1,4 @@
+use crate::dex::meteora_damm_v2::MeteoraDAMMV2AccountSubscriber;
 use crate::dex::meteora_dlmm::MeteoraDLMMAccountSubscriber;
 use crate::dex::orca_whirlpools::OrcaWhirlAccountSubscriber;
 use crate::dex::pump_fun::PumpFunAMMAccountSubscriber;
@@ -27,6 +28,7 @@ pub trait AccountSubscriber {
 #[enum_dispatch(AccountSubscriber)]
 pub enum Subscriber {
     MeteoraDLMM(MeteoraDLMMAccountSubscriber),
+    MeteoraDAMMV2(MeteoraDAMMV2AccountSubscriber),
     PumpFunAMM(PumpFunAMMAccountSubscriber),
     RaydiumAMM(RaydiumAMMAccountSubscriber),
     RaydiumCLMM(RaydiumCLMMAccountSubscriber),
@@ -43,6 +45,7 @@ pub async fn grpc_subscribe(
     let mut tx_include_accounts: Vec<Pubkey> = Vec::with_capacity(dex_json.len() * 3);
     for sub in vec![
         Subscriber::from(MeteoraDLMMAccountSubscriber),
+        Subscriber::from(MeteoraDAMMV2AccountSubscriber),
         Subscriber::from(PumpFunAMMAccountSubscriber),
         Subscriber::from(RaydiumAMMAccountSubscriber),
         Subscriber::from(RaydiumCLMMAccountSubscriber),

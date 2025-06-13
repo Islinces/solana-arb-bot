@@ -276,6 +276,7 @@ dependencies = [
  "num-derive",
  "num-integer",
  "num-traits",
+ "num_enum",
  "parking_lot",
  "rand 0.9.1",
  "rand_core 0.6.4",
