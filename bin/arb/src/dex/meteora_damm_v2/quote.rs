@@ -5,7 +5,6 @@ use crate::dex::{get_account_data, get_clock, get_transfer_fee, QuoteResult, Quo
 use anyhow::{ensure, Context, Ok, Result};
 use solana_sdk::pubkey::Pubkey;
 use std::ops::Sub;
-use tracing::info;
 
 #[derive(Debug)]
 pub struct MeteoraDAMMV2Quoter;
@@ -13,7 +12,6 @@ pub struct MeteoraDAMMV2Quoter;
 impl Quoter for MeteoraDAMMV2Quoter {
     fn quote(&self, amount_in: u64, swap_direction: bool, pool_id: &Pubkey) -> Option<QuoteResult> {
         let pool = get_account_data::<Pool>(pool_id)?;
-        info!("pool: {:#?}", pool);
         Some(QuoteResult {
             amount_out: get_quote(pool, amount_in, swap_direction).ok()?,
         })
