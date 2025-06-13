@@ -146,4 +146,5 @@ pub enum Swap {
     PumpdotfunAmmBuy,
     PumpdotfunAmmSell,
     Gamma,
+    MeteoraDammV2,
 }
