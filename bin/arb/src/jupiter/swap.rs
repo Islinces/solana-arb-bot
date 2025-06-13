@@ -146,5 +146,10 @@ pub enum Swap {
     PumpdotfunAmmBuy,
     PumpdotfunAmmSell,
     Gamma,
+    MeteoraDlmmSwapV2 {
+        remaining_accounts_info: RemainingAccountsInfo,
+    },
+    Woofi,
     MeteoraDammV2,
+    MeteoraDynamicBondingCurveSwap,
 }
