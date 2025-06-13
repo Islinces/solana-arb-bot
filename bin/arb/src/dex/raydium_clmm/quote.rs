@@ -30,7 +30,7 @@ impl Quoter for RaydiumCLMMQuoter {
         ) {
             Ok((amount_out, _, _)) => Some(QuoteResult { amount_out }),
             Err(e) => {
-                error!("CLMM池子[{}]quote失败，原因 : {}", pool_id, e);
+                error!("【RaydiumCLMM】池子[{}]quote失败，原因 : {}", pool_id, e);
                 None
             }
         }
