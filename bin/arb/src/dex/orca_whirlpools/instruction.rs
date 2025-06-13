@@ -135,8 +135,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index - offset,
             tick_array_start_index - offset * 2,
-            // tick_array_start_index - offset * 3,
-            // tick_array_start_index - offset * 4,
+            tick_array_start_index - offset * 3,
+            tick_array_start_index - offset * 4,
             // tick_array_start_index - offset * 5,
         ]
     } else {
@@ -144,8 +144,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index + offset,
             tick_array_start_index + offset * 2,
-            // tick_array_start_index + offset * 3,
-            // tick_array_start_index + offset * 4,
+            tick_array_start_index + offset * 3,
+            tick_array_start_index + offset * 4,
             // tick_array_start_index + offset * 5,
         ]
     };
