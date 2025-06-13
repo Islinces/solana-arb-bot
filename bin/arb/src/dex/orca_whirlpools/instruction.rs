@@ -95,23 +95,23 @@ impl InstructionMaterialConverter for OrcaWhirlInstructionMaterialConverter {
         // 15.oracle
         accounts.push(AccountMeta::new(get_oracle_address(pool_id)?, false));
         // 16..remaining tick_array
-        accounts.push(AccountMeta::new(
-            tick_array_keys
-                .pop()
-                .map_or(Err(anyhow!("tick_array_3 pop failed")), |v| Ok(v))?,
-            false,
-        ));
-        accounts.push(AccountMeta::new(
-            tick_array_keys
-                .pop()
-                .map_or(Err(anyhow!("tick_array_4 pop failed")), |v| Ok(v))?,
-            false,
-        ));
+        // accounts.push(AccountMeta::new(
+        //     tick_array_keys
+        //         .pop()
+        //         .map_or(Err(anyhow!("tick_array_3 pop failed")), |v| Ok(v))?,
+        //     false,
+        // ));
+        // accounts.push(AccountMeta::new(
+        //     tick_array_keys
+        //         .pop()
+        //         .map_or(Err(anyhow!("tick_array_4 pop failed")), |v| Ok(v))?,
+        //     false,
+        // ));
         Ok(InstructionMaterial::new(
             OrcaWhirl,
             swap_direction,
             accounts,
-            Some(2),
+            None,
             get_alt(pool_id),
             vec![
                 MintAtaPair::new(pool.token_mint_a, token_mint_a_ata),
@@ -135,8 +135,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index - offset,
             tick_array_start_index - offset * 2,
-            tick_array_start_index - offset * 3,
-            tick_array_start_index - offset * 4,
+            // tick_array_start_index - offset * 3,
+            // tick_array_start_index - offset * 4,
             // tick_array_start_index - offset * 5,
         ]
     } else {
@@ -144,8 +144,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index + offset,
             tick_array_start_index + offset * 2,
-            tick_array_start_index + offset * 3,
-            tick_array_start_index + offset * 4,
+            // tick_array_start_index + offset * 3,
+            // tick_array_start_index + offset * 4,
             // tick_array_start_index + offset * 5,
         ]
     };

@@ -78,7 +78,7 @@ fn get_tick_arrays_or_default(
     tick_current_index: i32,
     tick_spacing: u16,
     swap_direction: bool,
-) -> anyhow::Result<[TickArrayFacade; 5]> {
+) -> anyhow::Result<[TickArrayFacade; 3]> {
     let tick_array_start_index = get_tick_array_start_tick_index(tick_current_index, tick_spacing);
     let offset = tick_spacing as i32 * TICK_ARRAY_SIZE as i32;
 
@@ -87,8 +87,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index - offset,
             tick_array_start_index - offset * 2,
-            tick_array_start_index - offset * 3,
-            tick_array_start_index - offset * 4,
+            // tick_array_start_index - offset * 3,
+            // tick_array_start_index - offset * 4,
             // tick_array_start_index - offset * 5,
         ]
     } else {
@@ -96,8 +96,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index + offset,
             tick_array_start_index + offset * 2,
-            tick_array_start_index + offset * 3,
-            tick_array_start_index + offset * 4,
+            // tick_array_start_index + offset * 3,
+            // tick_array_start_index + offset * 4,
             // tick_array_start_index + offset * 5,
         ]
     };
