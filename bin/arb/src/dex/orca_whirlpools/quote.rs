@@ -1,15 +1,17 @@
 use crate::dex::global_cache::{get_account_data, get_clock, get_token2022_data};
+use crate::dex::oracle::{get_oracle_address, Oracle, OracleFacade};
 use crate::dex::orca_whirlpools::error::CoreError;
+use crate::dex::orca_whirlpools::math::{get_tick_array_start_tick_index, TransferFee};
+use crate::dex::orca_whirlpools::swap_quote_by_input_token;
 use crate::dex::quoter::{QuoteResult, Quoter};
+use crate::dex::tick_array::{
+    get_tick_array_address, TickArray, TickArrayFacade, TickFacade, TICK_ARRAY_SIZE,
+};
+use crate::dex::whirlpool::{Whirlpool, WhirlpoolFacade};
 use solana_sdk::pubkey::Pubkey;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
-use crate::dex::oracle::{get_oracle_address, Oracle, OracleFacade};
-use crate::dex::orca_whirlpools::math::{get_tick_array_start_tick_index, TransferFee};
-use crate::dex::orca_whirlpools::swap_quote_by_input_token;
-use crate::dex::tick_array::{get_tick_array_address, TickArray, TickArrayFacade, TickFacade, TICK_ARRAY_SIZE};
-use crate::dex::whirlpool::{Whirlpool, WhirlpoolFacade};
 
 #[derive(Debug)]
 pub struct OrcaWhirlQuoter;
@@ -43,7 +45,7 @@ impl Quoter for OrcaWhirlQuoter {
                 amount_out: quote_result.token_est_out,
             }),
             Err(e) => {
-                error!("【OracWhirl】Quote失败，原因：{}", e);
+                error!("【OracWhirl】[{pool_id}]Quote失败，原因：{}", e);
                 None
             }
         }
@@ -76,7 +78,7 @@ fn get_tick_arrays_or_default(
     tick_current_index: i32,
     tick_spacing: u16,
     swap_direction: bool,
-) -> anyhow::Result<[TickArrayFacade; 3]> {
+) -> anyhow::Result<[TickArrayFacade; 5]> {
     let tick_array_start_index = get_tick_array_start_tick_index(tick_current_index, tick_spacing);
     let offset = tick_spacing as i32 * TICK_ARRAY_SIZE as i32;
 
@@ -85,8 +87,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index - offset,
             tick_array_start_index - offset * 2,
-            // tick_array_start_index - offset * 3,
-            // tick_array_start_index - offset * 4,
+            tick_array_start_index - offset * 3,
+            tick_array_start_index - offset * 4,
             // tick_array_start_index - offset * 5,
         ]
     } else {
@@ -94,8 +96,8 @@ fn get_tick_arrays_or_default(
             tick_array_start_index,
             tick_array_start_index + offset,
             tick_array_start_index + offset * 2,
-            // tick_array_start_index + offset * 3,
-            // tick_array_start_index + offset * 4,
+            tick_array_start_index + offset * 3,
+            tick_array_start_index + offset * 4,
             // tick_array_start_index + offset * 5,
         ]
     };

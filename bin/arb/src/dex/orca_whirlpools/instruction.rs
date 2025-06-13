@@ -1,5 +1,9 @@
 use crate::dex::global_cache::{get_account_data, get_alt, get_token_program};
+use crate::dex::oracle::get_oracle_address;
+use crate::dex::orca_whirlpools::math::get_tick_array_start_tick_index;
 use crate::dex::swap_instruction::{InstructionMaterial, InstructionMaterialConverter};
+use crate::dex::tick_array::{get_tick_array_address, TICK_ARRAY_SIZE};
+use crate::dex::whirlpool::Whirlpool;
 use crate::dex::DexType::OrcaWhirl;
 use crate::dex::{ATA_PROGRAM_ID, MEMO_PROGRAM_V2, MINT_PROGRAM_ID};
 use crate::metadata::{get_keypair, MintAtaPair};
@@ -7,10 +11,6 @@ use anyhow::anyhow;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signer::Signer;
-use crate::dex::oracle::get_oracle_address;
-use crate::dex::orca_whirlpools::math::get_tick_array_start_tick_index;
-use crate::dex::tick_array::{get_tick_array_address, TICK_ARRAY_SIZE};
-use crate::dex::whirlpool::Whirlpool;
 
 pub struct OrcaWhirlInstructionMaterialConverter;
 
@@ -99,7 +99,7 @@ impl InstructionMaterialConverter for OrcaWhirlInstructionMaterialConverter {
             OrcaWhirl,
             swap_direction,
             accounts,
-            None,
+            Some(2),
             get_alt(pool_id),
             vec![
                 MintAtaPair::new(pool.token_mint_a, token_mint_a_ata),
