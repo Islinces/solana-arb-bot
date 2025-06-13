@@ -94,7 +94,19 @@ impl InstructionMaterialConverter for OrcaWhirlInstructionMaterialConverter {
         ));
         // 15.oracle
         accounts.push(AccountMeta::new(get_oracle_address(pool_id)?, false));
-        // 16..remaining tick_array TODO 发jupiter的话需要放在Swap枚举类里
+        // 16..remaining tick_array
+        accounts.push(AccountMeta::new(
+            tick_array_keys
+                .pop()
+                .map_or(Err(anyhow!("tick_array_3 pop failed")), |v| Ok(v))?,
+            false,
+        ));
+        accounts.push(AccountMeta::new(
+            tick_array_keys
+                .pop()
+                .map_or(Err(anyhow!("tick_array_4 pop failed")), |v| Ok(v))?,
+            false,
+        ));
         Ok(InstructionMaterial::new(
             OrcaWhirl,
             swap_direction,
