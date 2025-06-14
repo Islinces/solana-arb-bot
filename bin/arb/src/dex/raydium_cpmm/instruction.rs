@@ -22,7 +22,7 @@ impl InstructionMaterialConverter for RaydiumCPMMInstructionMaterialConverter {
         // 1.wallet
         accounts.push(AccountMeta::new(wallet, true));
         // 2.authority
-        accounts.push(AccountMeta::new_readonly(RAYDIUM_CPMM_AUTHORITY_ID, true));
+        accounts.push(AccountMeta::new_readonly(RAYDIUM_CPMM_AUTHORITY_ID, false));
         // 3.amm config
         accounts.push(AccountMeta::new_readonly(pool_state.amm_config, false));
         // 4.pool state
