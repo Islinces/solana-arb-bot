@@ -3,8 +3,8 @@ use crate::dex::init_snapshot;
 use crate::dex::{get_global_cache, init_global_cache, GlobalCache};
 use crate::dex::{init_account_relations, init_data_slice_config};
 use crate::dex_data::DexJson;
-use crate::executor::Executor;
 use crate::executor::JitoExecutor;
+use crate::executor::{Executor, JitoTipsType};
 use crate::graph::HopPathTypes;
 use crate::graph::HopPathTypes::TwoHop;
 use crate::grpc_processor::MessageProcessor;
@@ -44,6 +44,8 @@ pub struct Command {
     pub jito_region: String,
     #[arg(long)]
     pub jito_uuid: Option<String>,
+    #[arg(long, value_enum, default_value_t = JitoTipsType::Ema )]
+    pub jito_tips_type: JitoTipsType,
     #[arg(long, default_values = ["So11111111111111111111111111111111111111112"])]
     follow_mints: Vec<Pubkey>,
     #[arg(long)]

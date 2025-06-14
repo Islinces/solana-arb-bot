@@ -11,6 +11,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use base64::engine::general_purpose;
 use base64::Engine;
+use clap::ValueEnum;
 use futures_util::future::err;
 use parking_lot::RwLock;
 use rand::Rng;
@@ -61,6 +62,7 @@ pub struct JitoExecutor {
     jito_url: Vec<String>,
     used_url_index: Option<AtomicUsize>,
     client: Arc<Client>,
+    tips_type: JitoTipsType,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,12 +75,32 @@ struct JitoTips {
     ema_landed_tips_50th_percentile: f64,
 }
 
-async fn get_jito_ema_tips() -> Result<u64> {
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum JitoTipsType {
+    Th25,
+    Th50,
+    Th75,
+    Th95,
+    Th99,
+    Ema,
+}
+
+async fn get_jito_ema_tips(tips_type: JitoTipsType) -> Result<u64> {
     let url = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
     let tips: Vec<JitoTips> = reqwest::get(url).await?.json().await?;
     match tips.first() {
         None => Err(anyhow!("无返回数据")),
-        Some(tips) => Ok((tips.ema_landed_tips_50th_percentile * 1_000_000_000.0).floor() as u64),
+        Some(tips) => {
+            let percentile = match tips_type {
+                JitoTipsType::Th25 => tips.landed_tips_25th_percentile,
+                JitoTipsType::Th50 => tips.landed_tips_50th_percentile,
+                JitoTipsType::Th75 => tips.landed_tips_75th_percentile,
+                JitoTipsType::Th95 => tips.landed_tips_95th_percentile,
+                JitoTipsType::Th99 => tips.landed_tips_99th_percentile,
+                JitoTipsType::Ema => tips.ema_landed_tips_50th_percentile,
+            };
+            Ok((percentile * 1_000_000_000.0).floor() as u64)
+        }
     }
 }
 
@@ -91,6 +113,7 @@ impl Executor for JitoExecutor {
         let bot_name = command.arb_bot_name.clone();
         let jito_region = command.jito_region.clone();
         let jito_uuid = command.jito_uuid.clone();
+        let tips_type = command.jito_tips_type.clone();
         let jito_host = if jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
         } else {
@@ -118,10 +141,10 @@ impl Executor for JitoExecutor {
                 .build()
                 .expect("Failed to build HTTP client"),
         );
-        JITO_EMA_TIPS.set(RwLock::new(get_jito_ema_tips().await?))?;
+        JITO_EMA_TIPS.set(RwLock::new(get_jito_ema_tips(tips_type).await?))?;
         tokio::spawn(async move {
             loop {
-                match get_jito_ema_tips().await {
+                match get_jito_ema_tips(tips_type).await {
                     Ok(tips) => {
                         let mut write_guard = JITO_EMA_TIPS.get().unwrap().write();
                         *write_guard = tips;
@@ -143,6 +166,7 @@ impl Executor for JitoExecutor {
             jito_url,
             used_url_index,
             client,
+            tips_type,
         }))
     }
 
