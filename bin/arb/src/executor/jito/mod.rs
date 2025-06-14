@@ -199,7 +199,7 @@ impl JitoExecutor {
     }
 
     fn calculate_compute_unit() -> u32 {
-        200_000
+        250_000
     }
 
     async fn create_jito_bundle(
