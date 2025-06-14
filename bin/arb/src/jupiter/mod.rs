@@ -9,7 +9,8 @@ use crate::jupiter::route_plan_step::RoutePlanStep;
 use crate::jupiter::swap::Swap;
 use crate::metadata::{get_arb_mint_ata, get_keypair, remove_already_ata, MintAtaPair};
 use crate::HopPathSearchResult;
-use anyhow::{anyhow, Result};
+use ahash::AHashSet;
+use anyhow::Result;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey;
@@ -33,7 +34,7 @@ pub fn build_jupiter_swap_ix(
     tip: u64,
 ) -> Result<(
     Instruction,
-    Vec<MintAtaPair>,
+    AHashSet<MintAtaPair>,
     Vec<AddressLookupTableAccount>,
 )> {
     let mut remaining_accounts = Vec::with_capacity(100);
@@ -41,7 +42,7 @@ pub fn build_jupiter_swap_ix(
     let mut alts = Vec::with_capacity(2);
     let instruction_materials: Vec<InstructionMaterial> =
         hop_path_search_result.convert_to_instruction_materials()?;
-    let mut used_atas = Vec::with_capacity(instruction_materials.len() * 2);
+    let mut used_atas = AHashSet::with_capacity(instruction_materials.len() * 2);
     for (index, mut material) in instruction_materials.into_iter().enumerate() {
         let (swap, append_jup_program) = get_jupiter_swap_type(&mut material)?;
         remaining_accounts.push(AccountMeta::new_readonly(

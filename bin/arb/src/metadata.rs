@@ -1,6 +1,6 @@
+use crate::dex::get_token_program;
 use crate::dex::{ATA_PROGRAM_ID, MINT_PROGRAM_ID};
 use crate::dex_data::DexJson;
-use crate::dex::get_token_program;
 use crate::keypair::KeypairVault;
 use ahash::{AHashMap, AHashSet};
 use futures_util::future::join_all;
@@ -148,7 +148,7 @@ pub fn get_keypair() -> Arc<Keypair> {
     KEYPAIR.get().unwrap().clone()
 }
 
-pub fn remove_already_ata(instruction_atas: &mut Vec<MintAtaPair>) {
+pub fn remove_already_ata(instruction_atas: &mut AHashSet<MintAtaPair>) {
     let read_guard = WALLET_OF_ATA_AMOUNT.get().unwrap().read();
     instruction_atas.retain(|pair| !read_guard.contains_key(&pair.ata));
 }
@@ -174,6 +174,7 @@ pub fn get_last_blockhash() -> Hash {
     LAST_BLOCK_HASH.get().unwrap().read().clone()
 }
 
+#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct MintAtaPair {
     pub mint: Pubkey,
     pub ata: Pubkey,
