@@ -8,13 +8,17 @@ use crate::HopPathSearchResult;
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
 use anyhow::anyhow;
+use anyhow::Result;
 use base64::engine::general_purpose;
 use base64::Engine;
+use futures_util::future::err;
+use parking_lot::RwLock;
 use rand::Rng;
 use rand_core::OsRng;
 use rand_core::RngCore;
-use reqwest::Client;
-use serde_json::json;
+use reqwest::{Client, Error, Response};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::v0::Message;
@@ -29,7 +33,9 @@ use std::ops::{Div, Mul};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use tokio::time::Instant;
+use tracing::{error, info};
 
 const DEFAULT_TIP_ACCOUNTS: [Pubkey; 8] = [
     pubkey!("3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT"),
@@ -42,6 +48,8 @@ const DEFAULT_TIP_ACCOUNTS: [Pubkey; 8] = [
     pubkey!("DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL"),
 ];
 
+static JITO_EMA_TIPS: OnceCell<RwLock<u64>> = OnceCell::const_new();
+
 const JITO_UUID_KEYS: &[u8; 32] = b"mBE5O1xpYfaxfuFT6mdFBxhHnnkW39X8";
 
 fn get_jito_fee_account_with_rand() -> Pubkey {
@@ -53,21 +61,36 @@ pub struct JitoExecutor {
     jito_url: Vec<String>,
     used_url_index: Option<AtomicUsize>,
     client: Arc<Client>,
-    tip_bps_numerator: u64,
-    tip_bps_denominator: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct JitoTips {
+    landed_tips_25th_percentile: f64,
+    landed_tips_50th_percentile: f64,
+    landed_tips_75th_percentile: f64,
+    landed_tips_95th_percentile: f64,
+    landed_tips_99th_percentile: f64,
+    ema_landed_tips_50th_percentile: f64,
+}
+
+async fn get_jito_ema_tips() -> Result<u64> {
+    let url = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
+    let tips: Vec<JitoTips> = reqwest::get(url).await?.json().await?;
+    match tips.first() {
+        None => Err(anyhow!("无返回数据")),
+        Some(tips) => Ok((tips.ema_landed_tips_50th_percentile * 1_000_000_000.0).floor() as u64),
+    }
 }
 
 #[async_trait::async_trait]
 impl Executor for JitoExecutor {
-    fn initialize(command: &Command) -> anyhow::Result<Arc<dyn Executor>>
+    async fn initialize(command: &Command) -> Result<Arc<dyn Executor>>
     where
         Self: Sized,
     {
         let bot_name = command.arb_bot_name.clone();
         let jito_region = command.jito_region.clone();
         let jito_uuid = command.jito_uuid.clone();
-        let tip_bps_numerator = command.tip_bps_numerator;
-        let tip_bps_denominator = command.tip_bps_denominator;
         let jito_host = if jito_region == "mainnet".to_string() {
             "https://mainnet.block-engine.jito.wtf".to_string()
         } else {
@@ -95,6 +118,21 @@ impl Executor for JitoExecutor {
                 .build()
                 .expect("Failed to build HTTP client"),
         );
+        JITO_EMA_TIPS.set(RwLock::new(get_jito_ema_tips().await?))?;
+        tokio::spawn(async move {
+            loop {
+                match get_jito_ema_tips().await {
+                    Ok(tips) => {
+                        let mut write_guard = JITO_EMA_TIPS.get().unwrap().write();
+                        *write_guard = tips;
+                    }
+                    Err(e) => {
+                        error!("获取 jito_ema_tips 失败，{}", e);
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
         let used_url_index = if jito_url.len() == 1 {
             None
         } else {
@@ -105,8 +143,6 @@ impl Executor for JitoExecutor {
             jito_url,
             used_url_index,
             client,
-            tip_bps_numerator,
-            tip_bps_denominator,
         }))
     }
 
@@ -115,7 +151,7 @@ impl Executor for JitoExecutor {
         hop_path_search_result: HopPathSearchResult,
         tx: String,
         slot: u64,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String> {
         match self
             .create_jito_bundle(hop_path_search_result, tx, slot)
             .await
@@ -198,6 +234,14 @@ impl JitoExecutor {
         self.jito_url.get(index).map(|s| s.as_str())
     }
 
+    fn calculate_jito_tips(&self, _profit: i64) -> Result<u64> {
+        Ok(JITO_EMA_TIPS
+            .get()
+            .ok_or(anyhow!("无法获取jito_ema_tips"))?
+            .read()
+            .clone())
+    }
+
     fn calculate_compute_unit() -> u32 {
         250_000
     }
@@ -207,14 +251,12 @@ impl JitoExecutor {
         hop_path_search_result: HopPathSearchResult,
         tx: String,
         slot: u64,
-    ) -> anyhow::Result<(Vec<VersionedTransaction>, Duration)> {
+    ) -> Result<(Vec<VersionedTransaction>, Duration)> {
         let start = Instant::now();
         let keypair = get_keypair();
         let wallet = keypair.pubkey();
         // ======================第一个Transaction====================
-        let tip = (hop_path_search_result.profit() as u64)
-            .mul(self.tip_bps_numerator)
-            .div(self.tip_bps_denominator);
+        let tip = self.calculate_jito_tips(hop_path_search_result.profit())?;
 
         let mut first_instructions = Vec::with_capacity(10);
         // 设置 CU

@@ -8,7 +8,7 @@ pub use jito::*;
 
 #[async_trait::async_trait]
 pub trait Executor: Sync + Send {
-    fn initialize(command: &Command) -> anyhow::Result<Arc<dyn Executor>>
+    async fn initialize(command: &Command) -> anyhow::Result<Arc<dyn Executor>>
     where
         Self: Sized;
 

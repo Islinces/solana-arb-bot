@@ -62,12 +62,6 @@ pub struct Command {
     arb_channel_capacity: usize,
     #[arg(long, default_value = "100000")]
     arb_min_profit: u64,
-    #[arg(long, default_value = "70")]
-    pub tip_bps_numerator: u64,
-    #[arg(long, default_value = "100")]
-    pub tip_bps_denominator: u64,
-    #[arg(long, default_value = "false")]
-    standard_program: bool,
     #[arg(long, default_value = "1")]
     processor_size: usize,
 }
@@ -130,7 +124,7 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         arb_mint,
         arb_mint_bps_numerator,
         arb_mint_bps_denominator,
-        JitoExecutor::initialize(&command)?,
+        JitoExecutor::initialize(&command).await?,
         hop_path_types,
     )
     .start(&mut join_set, cached_message_receiver)
