@@ -7,6 +7,7 @@ use crate::dex::pump_fun::PumpFunAMMSnapshotInitializer;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_amm::RaydiumAmmSnapshotInitializer;
 use crate::dex::raydium_clmm::RaydiumCLMMSnapshotInitializer;
+use crate::dex::raydium_cpmm::RaydiumCPMMSnapshotLoader;
 use crate::dex::{AccountType, DexType, CLOCK_ID};
 use crate::dex_data::DexJson;
 use ahash::AHashSet;
@@ -16,12 +17,12 @@ use enum_dispatch::enum_dispatch;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::address_lookup_table::state::AddressLookupTable;
 use solana_sdk::address_lookup_table::AddressLookupTableAccount;
+use solana_sdk::clock::Clock;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::extension::transfer_fee::TransferFeeConfig;
 use spl_token_2022::extension::{BaseStateWithExtensions, StateWithExtensions};
 use std::sync::Arc;
-use solana_sdk::clock::Clock;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 
@@ -97,6 +98,7 @@ pub enum SnapshotType {
     PumpFunAMM(PumpFunAMMSnapshotInitializer),
     RaydiumAmm(RaydiumAmmSnapshotInitializer),
     RaydiumCLMM(RaydiumCLMMSnapshotInitializer),
+    RaydiumCPMM(RaydiumCPMMSnapshotLoader),
 }
 
 pub async fn init_snapshot(
@@ -112,6 +114,7 @@ pub async fn init_snapshot(
         SnapshotType::from(PumpFunAMMSnapshotInitializer),
         SnapshotType::from(RaydiumAmmSnapshotInitializer),
         SnapshotType::from(RaydiumCLMMSnapshotInitializer),
+        SnapshotType::from(RaydiumCPMMSnapshotLoader),
     ] {
         let accounts: Vec<AccountDataSlice> =
             snapshot.init_snapshot(dex_data, rpc_client.clone()).await;
@@ -130,7 +133,7 @@ pub async fn init_snapshot(
     // 加载token2022
     cache_token_2022(dex_data.as_slice(), rpc_client.clone(), &cache).await;
     // 加载clock
-    cache_clock(dex_data.as_slice(), rpc_client.clone(), &cache).await;
+    cache_clock(rpc_client.clone(), &cache).await;
     info!("初始化Snapshot结束, 数量 : {}", dex_data.len());
     #[cfg(feature = "print_slice_data")]
     print_slice_data(dex_data);
@@ -149,6 +152,7 @@ fn print_slice_data(dex_json: &[DexJson]) {
         SnapshotType::from(PumpFunAMMSnapshotInitializer),
         SnapshotType::from(RaydiumAmmSnapshotInitializer),
         SnapshotType::from(RaydiumCLMMSnapshotInitializer),
+        SnapshotType::from(RaydiumCPMMSnapshotLoader),
     ]
     .into_iter()
     .for_each(|snapshot| {
@@ -276,19 +280,13 @@ async fn cache_token_2022(dex_data: &[DexJson], rpc_client: Arc<RpcClient>, cach
     })
 }
 
-async fn cache_clock(dex_data: &[DexJson], rpc_client: Arc<RpcClient>, cache: &GlobalCache) {
-    if dex_data.iter().any(|json| {
-        &json.owner == DexType::MeteoraDLMM.get_ref_program_id()
-            || &json.owner == DexType::OrcaWhirl.get_ref_program_id()
-            || &json.owner == DexType::MeteoraDAMMV2.get_ref_program_id()
-    }) {
-        let clock_data = rpc_client
-            .clone()
-            .get_account_data(&CLOCK_ID)
-            .await
-            .unwrap();
-        cache.upsert_dynamic(CLOCK_ID, clock_data);
-    }
+async fn cache_clock(rpc_client: Arc<RpcClient>, cache: &GlobalCache) {
+    let clock_data = rpc_client
+        .clone()
+        .get_account_data(&CLOCK_ID)
+        .await
+        .unwrap();
+    cache.upsert_dynamic(CLOCK_ID, clock_data);
 }
 
 #[derive(Clone, Debug)]

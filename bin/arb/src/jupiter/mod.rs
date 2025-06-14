@@ -86,9 +86,7 @@ pub fn build_jupiter_swap_ix(
     Ok((instruction, used_atas, alts))
 }
 
-fn get_jupiter_swap_type(
-    instruction_material: &mut InstructionMaterial,
-) -> anyhow::Result<(Swap, bool)> {
+fn get_jupiter_swap_type(instruction_material: &mut InstructionMaterial) -> Result<(Swap, bool)> {
     match instruction_material.dex_type {
         DexType::RaydiumAMM => Ok((Swap::Raydium, false)),
         // DexType::RaydiumCLMM => Swap::RaydiumClmmV2,
@@ -122,5 +120,6 @@ fn get_jupiter_swap_type(
             false,
         )),
         DexType::MeteoraDAMMV2 => Ok((Swap::MeteoraDammV2, false)),
+        DexType::RaydiumCPMM => Ok((Swap::RaydiumCP, false)),
     }
 }

@@ -4,6 +4,7 @@ use crate::dex::orca_whirlpools::OrcaWhirlInstructionMaterialConverter;
 use crate::dex::pump_fun::instruction::PumpFunAMMInstructionMaterialConverter;
 use crate::dex::raydium_amm::instruction::RaydiumAMMInstructionMaterialConverter;
 use crate::dex::raydium_clmm::instruction::RaydiumCLMMInstructionMaterialConverter;
+use crate::dex::raydium_cpmm::RaydiumCPMMInstructionMaterialConverter;
 use crate::dex::DexType;
 use crate::metadata::MintAtaPair;
 use enum_dispatch::enum_dispatch;
@@ -28,6 +29,7 @@ pub enum SwapInstructionType {
     PumpFunAMM(PumpFunAMMInstructionMaterialConverter),
     RaydiumAmm(RaydiumAMMInstructionMaterialConverter),
     RaydiumCLMM(RaydiumCLMMInstructionMaterialConverter),
+    RaydiumCPMM(RaydiumCPMMInstructionMaterialConverter),
 }
 
 pub struct InstructionMaterial {
@@ -78,6 +80,9 @@ pub fn get_instruction_builder(dex_type: &DexType) -> anyhow::Result<SwapInstruc
         )),
         DexType::MeteoraDAMMV2 => Ok(SwapInstructionType::from(
             MeteoraDAMMV2InstructionMaterialConverter,
+        )),
+        DexType::RaydiumCPMM => Ok(SwapInstructionType::from(
+            RaydiumCPMMInstructionMaterialConverter,
         )),
     }
 }

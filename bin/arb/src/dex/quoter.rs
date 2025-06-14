@@ -4,6 +4,7 @@ use crate::dex::orca_whirlpools::OrcaWhirlQuoter;
 use crate::dex::pump_fun::quote::PumpFunAMMQuoter;
 use crate::dex::raydium_amm::quote::RaydiumAMMQuoter;
 use crate::dex::raydium_clmm::quote::RaydiumCLMMQuoter;
+use crate::dex::raydium_cpmm::RaydiumCPMMQuoter;
 use crate::dex::DexType;
 use enum_dispatch::enum_dispatch;
 use solana_sdk::pubkey::Pubkey;
@@ -22,6 +23,7 @@ pub enum QuoterType {
     PumpFunAMM(PumpFunAMMQuoter),
     RaydiumAmm(RaydiumAMMQuoter),
     RaydiumCLMM(RaydiumCLMMQuoter),
+    RaydiumCPMM(RaydiumCPMMQuoter),
 }
 
 pub fn get_quoter_type(dex_type: DexType) -> anyhow::Result<QuoterType> {
@@ -32,6 +34,7 @@ pub fn get_quoter_type(dex_type: DexType) -> anyhow::Result<QuoterType> {
         DexType::MeteoraDLMM => Ok(QuoterType::from(MeteoraDLMMQuoter)),
         DexType::OrcaWhirl => Ok(QuoterType::from(OrcaWhirlQuoter)),
         DexType::MeteoraDAMMV2 => Ok(QuoterType::from(MeteoraDAMMV2Quoter)),
+        DexType::RaydiumCPMM => Ok(QuoterType::from(RaydiumCPMMQuoter)),
     }
 }
 

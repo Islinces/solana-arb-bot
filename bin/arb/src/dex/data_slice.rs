@@ -4,10 +4,13 @@ use crate::dex::orca_whirlpools::OrcaWhirlDataSlicer;
 use crate::dex::pump_fun::PumpFunAMMDataSlicer;
 use crate::dex::raydium_amm::RaydiumAMMDataSlicer;
 use crate::dex::raydium_clmm::RaydiumCLMMDataSlicer;
-use crate::dex::{AccountType, DexType};
+use crate::dex::raydium_cpmm::RaydiumCPMMDataSlicer;
+use crate::dex::utils::read_from;
+use crate::dex::{AccountType, DexType, DynamicCache, FromCache, StaticCache};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use enum_dispatch::enum_dispatch;
+use parking_lot::RwLockReadGuard;
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::SysvarId;
@@ -71,6 +74,7 @@ pub enum DataSlice {
     PumpFunAMM(PumpFunAMMDataSlicer),
     RaydiumAmm(RaydiumAMMDataSlicer),
     RaydiumCLMM(RaydiumCLMMDataSlicer),
+    RaydiumCPMM(RaydiumCPMMDataSlicer),
 }
 
 pub enum SliceType {
@@ -89,6 +93,7 @@ pub fn init_data_slice_config() -> anyhow::Result<()> {
     data_slicer.insert(DexType::PumpFunAMM, DataSlice::from(PumpFunAMMDataSlicer));
     data_slicer.insert(DexType::RaydiumAMM, DataSlice::from(RaydiumAMMDataSlicer));
     data_slicer.insert(DexType::RaydiumCLMM, DataSlice::from(RaydiumCLMMDataSlicer));
+    data_slicer.insert(DexType::RaydiumCPMM, DataSlice::from(RaydiumCPMMDataSlicer));
     DATA_SLICE_PROCESSOR.set(data_slicer)?;
     DATA_SLICE_PROCESSOR
         .get()
@@ -169,4 +174,25 @@ pub fn retain_intervals_unsafe(
         result.set_len(total_len);
     }
     result
+}
+
+#[derive(Debug)]
+pub struct MintVault {
+    pub amount: u64,
+}
+
+impl FromCache for MintVault {
+    fn from_cache(
+        account_key: &Pubkey,
+        _static_cache: RwLockReadGuard<StaticCache>,
+        dynamic_cache: &DynamicCache,
+    ) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let dynamic_data = dynamic_cache.get(account_key)?;
+        let dynamic_data = dynamic_data.value().as_slice();
+        let amount = unsafe { read_from::<u64>(&dynamic_data[0..8]) };
+        Some(Self { amount })
+    }
 }

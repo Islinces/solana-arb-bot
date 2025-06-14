@@ -16,6 +16,7 @@ mod pump_fun;
 mod quoter;
 mod raydium_amm;
 mod raydium_clmm;
+pub mod raydium_cpmm;
 mod snapshot;
 mod subscriber;
 mod swap_instruction;
@@ -46,6 +47,7 @@ pub const MEMO_PROGRAM_V2: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXg
 pub enum DexType {
     RaydiumAMM,
     RaydiumCLMM,
+    RaydiumCPMM,
     PumpFunAMM,
     MeteoraDLMM,
     MeteoraDAMMV2,
@@ -68,6 +70,8 @@ impl TryFrom<&Pubkey> for DexType {
             Ok(DexType::OrcaWhirl)
         } else if owner == DexType::MeteoraDAMMV2.get_ref_program_id() {
             Ok(DexType::MeteoraDAMMV2)
+        } else if owner == DexType::RaydiumCPMM.get_ref_program_id() {
+            Ok(DexType::RaydiumCPMM)
         } else {
             Err(anyhow!("无效的Owner"))
         }
@@ -102,6 +106,7 @@ impl Display for DexType {
             DexType::MeteoraDLMM => "MeteoraDLMM",
             DexType::MeteoraDAMMV2 => "MeteoraDAMMV2",
             DexType::OrcaWhirl => "OrcaWhirl",
+            DexType::RaydiumCPMM => "RaydiumCPMM",
         })
     }
 }
@@ -115,6 +120,7 @@ impl DexType {
             DexType::MeteoraDLMM => &meteora_dlmm::METEORA_DLMM_PROGRAM_ID,
             DexType::OrcaWhirl => &orca_whirlpools::WHIRLPOOL_ID,
             DexType::MeteoraDAMMV2 => &meteora_damm_v2::DAMM_V2_PROGRAM_ID,
+            DexType::RaydiumCPMM => &raydium_cpmm::RAYDIUM_CPMM_PROGRAM_ID,
         }
     }
 }

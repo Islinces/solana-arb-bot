@@ -19,6 +19,7 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterTransactions, SubscribeUpdate,
 };
 use yellowstone_grpc_proto::tonic::Status;
+use crate::dex::raydium_cpmm::RaydiumCPMMAccountSubscriber;
 
 #[enum_dispatch]
 pub trait AccountSubscriber {
@@ -33,6 +34,7 @@ pub enum Subscriber {
     RaydiumAMM(RaydiumAMMAccountSubscriber),
     RaydiumCLMM(RaydiumCLMMAccountSubscriber),
     OrcaWhirl(OrcaWhirlAccountSubscriber),
+    RaydiumCPMM(RaydiumCPMMAccountSubscriber),
 }
 
 pub async fn grpc_subscribe(
@@ -50,6 +52,7 @@ pub async fn grpc_subscribe(
         Subscriber::from(RaydiumAMMAccountSubscriber),
         Subscriber::from(RaydiumCLMMAccountSubscriber),
         Subscriber::from(OrcaWhirlAccountSubscriber),
+        Subscriber::from(RaydiumCPMMAccountSubscriber),
     ] {
         match sub.get_subscription_accounts(dex_json.as_slice()) {
             None => {}

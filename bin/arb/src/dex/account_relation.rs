@@ -4,6 +4,7 @@ use crate::dex::orca_whirlpools::OrcaWhirlAccountRelationRecord;
 use crate::dex::pump_fun::PumpFunAMMRelationRecord;
 use crate::dex::raydium_amm::RaydiumAMMRelationRecord;
 use crate::dex::raydium_clmm::RaydiumCLMMRelationRecord;
+use crate::dex::raydium_cpmm::RaydiumCPMMAccountRelationRecord;
 use crate::dex::{AccountType, DexType};
 use crate::dex_data::DexJson;
 use ahash::AHashMap;
@@ -34,6 +35,7 @@ pub enum AccountRelationRecordType {
     PumpFunAMM(PumpFunAMMRelationRecord),
     RaydiumAmm(RaydiumAMMRelationRecord),
     RaydiumCLMM(RaydiumCLMMRelationRecord),
+    RaydiumCPMM(RaydiumCPMMAccountRelationRecord),
 }
 
 pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()> {
@@ -46,6 +48,7 @@ pub(crate) fn init_account_relations(dex_data: &[DexJson]) -> anyhow::Result<()>
         AccountRelationRecordType::from(RaydiumAMMRelationRecord),
         AccountRelationRecordType::from(RaydiumCLMMRelationRecord),
         AccountRelationRecordType::from(MeteoraDAMMV2RelationRecord),
+        AccountRelationRecordType::from(RaydiumCPMMAccountRelationRecord),
     ] {
         let relation_infos: Option<(Vec<AccountInfo>, Option<(DexType, AccountType)>)> =
             record_type.get_account_info(dex_data)?;

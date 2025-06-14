@@ -3,8 +3,8 @@ use crate::dex::tick_array::TickArray;
 use crate::dex::whirlpool::Whirlpool;
 use crate::dex::{
     get_account_data, get_dex_type_and_account_type, is_follow_vault, update_cache, AccountType,
-    AmmInfo, BinArray, BinArrayBitmapExtension, LbPair, PoolState, TickArrayBitmapExtension,
-    TickArrayState,
+    AmmInfo, BinArray, BinArrayBitmapExtension, LbPair, MintVault, PoolState,
+    TickArrayBitmapExtension, TickArrayState,
 };
 use crate::dex::{slice_data_auto_get_dex_type, SliceType};
 use crate::dex::{DexType, FromCache};
@@ -312,6 +312,32 @@ fn print_data_from_cache(owner: &Pubkey, account_key: &Pubkey) -> anyhow::Result
                     Ok(())
                 }
                 _ => Err(anyhow!("MeteoraDAMMV2")),
+            },
+            DexType::RaydiumCPMM => match account_type {
+                AccountType::Pool => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumCPMM,
+                        AccountType::Pool,
+                        account_key,
+                        get_account_data::<crate::dex::raydium_cpmm::states::PoolState>(
+                            &account_key
+                        )
+                        .unwrap()
+                    );
+                    Ok(())
+                }
+                AccountType::MintVault => {
+                    info!(
+                        "{:?} {:?}, key : {:?}\n{:#?}",
+                        DexType::RaydiumCPMM,
+                        AccountType::MintVault,
+                        account_key,
+                        get_account_data::<MintVault>(&account_key).unwrap()
+                    );
+                    Ok(())
+                }
+                _ => Err(anyhow!("RaydiumCPMM")),
             },
         },
     }
