@@ -3,6 +3,7 @@ use solana_sdk::pubkey::Pubkey;
 const TICK_ARRAY_SIZE_USIZE: usize = 60;
 const REWARD_NUM: usize = 3;
 #[repr(C, packed)]
+#[derive(Debug, Copy, Clone)]
 pub struct TickArrayState {
     pub pool_id: Pubkey,
     pub start_tick_index: i32,
@@ -31,7 +32,7 @@ impl TryInto<crate::dex::raydium_clmm::TickArrayState> for TickArrayState {
 }
 
 #[repr(C, packed)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct TickState {
     pub tick: i32,
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)

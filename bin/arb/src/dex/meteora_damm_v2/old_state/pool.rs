@@ -3,7 +3,8 @@ use solana_sdk::pubkey::Pubkey;
 
 const NUM_REWARDS: usize = 2;
 
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct Pool {
     /// Pool fee
     pub pool_fees: PoolFeesStruct,
@@ -86,9 +87,10 @@ impl TryInto<crate::dex::meteora_damm_v2::state::pool::Pool> for Pool {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<crate::dex::meteora_damm_v2::state::pool::Pool, Self::Error> {
+        let base_fees = self.pool_fees;
         Ok(crate::dex::meteora_damm_v2::state::pool::Pool {
-            base_fee: self.pool_fees.clone().base_fee.try_into()?,
-            dynamic_fee: self.pool_fees.clone().dynamic_fee.try_into()?,
+            base_fee: base_fees.base_fee.try_into()?,
+            dynamic_fee: base_fees.dynamic_fee.try_into()?,
             token_a_mint: self.token_a_mint,
             token_b_mint: self.token_b_mint,
             token_a_vault: self.token_a_vault,
@@ -107,7 +109,8 @@ impl TryInto<crate::dex::meteora_damm_v2::state::pool::Pool> for Pool {
     }
 }
 
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct PoolMetrics {
     pub total_lp_a_fee: u128,
     pub total_lp_b_fee: u128,
@@ -119,7 +122,8 @@ pub struct PoolMetrics {
     pub padding: u64,
 }
 
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct RewardInfo {
     /// Indicates if the reward has been initialized
     pub initialized: u8,

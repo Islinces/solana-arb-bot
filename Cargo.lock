@@ -272,6 +272,7 @@ dependencies = [
  "ethnum",
  "flume",
  "futures-util",
+ "log",
  "mimalloc",
  "num-derive",
  "num-integer",

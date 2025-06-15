@@ -1,39 +1,11 @@
 [
   {
-    "pool": "CXgcuECqdaBpvJWH5cwEir9Y5FY9SKTjhGutMc95bGy3",
-    "owner": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "znv3FZt2HFAvzYf5LxzVyryh3mBXWuTRRng25gEZAjh",
-    "vaultA": "5exwzc4fcPvd1hrEEdNKMWqadaMLjNRtNDqg4Rj8Vvco",
-    "vaultB": "5SFCroG7VU2T5GqAeHM9pAwSVWdJdRDiGsPKh9kJjxh7",
-    "addressLookupTableAddress": "FVQHRGpE2oc3eVWNReVWWVi8dDj5zuf5pJUjC3GNb8db"
-  },
-  {
-    "pool": "Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v",
-    "owner": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
-    "mintA": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "mintB": "So11111111111111111111111111111111111111112",
-    "vaultA": "nML7msD1MiJHxFvhv4po1u6C4KpWr64ugKqc75DMuD2",
-    "vaultB": "EjHirXt2bQd2DDNveagHHCWYzUwtY1iwNbBrV5j84e6j",
-    "addressLookupTableAddress": "7KgsCbuJAXxELXhpzc9PwX7GenoF3UsuuW71qW1Gr3u9"
-  },
-
-  {
-    "pool": "6MUjnGffYaqcHeqv4nNemUQVNMpJab3W2NV9bfPj576c",
-    "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+    "pool": "Esvfxt3jMDdtTZqLF1fqRhDjzM8Bpr7fZxJMrK69PB7e",
+    "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
     "mintA": "So11111111111111111111111111111111111111112",
     "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "2P6xseti7bdTSkECNod9myYbY92WFAg4PUwYSkQUyUoD",
-    "vaultB": "1i3HWdz8Yphfy9jWizbSK2f6cX1em8ANU6xhHLfuzsE",
-    "addressLookupTableAddress": "9RDJFu8AzKituXzkciF8u7MGWRdVYKEAbjZw8X2vRFYx"
-  },
-  {
-    "pool": "HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR",
-    "owner": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
-    "mintA": "So11111111111111111111111111111111111111112",
-    "mintB": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "vaultA": "H7j5NPopj3tQvDg4N8CxwtYciTn3e8AEV6wSVrxpyDUc",
-    "vaultB": "HbYjRzx7teCxqW3unpXBEcNHhfVZvW2vW9MQ99TkizWt",
-    "addressLookupTableAddress": "F82bQDMeZaUvRUJe73uw6K5y5Nf7zUUPqPcALBE3AfgZ"
+    "vaultA": "5fEq5SYpSpnDUDn8dmXUmZeHVaXpL14UirnGajF9QMor",
+    "vaultB": "iMH9YW3kAgk4kkB74ZHPHESHAQQWPeGWn6Rmty3WJnq",
+    "addressLookupTableAddress": "4TeTR3QLmwPdnw7H3oUgPSA7Etx2W3WEooX4wC62JLB5"
   }
 ]

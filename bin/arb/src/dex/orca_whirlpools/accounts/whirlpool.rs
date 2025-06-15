@@ -4,7 +4,9 @@ use crate::dex::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use tracing::info;
 
+#[repr(C, packed)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Whirlpool {
@@ -20,10 +22,6 @@ pub struct Whirlpool {
     pub sqrt_price: u128,
     // 81,4
     pub tick_current_index: i32,
-    // 85,8
-    pub protocol_fee_owed_a: u64,
-    // 93,8
-    pub protocol_fee_owed_b: u64,
     // 101,32
     pub token_mint_a: Pubkey,
     // 133,32
@@ -57,12 +55,10 @@ impl Whirlpool {
             let tick_spacing = read_from::<u16>(&static_data[0..2]);
             let fee_tier_index_seed = read_from::<[u8; 2]>(&static_data[2..4]);
             let fee_rate = read_from::<u16>(&static_data[4..6]);
-            let protocol_fee_owed_a = read_from::<u64>(&static_data[6..14]);
-            let protocol_fee_owed_b = read_from::<u64>(&static_data[14..22]);
-            let token_mint_a = read_from::<Pubkey>(&static_data[22..54]);
-            let token_vault_a = read_from::<Pubkey>(&static_data[54..86]);
-            let token_mint_b = read_from::<Pubkey>(&static_data[86..118]);
-            let token_vault_b = read_from::<Pubkey>(&static_data[118..150]);
+            let token_mint_a = read_from::<Pubkey>(&static_data[6..38]);
+            let token_vault_a = read_from::<Pubkey>(&static_data[38..70]);
+            let token_mint_b = read_from::<Pubkey>(&static_data[70..102]);
+            let token_vault_b = read_from::<Pubkey>(&static_data[102..134]);
             let liquidity = read_from::<u128>(&dynamic_data[0..16]);
             let sqrt_price = read_from::<u128>(&dynamic_data[16..32]);
             let tick_current_index = read_from::<i32>(&dynamic_data[32..36]);
@@ -73,8 +69,6 @@ impl Whirlpool {
                 liquidity,
                 sqrt_price,
                 tick_current_index,
-                protocol_fee_owed_a,
-                protocol_fee_owed_b,
                 token_mint_a,
                 token_vault_a,
                 token_mint_b,
@@ -93,8 +87,6 @@ impl Whirlpool {
             let liquidity = read_from::<u128>(&data[49..65]);
             let sqrt_price = read_from::<u128>(&data[65..81]);
             let tick_current_index = read_from::<i32>(&data[81..85]);
-            let protocol_fee_owed_a = read_from::<u64>(&data[85..93]);
-            let protocol_fee_owed_b = read_from::<u64>(&data[93..101]);
             let token_mint_a = read_from::<Pubkey>(&data[101..133]);
             let token_vault_a = read_from::<Pubkey>(&data[133..165]);
             let token_mint_b = read_from::<Pubkey>(&data[181..213]);
@@ -106,8 +98,6 @@ impl Whirlpool {
                 liquidity,
                 sqrt_price,
                 tick_current_index,
-                protocol_fee_owed_a,
-                protocol_fee_owed_b,
                 token_mint_a,
                 token_vault_a,
                 token_mint_b,

@@ -3,7 +3,8 @@ use serde::Serialize;
 use serde_with::serde_as;
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Clone, Debug)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 #[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Oracle {
@@ -30,7 +31,8 @@ impl TryInto<crate::dex::orca_whirlpools::accounts::oracle::Oracle> for Oracle {
     }
 }
 
-#[derive(Clone, Debug)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AdaptiveFeeConstants {
     pub filter_period: u16,
@@ -61,7 +63,8 @@ impl TryInto<crate::dex::orca_whirlpools::accounts::oracle::AdaptiveFeeConstants
     }
 }
 
-#[derive(Clone, Debug)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AdaptiveFeeVariables {
     pub last_reference_update_timestamp: u64,

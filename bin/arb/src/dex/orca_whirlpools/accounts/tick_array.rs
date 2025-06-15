@@ -24,6 +24,7 @@ pub const MIN_TICK_INDEX: i32 = -443636;
 /// The maximum tick index.
 pub const MAX_TICK_INDEX: i32 = 443636;
 
+#[repr(C, packed)]
 #[derive(Clone, Debug)]
 #[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
@@ -67,7 +68,7 @@ impl TickArray {
                     liquidity_gross,
                 };
             }
-            let whirlpool = read_from::<Pubkey>(&dynamic_data[2904..2936]);
+            let whirlpool = read_from::<Pubkey>(&dynamic_data[2908..2940]);
             Ok(Self {
                 start_tick_index,
                 ticks,

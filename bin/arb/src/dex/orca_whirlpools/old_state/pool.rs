@@ -1,6 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Clone, Debug)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct Whirlpool {
     pub discriminator: [u8; 8],
     pub whirlpools_config: Pubkey,
@@ -35,8 +36,6 @@ impl TryInto<crate::dex::orca_whirlpools::accounts::whirlpool::Whirlpool> for Wh
             liquidity: self.liquidity,
             sqrt_price: self.sqrt_price,
             tick_current_index: self.tick_current_index,
-            protocol_fee_owed_a: self.protocol_fee_owed_a,
-            protocol_fee_owed_b: self.protocol_fee_owed_b,
             token_mint_a: self.token_mint_a,
             token_vault_a: self.token_vault_a,
             token_mint_b: self.token_mint_b,
@@ -45,7 +44,8 @@ impl TryInto<crate::dex::orca_whirlpools::accounts::whirlpool::Whirlpool> for Wh
     }
 }
 
-#[derive(Clone, Debug)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct WhirlpoolRewardInfo {
     /// Reward token mint.
     pub mint: Pubkey,

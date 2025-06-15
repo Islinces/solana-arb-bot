@@ -12,7 +12,7 @@ static DYNAMIC_ORACLE_SLICE: OnceCell<([(usize, usize); 5], usize)> = OnceCell::
 static DYNAMIC_TICK_ARRAY_SLICE: OnceCell<(Vec<(usize, usize)>, usize)> = OnceCell::const_new();
 // ========================= static data 账户未订阅的数据切片 =========================
 // pool
-static STATIC_POOL_SLICE: OnceCell<([(usize, usize); 9], usize)> = OnceCell::const_new();
+static STATIC_POOL_SLICE: OnceCell<([(usize, usize); 7], usize)> = OnceCell::const_new();
 // oracle
 static STATIC_ORACLE_SLICE: OnceCell<([(usize, usize); 8], usize)> = OnceCell::const_new();
 
@@ -135,36 +135,36 @@ fn oracle_data_slice() -> anyhow::Result<()> {
                 // whirlpool
                 (8, 8 + 32),
                 // filter_period
-                (40, 40 + 2),
+                (48, 48 + 2),
                 // decay_period
-                (42, 42 + 2),
+                (50, 50 + 2),
                 // reduction_factor
-                (44, 44 + 2),
+                (52, 52 + 2),
                 // adaptive_fee_control_factor
-                (46, 46 + 4),
+                (54, 54 + 4),
                 // max_volatility_accumulator
-                (50, 50 + 4),
+                (58, 58 + 4),
                 // tick_group_size
-                (54, 54 + 2),
+                (62, 62 + 2),
                 // major_swap_threshold_ticks
-                (56, 56 + 16),
+                (64, 64 + 2),
             ],
-            32 + 2 + 2 + 2 + 4 + 4 + 2 + 16,
+            32 + 2 + 2 + 2 + 4 + 4 + 2 + 2,
         )
     })?;
     DYNAMIC_ORACLE_SLICE.set({
         (
             [
                 // last_reference_update_timestamp
-                (74, 74 + 8),
-                // last_major_swap_timestamp
                 (82, 82 + 8),
+                // last_major_swap_timestamp
+                (90, 90 + 8),
                 // volatility_reference
-                (90, 90 + 4),
-                // tick_group_index_reference
-                (94, 94 + 4),
-                // volatility_accumulator
                 (98, 98 + 4),
+                // tick_group_index_reference
+                (102, 102 + 4),
+                // volatility_accumulator
+                (106, 106 + 4),
             ],
             8 + 8 + 4 + 4 + 4,
         )
@@ -195,10 +195,6 @@ fn pool_data_slice() -> anyhow::Result<()> {
                 (43, 43 + 2),
                 // fee_rate
                 (45, 45 + 2),
-                // protocol_fee_owed_a
-                (85, 85 + 8),
-                // protocol_fee_owed_b
-                (93, 93 + 8),
                 // token_mint_a
                 (101, 101 + 32),
                 // token_vault_a
@@ -208,7 +204,7 @@ fn pool_data_slice() -> anyhow::Result<()> {
                 // token_vault_b
                 (213, 213 + 32),
             ],
-            2 + 2 + 2 + 8 + 8 + 32 + 32 + 32 + 32,
+            2 + 2 + 2 + 32 + 32 + 32 + 32,
         )
     })?;
     Ok(())

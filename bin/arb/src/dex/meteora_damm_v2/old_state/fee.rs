@@ -1,4 +1,5 @@
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct PoolFeesStruct {
     /// Trade fees are extra token amounts that are held inside the token
     /// accounts during a trade, making the value of liquidity tokens rise.
@@ -24,7 +25,8 @@ pub struct PoolFeesStruct {
     pub padding_1: [u64; 2],
 }
 
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct BaseFeeStruct {
     pub cliff_fee_numerator: u64,
     pub fee_scheduler_mode: u8,
@@ -51,7 +53,8 @@ impl TryInto<crate::dex::meteora_damm_v2::state::fee::BaseFeeStruct> for BaseFee
     }
 }
 
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct DynamicFeeStruct {
     pub initialized: u8, // 0, ignore for dynamic fee
     pub padding: [u8; 7],

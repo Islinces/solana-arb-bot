@@ -190,7 +190,7 @@ fn print_data_from_cache(
                     AccountType::Pool,
                     get_diff::<AmmInfo, crate::dex::raydium_amm::old_state::pool::AmmInfo>(
                         account_key,
-                        &grpc_data[8..],
+                        grpc_data,
                     ),
                 )),
                 AccountType::MintVault => Ok((
@@ -222,12 +222,12 @@ fn print_data_from_cache(
                     crate::dex::raydium_clmm::old_state::bitmap_extension::TickArrayBitmapExtension,
                 >(account_key, &grpc_data[8..])))
                 ,
-                _ => Err(anyhow!("RaydiumAMM")),
+                _ => Err(anyhow!("RaydiumCLMM")),
             },
             DexType::PumpFunAMM => match account_type {
                 AccountType::MintVault =>Ok((DexType::PumpFunAMM, AccountType::MintVault, get_diff::<MintVault, Account>(account_key, grpc_data)))
                    ,
-                _ => Err(anyhow!("RaydiumAMM")),
+                _ => Err(anyhow!("PumpFunAMM")),
             },
             DexType::MeteoraDLMM => match account_type {
                 AccountType::Pool =>Ok((DexType::MeteoraDLMM, AccountType::Pool,  get_diff::<
@@ -245,25 +245,25 @@ fn print_data_from_cache(
                     crate::dex::meteora_dlmm::old_state::bitmap_extension::BinArrayBitmapExtension,
                 >(account_key, &grpc_data[8..])))
                 ,
-                _ => Err(anyhow!("RaydiumAMM")),
+                _ => Err(anyhow!("MeteoraDLMM")),
             },
             DexType::OrcaWhirl => match account_type {
                 AccountType::Pool =>  Ok((DexType::OrcaWhirl, AccountType::Pool, get_diff::<
                     Whirlpool,
                     crate::dex::orca_whirlpools::old_state::pool::Whirlpool,
-                >(account_key, &grpc_data[8..])))
+                >(account_key, grpc_data)))
                 ,
                 AccountType::TickArray =>Ok((DexType::OrcaWhirl, AccountType::TickArray,  get_diff::<
                     TickArray,
                     crate::dex::orca_whirlpools::old_state::tick_array::TickArray,
-                >(account_key, &grpc_data[8..])))
+                >(account_key, grpc_data)))
                 ,
                 AccountType::Oracle =>Ok((DexType::OrcaWhirl, AccountType::Oracle,  get_diff::<
                     Oracle,
                     crate::dex::orca_whirlpools::old_state::oracle::Oracle,
-                >(account_key, &grpc_data[8..])))
+                >(account_key, grpc_data)))
                 ,
-                _ => Err(anyhow!("RaydiumAMM")),
+                _ => Err(anyhow!("OrcaWhirl")),
             },
             DexType::MeteoraDAMMV2 => match account_type {
                 AccountType::Pool => Ok((DexType::MeteoraDAMMV2, AccountType::Pool, get_diff::<
@@ -271,7 +271,7 @@ fn print_data_from_cache(
                     crate::dex::meteora_damm_v2::old_state::pool::Pool,
                 >(account_key, &grpc_data[8..])))
                 ,
-                _ => Err(anyhow!("RaydiumAMM")),
+                _ => Err(anyhow!("MeteoraDAMMV2")),
             },
             DexType::RaydiumCPMM => match account_type {
                 AccountType::Pool =>Ok((DexType::RaydiumCPMM, AccountType::Pool,  get_diff::<
@@ -281,7 +281,7 @@ fn print_data_from_cache(
                 ,
                 AccountType::MintVault =>Ok((DexType::RaydiumCPMM, AccountType::MintVault,  get_diff::<MintVault, Account>(account_key, grpc_data)))
                     ,
-                _ => Err(anyhow!("RaydiumAMM")),
+                _ => Err(anyhow!("RaydiumCPMM")),
             },
         },
     };
@@ -290,8 +290,8 @@ fn print_data_from_cache(
             Ok(d) => {
                 if let Some(df) = d {
                     info!(
-                        "{:?} {:?}, key : {:?}\n{:#?}",
-                        dex_type, account_type, account_key, df
+                        "{:?} {:?}, key : {:?}\n{:?}",
+                        dex_type, account_type, account_key, serde_json::to_string(&df)
                     );
                 }
                 // else {
@@ -312,24 +312,27 @@ fn print_data_from_cache(
     Ok(())
 }
 
-fn get_diff<Taget: FromCache + Serialize + Debug, F: TryInto<Taget>>(
+fn get_diff<Taget: FromCache + Serialize + Debug, F: TryInto<Taget> + Debug>(
     account_key: &Pubkey,
     grpc_data: &[u8],
 ) -> anyhow::Result<Option<Difference>>
 where
     <F as TryInto<Taget>>::Error: Debug,
 {
-    let origin_pool = unsafe {
-        read_from::<F>(grpc_data)
-            .try_into()
-            .map_err(|e| anyhow!("grpc数据转换失败，原因：{:?}", e))?
-    };
+    let origin_pool = unsafe { read_from::<F>(grpc_data) };
+    let a = origin_pool
+        .try_into()
+        .map_err(|e| anyhow!("grpc数据转换失败，原因：{:?}", e))?;
+    // info!("a:{:#?}", a);
     let custom_pool = get_account_data::<Taget>(&account_key).map_or(
         Err(anyhow!("account:{account_key}缓存中没有")),
         |data| Ok(data),
     )?;
+    // info!("custom_pool:{:#?}", custom_pool);
     // 序列化为 serde_json::Value
     let old_json = serde_json::to_value(&custom_pool)?;
-    let new_json = serde_json::to_value(&origin_pool)?;
-    serde_json_diff::values(old_json, new_json).map_or(Ok(None), |diff| Ok(Some(diff)))
+    let new_json = serde_json::to_value(&a)?;
+    let result =
+        serde_json_diff::values(old_json, new_json).map_or(Ok(None), |diff| Ok(Some(diff)));
+    result
 }

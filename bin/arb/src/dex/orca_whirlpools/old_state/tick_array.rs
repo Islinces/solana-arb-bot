@@ -1,6 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Clone, Debug)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
 pub struct TickArray {
     pub discriminator: [u8; 8],
     pub start_tick_index: i32,
@@ -24,7 +25,8 @@ impl TryInto<crate::dex::orca_whirlpools::accounts::tick_array::TickArray> for T
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Tick {
     pub initialized: bool,
     pub liquidity_net: i128,
