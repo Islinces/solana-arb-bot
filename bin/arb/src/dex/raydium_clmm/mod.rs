@@ -16,6 +16,7 @@ mod swap_math;
 mod tick_math;
 mod unsafe_math;
 pub mod utils;
+pub mod old_state;
 
 pub use account_subscriber::*;
 pub use data_slice::*;

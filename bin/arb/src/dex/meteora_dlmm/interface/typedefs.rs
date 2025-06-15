@@ -1,8 +1,10 @@
 use crate::dex::utils::read_from;
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Default, Clone, Copy, Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Bin {
     pub amount_x: u64,
     pub amount_y: u64,
@@ -12,7 +14,8 @@ pub struct Bin {
 
 pub(crate) const S_PARAMETER_LEN: usize = 2 + 2 + 2 + 2 + 4 + 4 + 2 + 1;
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct StaticParameters {
     pub base_factor: u16,
     pub filter_period: u16,
@@ -52,6 +55,7 @@ impl StaticParameters {
 pub(crate) const V_PARAMETER_LEN: usize = 4 + 4 + 4 + 8;
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct VariableParameters {
     pub volatility_accumulator: u32,
     pub volatility_reference: u32,

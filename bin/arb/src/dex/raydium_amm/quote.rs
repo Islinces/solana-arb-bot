@@ -1,7 +1,8 @@
-use crate::dex::utils::CheckedCeilDiv;
+use crate::dex::global_cache::get_account_data;
 use crate::dex::quoter::{QuoteResult, Quoter};
 use crate::dex::raydium_amm::state::AmmInfo;
-use crate::dex::global_cache::get_account_data;
+use crate::dex::utils::CheckedCeilDiv;
+use crate::dex::MintVault;
 use solana_sdk::pubkey::Pubkey;
 use std::ops::{Add, Div, Mul, Sub};
 
@@ -11,6 +12,8 @@ pub struct RaydiumAMMQuoter;
 impl Quoter for RaydiumAMMQuoter {
     fn quote(&self, amount_in: u64, swap_direction: bool, pool_id: &Pubkey) -> Option<QuoteResult> {
         let amm_info = get_account_data::<AmmInfo>(pool_id)?;
+        let coin_vault_amount = get_account_data::<MintVault>(&amm_info.coin_vault)?.amount;
+        let pc_vault_amount = get_account_data::<MintVault>(&amm_info.pc_vault)?.amount;
         let amount_in = u128::from(amount_in);
         let swap_fee_numerator = u128::from(amm_info.swap_fee_numerator);
         let swap_fee_denominator = u128::from(amm_info.swap_fee_denominator);
@@ -22,9 +25,8 @@ impl Quoter for RaydiumAMMQuoter {
         let swap_in_after_deduct_fee = amount_in.sub(swap_fee);
 
         let mint_0_amount_without_pnl =
-            u128::from(amm_info.coin_vault_amount.sub(amm_info.need_take_pnl_coin));
-        let mint_1_amount_without_pnl =
-            u128::from(amm_info.pc_vault_amount.sub(amm_info.need_take_pnl_pc));
+            u128::from(coin_vault_amount.sub(amm_info.need_take_pnl_coin));
+        let mint_1_amount_without_pnl = u128::from(pc_vault_amount.sub(amm_info.need_take_pnl_pc));
         let amount_out = if swap_direction {
             mint_1_amount_without_pnl
                 .mul(swap_in_after_deduct_fee)

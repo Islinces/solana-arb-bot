@@ -2,9 +2,11 @@ use crate::dex::utils::read_from;
 use crate::dex::FromCache;
 use crate::dex::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Whirlpool {
     // 41,2
     pub tick_spacing: u16,

@@ -15,6 +15,7 @@ use crate::dex::{DynamicCache, FromCache, StaticCache};
 use anyhow::{anyhow, Result};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 /// collect fee mode
@@ -42,7 +43,8 @@ pub enum PoolType {
     Customizable,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Pool {
     /// Pool fee
     // 8,40

@@ -6,6 +6,7 @@ mod quote;
 mod relation;
 mod snapshot_loader;
 pub mod state;
+pub mod old_state;
 
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use solana_sdk::pubkey;

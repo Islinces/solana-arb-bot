@@ -7,6 +7,7 @@ use crate::dex::meteora_damm_v2::math::safe_math::SafeMath;
 use crate::dex::meteora_damm_v2::state::pool::CollectFeeMode;
 use anyhow::{anyhow, Result};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use serde::{Deserialize, Serialize};
 use crate::dex::meteora_damm_v2::TradeDirection;
 
 /// Encodes all results of swapping
@@ -27,7 +28,8 @@ pub enum FeeSchedulerMode {
     Exponential,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct BaseFeeStruct {
     // 8,8
     pub cliff_fee_numerator: u64,
@@ -79,7 +81,8 @@ impl BaseFeeStruct {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct DynamicFeeStruct {
     // 56，1
     pub initialized: u8, // 0, ignore for dynamic fee

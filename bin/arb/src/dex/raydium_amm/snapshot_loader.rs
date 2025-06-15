@@ -1,10 +1,10 @@
+use crate::dex::global_cache::get_account_data;
 use crate::dex::pump_fun::PUMP_FUN_AMM_PROGRAM_ID;
 use crate::dex::raydium_amm::state::AmmInfo;
 use crate::dex::raydium_amm::RAYDIUM_AMM_PROGRAM_ID;
 use crate::dex::snapshot::{AccountDataSlice, SnapshotInitializer};
-use crate::dex::{AccountType, DexType};
+use crate::dex::{AccountType, DexType, MintVault};
 use crate::dex_data::DexJson;
-use crate::dex::global_cache::get_account_data;
 use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -110,6 +110,24 @@ impl SnapshotInitializer for RaydiumAmmSnapshotInitializer {
                 AccountType::Pool,
                 json.pool,
                 pool
+            );
+            let coin_vault = get_account_data::<MintVault>(&pool.coin_vault)
+                .ok_or(anyhow!("{}找不到缓存数据", pool.coin_vault))?;
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::RaydiumAMM,
+                AccountType::MintVault,
+                pool.coin_vault,
+                coin_vault
+            );
+            let pc_vault = get_account_data::<MintVault>(&pool.pc_vault)
+                .ok_or(anyhow!("{}找不到缓存数据", pool.pc_vault))?;
+            info!(
+                "【{}】【{:?}】, key : {:?}\ndata : {:#?}",
+                DexType::RaydiumAMM,
+                AccountType::MintVault,
+                pool.pc_vault,
+                pc_vault
             );
         }
         Ok(())

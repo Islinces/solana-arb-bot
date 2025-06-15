@@ -1,11 +1,15 @@
-use crate::dex::utils::read_from;
-use crate::dex::orca_whirlpools::{get_tick_array_start_tick_index, WHIRLPOOL_ID};
-use crate::dex::FromCache;
 use crate::dex::global_cache::{DynamicCache, StaticCache};
+use crate::dex::orca_whirlpools::{get_tick_array_start_tick_index, WHIRLPOOL_ID};
+use crate::dex::utils::read_from;
+use crate::dex::whirlpool::Whirlpool;
+use crate::dex::FromCache;
 use parking_lot::RwLockReadGuard;
+use serde::de::SeqAccess;
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use crate::dex::whirlpool::Whirlpool;
 
 /// The number of ticks in a tick array.
 pub const TICK_ARRAY_SIZE: usize = 88;
@@ -20,12 +24,15 @@ pub const MIN_TICK_INDEX: i32 = -443636;
 /// The maximum tick index.
 pub const MAX_TICK_INDEX: i32 = 443636;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
+#[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickArray {
     // 8,4
     pub start_tick_index: i32,
     // 12,113*88
-    pub ticks: [Tick; 88],
+    #[serde_as(as = "[_; 88]")]
+    pub ticks: [Tick; TICK_ARRAY_SIZE],
     // 9956,32
     pub whirlpool: Pubkey,
 }
@@ -133,7 +140,8 @@ pub(crate) fn get_tick_array_keys(
         .collect::<Result<Vec<Pubkey>, _>>()
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Default, Copy)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Tick {
     // 1
     pub initialized: bool,

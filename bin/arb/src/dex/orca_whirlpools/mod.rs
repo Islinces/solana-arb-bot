@@ -11,6 +11,7 @@ mod quote;
 mod relation;
 mod snapshot_loader;
 mod swap;
+pub mod old_state;
 
 pub(super) use account_subscriber::*;
 pub(super) use data_slice::*;

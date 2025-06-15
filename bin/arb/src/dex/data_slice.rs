@@ -11,9 +11,11 @@ use ahash::AHashMap;
 use anyhow::anyhow;
 use enum_dispatch::enum_dispatch;
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::SysvarId;
+use spl_token::state::Account;
 use std::ptr;
 use tokio::sync::{OnceCell, SetError};
 
@@ -177,8 +179,19 @@ pub fn retain_intervals_unsafe(
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct MintVault {
     pub amount: u64,
+}
+
+impl TryFrom<Account> for MintVault {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Account) -> Result<Self, Self::Error> {
+        Ok(Self {
+            amount: value.amount,
+        })
+    }
 }
 
 impl FromCache for MintVault {

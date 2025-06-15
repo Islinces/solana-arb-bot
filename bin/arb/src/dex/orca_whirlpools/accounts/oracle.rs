@@ -3,6 +3,7 @@ use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
 use crate::dex::FromCache;
 use crate::dex::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -29,7 +30,8 @@ pub fn get_oracle_address(whirlpool: &Pubkey) -> Result<Pubkey, ProgramError> {
         .map_or(Err(ProgramError::InvalidSeeds), |v| Ok(v.0))
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Oracle {
     // 8,32
     pub whirlpool: Pubkey,
@@ -140,6 +142,7 @@ impl Oracle {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AdaptiveFeeConstants {
     // 40,2
     pub filter_period: u16,
@@ -160,6 +163,7 @@ pub struct AdaptiveFeeConstants {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AdaptiveFeeVariables {
     // 74,8
     pub last_reference_update_timestamp: u64,

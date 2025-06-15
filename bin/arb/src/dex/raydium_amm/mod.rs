@@ -8,6 +8,7 @@ pub mod quote;
 mod relation;
 mod snapshot_loader;
 pub mod state;
+pub mod old_state;
 
 pub use account_subscriber::*;
 pub use data_slice::*;

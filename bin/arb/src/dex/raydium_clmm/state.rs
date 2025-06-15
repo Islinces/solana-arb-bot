@@ -6,6 +6,8 @@ use crate::dex::{DexType, FromCache};
 use crate::{require, require_gt};
 use anyhow::anyhow;
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use solana_sdk::pubkey::Pubkey;
 use std::ptr;
 
@@ -52,6 +54,7 @@ pub fn _pda_amm_config_key(index: u16) -> Pubkey {
 
 #[repr(C, packed)]
 #[derive(Default, Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct PoolState {
     // ================= static data ====================
     pub amm_config: Pubkey,
@@ -249,9 +252,12 @@ pub const TICK_ARRAY_SIZE: i32 = 60;
 
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
+#[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickArrayState {
     pub pool_id: Pubkey,
     pub start_tick_index: i32,
+    #[serde_as(as = "[_; 60]")]
     pub ticks: [TickState; TICK_ARRAY_SIZE_USIZE],
 }
 
@@ -386,6 +392,7 @@ impl Default for TickArrayState {
 
 #[repr(C, packed)]
 #[derive(Default, Debug, Clone, Copy)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickState {
     pub tick: i32,
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
@@ -542,6 +549,7 @@ pub fn pda_bit_map_extension_key(pool_id: &Pubkey) -> Pubkey {
 const EXTENSION_TICKARRAY_BITMAP_SIZE: usize = 14;
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickArrayBitmapExtension {
     pub pool_id: Pubkey,
     /// Packed initialized tick array state for start_tick_index is positive

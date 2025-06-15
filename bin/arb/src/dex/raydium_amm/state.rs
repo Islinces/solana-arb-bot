@@ -1,11 +1,13 @@
-use crate::dex::utils::read_from;
 use crate::dex::global_cache::{DynamicCache, StaticCache};
+use crate::dex::utils::read_from;
 use crate::dex::FromCache;
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AmmInfo {
     // 分开存储
     // static data 未订阅的属性
@@ -18,9 +20,9 @@ pub struct AmmInfo {
     // dynamic data 订阅的属性
     pub need_take_pnl_coin: u64,
     pub need_take_pnl_pc: u64,
-    // dynamic data 金库
-    pub coin_vault_amount: u64,
-    pub pc_vault_amount: u64,
+    // // dynamic data 金库
+    // pub coin_vault_amount: u64,
+    // pub pc_vault_amount: u64,
 }
 
 impl FromCache for AmmInfo {
@@ -46,13 +48,6 @@ impl FromCache for AmmInfo {
 
             let need_take_pnl_coin = read_from::<u64>(&pool_dynamic_data[0..8]);
             let need_take_pnl_pc = read_from::<u64>(&pool_dynamic_data[8..16]);
-
-            let coin_vault_amount_bytes = dynamic_cache.get(&coin_vault)?;
-            let pc_vault_amount_bytes = dynamic_cache.get(&pc_vault)?;
-
-            let coin_vault_amount = read_from::<u64>(&coin_vault_amount_bytes[0..8]);
-            let pc_vault_amount = read_from::<u64>(&pc_vault_amount_bytes[0..8]);
-
             Some(Self {
                 swap_fee_numerator,
                 swap_fee_denominator,
@@ -62,8 +57,6 @@ impl FromCache for AmmInfo {
                 pc_vault_mint,
                 need_take_pnl_coin,
                 need_take_pnl_pc,
-                coin_vault_amount,
-                pc_vault_amount,
             })
         }
     }

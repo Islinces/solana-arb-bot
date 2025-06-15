@@ -1,6 +1,7 @@
 use crate::dex::utils::read_from;
 use crate::dex::{DynamicCache, FromCache, StaticCache};
 use parking_lot::RwLockReadGuard;
+use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 
 /// Seed to derive account address and signature
@@ -23,7 +24,8 @@ enum PoolStatusBitFlag {
 }
 
 #[repr(C, packed)]
-#[derive(Default, Debug)]
+#[derive(Debug)]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct PoolState {
     /// Which config the pool belongs
     /// 8,32

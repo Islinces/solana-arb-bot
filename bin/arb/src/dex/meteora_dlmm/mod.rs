@@ -13,6 +13,7 @@ mod math;
 mod quote;
 mod relation;
 mod snapshot_loader;
+pub mod old_state;
 
 pub(super) use account_subscriber::*;
 pub(super) use commons::derive_bin_array_bitmap_extension;
