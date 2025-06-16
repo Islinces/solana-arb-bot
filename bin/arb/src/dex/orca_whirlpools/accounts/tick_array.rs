@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use serde_big_array::BigArray;
 
 /// The number of ticks in a tick array.
 pub const TICK_ARRAY_SIZE: usize = 88;
