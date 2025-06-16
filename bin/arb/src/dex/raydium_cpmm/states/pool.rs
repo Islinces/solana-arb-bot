@@ -26,8 +26,8 @@ enum PoolStatusBitFlag {
 
 #[repr(C, packed)]
 #[derive(Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct PoolState {
     /// Which config the pool belongs
     /// 8,32

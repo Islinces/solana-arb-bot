@@ -33,8 +33,8 @@ pub fn get_oracle_address(whirlpool: &Pubkey) -> Result<Pubkey, ProgramError> {
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Oracle {
     // 8,32
     #[serde_as(as = "DisplayFromStr")]

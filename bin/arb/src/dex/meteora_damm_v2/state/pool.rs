@@ -45,8 +45,8 @@ pub enum PoolType {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Pool {
     /// Pool fee
     // 8,40

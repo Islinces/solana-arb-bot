@@ -14,8 +14,8 @@ use std::{mem, ptr};
 pub const BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM: [u8; 8] = [80, 111, 124, 113, 55, 237, 18, 5];
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct BinArrayBitmapExtension {
     #[serde_as(as = "DisplayFromStr")]
     pub lb_pair: Pubkey,
@@ -89,8 +89,8 @@ impl BinArray {
 pub const LB_PAIR_ACCOUNT_DISCM: [u8; 8] = [33, 11, 49, 98, 181, 101, 177, 13];
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct LbPair {
     // static
     pub parameters: StaticParameters,

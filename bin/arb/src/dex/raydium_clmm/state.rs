@@ -55,8 +55,8 @@ pub fn _pda_amm_config_key(index: u16) -> Pubkey {
 
 #[repr(C, packed)]
 #[derive(Default, Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct PoolState {
     // ================= static data ====================
     #[serde_as(as = "DisplayFromStr")]
@@ -403,8 +403,8 @@ impl Default for TickArrayState {
 
 #[repr(C, packed)]
 #[derive(Default, Debug, Clone, Copy)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickState {
     pub tick: i32,
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
@@ -563,8 +563,8 @@ pub fn pda_bit_map_extension_key(pool_id: &Pubkey) -> Pubkey {
 const EXTENSION_TICKARRAY_BITMAP_SIZE: usize = 14;
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickArrayBitmapExtension {
     #[serde_as(as = "DisplayFromStr")]
     pub pool_id: Pubkey,

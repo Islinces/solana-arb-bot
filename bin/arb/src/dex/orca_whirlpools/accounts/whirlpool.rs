@@ -8,8 +8,8 @@ use solana_sdk::pubkey::Pubkey;
 
 #[repr(C, packed)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Whirlpool {
     // 41,2
     pub tick_spacing: u16,

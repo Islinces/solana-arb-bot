@@ -83,8 +83,8 @@ impl BaseFeeStruct {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[serde_as]
+#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct DynamicFeeStruct {
     // 56，1
     pub initialized: u8, // 0, ignore for dynamic fee
