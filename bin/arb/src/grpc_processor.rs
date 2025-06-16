@@ -70,6 +70,14 @@ impl MessageProcessor {
                                 );
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
+                                #[cfg(feature = "print_data_after_update")]
+                                let _ =
+                                    BalanceChangeInfo::collect_balance_change_infos(
+                                        transaction_msg.signature.as_slice(),
+                                        transaction_msg.transaction.as_ref().unwrap().message.clone(),
+                                        transaction_msg.meta.clone().unwrap(),
+                                    );
+
                                 match cached_message_sender.try_send(transaction_msg) {
                                     Err(TrySendError::Full(msg)) => {
                                         cached_msg_drop_receiver.try_recv().ok();
@@ -269,7 +277,7 @@ impl BalanceChangeInfo {
                     .into_iter()
                     .filter_map(|t| {
                         if only_in_pre.contains(&t.account_index) {
-                            BalanceChangeInfo::new_from_one(tx,true, &t, &account_keys)
+                            BalanceChangeInfo::new_from_one(tx, true, &t, &account_keys)
                         } else {
                             None
                         }
@@ -283,7 +291,7 @@ impl BalanceChangeInfo {
                     .into_iter()
                     .filter_map(|t| {
                         if only_in_post.contains(&t.account_index) {
-                            BalanceChangeInfo::new_from_one(tx,false, &t, &account_keys)
+                            BalanceChangeInfo::new_from_one(tx, false, &t, &account_keys)
                         } else {
                             None
                         }

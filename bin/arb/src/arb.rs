@@ -82,11 +82,7 @@ impl Arb {
                                     meta,
                                 );
                             if let Some(changed_balances) = balance_change_infos {
-                                #[cfg(feature = "print_data_after_update")]
-                                Self::print_amount_diff(
-                                    transaction_msg.signature.as_slice(),
-                                    changed_balances.as_slice(),
-                                );
+
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
                                 if let Some(best_path) = Self::trigger_quote(
@@ -167,7 +163,7 @@ impl Arb {
             .max_by_key(|a| a.profit())
     }
 
-    fn print_amount_diff(tx: &[u8], balances: &[BalanceChangeInfo]) {
+    pub fn print_amount_diff(tx: &[u8], balances: &[BalanceChangeInfo]) {
         balances.iter().for_each(|info| {
             if info.dex_type == DexType::RaydiumAMM
                 || info.dex_type == DexType::PumpFunAMM
