@@ -162,29 +162,4 @@ impl Arb {
             })
             .max_by_key(|a| a.profit())
     }
-
-    pub fn print_amount_diff(tx: &[u8], balances: &[BalanceChangeInfo]) {
-        balances.iter().for_each(|info| {
-            if info.dex_type == DexType::RaydiumAMM
-                || info.dex_type == DexType::PumpFunAMM
-                || info.dex_type == DexType::RaydiumCPMM
-            {
-                let cache_vault_amount = match get_account_data::<MintVault>(&info.vault_account) {
-                    None => 0,
-                    Some(amount) => amount.amount,
-                };
-                if cache_vault_amount.to_string()!=info.post_account {
-                    warn!(
-                    "Arb : tx : {:?}, Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}",
-                    tx.to_base58(),
-                    info.dex_type,
-                    info.pool_id,
-                    info.vault_account,
-                    info.post_account,
-                    cache_vault_amount,
-                    );
-                }
-            }
-        })
-    }
 }

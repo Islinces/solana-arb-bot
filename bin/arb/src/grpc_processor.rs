@@ -32,7 +32,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use yellowstone_grpc_proto::prelude::{
     Message, TokenBalance, TransactionStatusMeta, UiTokenAmount,
 };
@@ -299,7 +299,37 @@ impl BalanceChangeInfo {
                     .collect::<Vec<_>>(),
             );
         }
-        (!changed_balances.is_empty()).then_some(changed_balances)
+        if changed_balances.is_empty() {
+            None
+        } else {
+            Self::print_amount_diff(tx, changed_balances.as_slice());
+            Some(changed_balances)
+        }
+    }
+
+    fn print_amount_diff(tx: &[u8], balances: &[BalanceChangeInfo]) {
+        balances.iter().for_each(|info| {
+            if info.dex_type == DexType::RaydiumAMM
+                || info.dex_type == DexType::PumpFunAMM
+                || info.dex_type == DexType::RaydiumCPMM
+            {
+                let cache_vault_amount = match get_account_data::<MintVault>(&info.vault_account) {
+                    None => 0,
+                    Some(amount) => amount.amount,
+                };
+                if cache_vault_amount.to_string()!=info.post_account {
+                    warn!(
+                    "Arb : tx : {:?}, Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}",
+                    tx.to_base58(),
+                    info.dex_type,
+                    info.pool_id,
+                    info.vault_account,
+                    info.post_account,
+                    cache_vault_amount,
+                    );
+                }
+            }
+        })
     }
 }
 
