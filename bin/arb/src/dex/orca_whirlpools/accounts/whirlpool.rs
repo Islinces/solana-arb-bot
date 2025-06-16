@@ -1,14 +1,15 @@
+use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::utils::read_from;
 use crate::dex::FromCache;
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use solana_sdk::pubkey::Pubkey;
-use tracing::info;
 
 #[repr(C, packed)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct Whirlpool {
     // 41,2
     pub tick_spacing: u16,
@@ -17,18 +18,24 @@ pub struct Whirlpool {
     // 45,2
     pub fee_rate: u16,
     // 49,16
+    #[serde_as(as = "DisplayFromStr")]
     pub liquidity: u128,
     // 65,16
+    #[serde_as(as = "DisplayFromStr")]
     pub sqrt_price: u128,
     // 81,4
     pub tick_current_index: i32,
     // 101,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_mint_a: Pubkey,
     // 133,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_vault_a: Pubkey,
     // 181,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_mint_b: Pubkey,
     // 213,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_vault_b: Pubkey,
 }
 

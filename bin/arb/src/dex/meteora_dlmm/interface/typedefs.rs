@@ -1,13 +1,16 @@
 use crate::dex::utils::read_from;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
+#[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Bin {
     pub amount_x: u64,
     pub amount_y: u64,
+    #[serde_as(as = "DisplayFromStr")]
     pub price: u128,
     // pub liquidity_supply: u128,
 }

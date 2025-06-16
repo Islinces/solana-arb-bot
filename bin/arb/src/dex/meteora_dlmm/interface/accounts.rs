@@ -6,15 +6,18 @@ use crate::dex::utils::read_from;
 use crate::dex::FromCache;
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use solana_sdk::pubkey::Pubkey;
 use std::{mem, ptr};
-use serde_with::serde_as;
 
 pub const BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM: [u8; 8] = [80, 111, 124, 113, 55, 237, 18, 5];
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct BinArrayBitmapExtension {
+    #[serde_as(as = "DisplayFromStr")]
     pub lb_pair: Pubkey,
     pub positive_bin_array_bitmap: [[u64; 8]; 12],
     pub negative_bin_array_bitmap: [[u64; 8]; 12],
@@ -42,11 +45,12 @@ impl FromCache for BinArrayBitmapExtension {
 }
 pub const BIN_ARRAY_ACCOUNT_DISCM: [u8; 8] = [92, 142, 92, 220, 5, 148, 70, 181];
 #[repr(C)]
-#[serde_as]
 #[derive(Clone, Debug)]
+#[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct BinArray {
     pub index: i64,
+    #[serde_as(as = "DisplayFromStr")]
     pub lb_pair: Pubkey,
     #[serde_as(as = "[_; 70]")]
     pub bins: [Bin; 70],
@@ -86,6 +90,7 @@ pub const LB_PAIR_ACCOUNT_DISCM: [u8; 8] = [33, 11, 49, 98, 181, 101, 177, 13];
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct LbPair {
     // static
     pub parameters: StaticParameters,
@@ -93,10 +98,15 @@ pub struct LbPair {
     pub bin_step: u16,
     pub status: u8,
     pub activation_type: u8,
+    #[serde_as(as = "DisplayFromStr")]
     pub token_x_mint: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub token_y_mint: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub reserve_x: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub reserve_y: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub oracle: Pubkey,
     pub activation_point: u64,
     pub token_mint_x_program_flag: u8,

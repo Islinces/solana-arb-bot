@@ -3,19 +3,25 @@ use crate::dex::utils::read_from;
 use crate::dex::FromCache;
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use solana_sdk::pubkey::Pubkey;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
+#[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AmmInfo {
     // 分开存储
     // static data 未订阅的属性
     pub swap_fee_numerator: u64,
     pub swap_fee_denominator: u64,
+    #[serde_as(as = "DisplayFromStr")]
     pub coin_vault: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub pc_vault: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub coin_vault_mint: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub pc_vault_mint: Pubkey,
     // dynamic data 订阅的属性
     pub need_take_pnl_coin: u64,

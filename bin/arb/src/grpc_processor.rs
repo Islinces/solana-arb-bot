@@ -291,7 +291,10 @@ fn print_data_from_cache(
                 if let Some(df) = d {
                     info!(
                         "{:?} {:?}, key : {:?}\n{:?}",
-                        dex_type, account_type, account_key, serde_json::to_string(&df)
+                        dex_type,
+                        account_type,
+                        account_key,
+                        serde_json::to_string(&df)
                     );
                 }
                 // else {
@@ -319,6 +322,9 @@ fn get_diff<Taget: FromCache + Serialize + Debug, F: TryInto<Taget> + Debug>(
 where
     <F as TryInto<Taget>>::Error: Debug,
 {
+    if grpc_data.len()==0 {
+        return Ok(None);
+    }
     let origin_pool = unsafe { read_from::<F>(grpc_data) };
     let a = origin_pool
         .try_into()

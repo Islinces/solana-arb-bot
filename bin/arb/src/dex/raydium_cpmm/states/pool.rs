@@ -3,6 +3,7 @@ use crate::dex::{DynamicCache, FromCache, StaticCache};
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use serde_with::{serde_as, DisplayFromStr};
 
 /// Seed to derive account address and signature
 const POOL_SEED: &str = "pool";
@@ -26,32 +27,41 @@ enum PoolStatusBitFlag {
 #[repr(C, packed)]
 #[derive(Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct PoolState {
     /// Which config the pool belongs
     /// 8,32
+    #[serde_as(as = "DisplayFromStr")]
     pub amm_config: Pubkey,
     /// Token A
     /// 72,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_0_vault: Pubkey,
     /// Token B
     /// 104,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_1_vault: Pubkey,
     /// Mint information for token A
     /// 168,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_0_mint: Pubkey,
     /// Mint information for token B
     /// 200,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_1_mint: Pubkey,
 
     /// token_0 program
     /// 232,32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_0_program: Pubkey,
     /// token_1 program
     /// 264，32
+    #[serde_as(as = "DisplayFromStr")]
     pub token_1_program: Pubkey,
 
     /// observation account to store oracle data
     /// 296，32
+    #[serde_as(as = "DisplayFromStr")]
     pub observation_key: Pubkey,
     /// Bitwise representation of the state of the pool
     /// bit0, 1: disable deposit(value is 1), 0: normal

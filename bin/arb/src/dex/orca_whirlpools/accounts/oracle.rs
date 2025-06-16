@@ -6,6 +6,7 @@ use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use serde_with::{serde_as, DisplayFromStr};
 
 /// This constant is used to scale the value of the volatility accumulator.
 pub const VOLATILITY_ACCUMULATOR_SCALE_FACTOR: u16 = 10_000;
@@ -33,8 +34,10 @@ pub fn get_oracle_address(whirlpool: &Pubkey) -> Result<Pubkey, ProgramError> {
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct Oracle {
     // 8,32
+    #[serde_as(as = "DisplayFromStr")]
     pub whirlpool: Pubkey,
     // 40,34
     pub adaptive_fee_constants: AdaptiveFeeConstants,

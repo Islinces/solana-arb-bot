@@ -8,6 +8,7 @@ use anyhow::anyhow;
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use solana_sdk::pubkey::Pubkey;
 use std::ptr;
 
@@ -55,23 +56,32 @@ pub fn _pda_amm_config_key(index: u16) -> Pubkey {
 #[repr(C, packed)]
 #[derive(Default, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct PoolState {
     // ================= static data ====================
+    #[serde_as(as = "DisplayFromStr")]
     pub amm_config: Pubkey,
     /// Token pair of the pool, where token_mint_0 address < token_mint_1 address
+    #[serde_as(as = "DisplayFromStr")]
     pub token_mint_0: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub token_mint_1: Pubkey,
     /// Token pair vault
+    #[serde_as(as = "DisplayFromStr")]
     pub token_vault_0: Pubkey,
+    #[serde_as(as = "DisplayFromStr")]
     pub token_vault_1: Pubkey,
     /// observation account key
+    #[serde_as(as = "DisplayFromStr")]
     pub observation_key: Pubkey,
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,
     // ================= dynamic data ====================
     /// The currently in range liquidity available to the pool.
+    #[serde_as(as = "DisplayFromStr")]
     pub liquidity: u128,
     /// The current price of the pool as a sqrt(token_1/token_0) Q64.64 value
+    #[serde_as(as = "DisplayFromStr")]
     pub sqrt_price_x64: u128,
     /// The current tick of the pool, i.e. according to the last tick transition that was run.
     pub tick_current: i32,
@@ -250,12 +260,12 @@ pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
 pub const TICK_ARRAY_SIZE: i32 = 60;
 
-
 #[repr(C, packed)]
 #[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct TickArrayState {
+    #[serde_as(as = "DisplayFromStr")]
     pub pool_id: Pubkey,
     pub start_tick_index: i32,
     #[serde_as(as = "[_; 60]")]
@@ -394,11 +404,14 @@ impl Default for TickArrayState {
 #[repr(C, packed)]
 #[derive(Default, Debug, Clone, Copy)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct TickState {
     pub tick: i32,
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
+    #[serde_as(as = "DisplayFromStr")]
     pub liquidity_net: i128,
     /// The total position liquidity that references this tick
+    #[serde_as(as = "DisplayFromStr")]
     pub liquidity_gross: u128,
 }
 
@@ -551,7 +564,9 @@ const EXTENSION_TICKARRAY_BITMAP_SIZE: usize = 14;
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[serde_as]
 pub struct TickArrayBitmapExtension {
+    #[serde_as(as = "DisplayFromStr")]
     pub pool_id: Pubkey,
     /// Packed initialized tick array state for start_tick_index is positive
     pub positive_tick_array_bitmap: [[u64; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE],

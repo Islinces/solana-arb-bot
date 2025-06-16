@@ -7,9 +7,10 @@ use parking_lot::RwLockReadGuard;
 use serde::de::SeqAccess;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde_with::{serde_as, DisplayFromStr};
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use serde_big_array::BigArray;
 
 /// The number of ticks in a tick array.
 pub const TICK_ARRAY_SIZE: usize = 88;
@@ -35,6 +36,7 @@ pub struct TickArray {
     #[serde_as(as = "[_; 88]")]
     pub ticks: [Tick; TICK_ARRAY_SIZE],
     // 9956,32
+    #[serde_as(as = "DisplayFromStr")]
     pub whirlpool: Pubkey,
 }
 
@@ -142,13 +144,16 @@ pub(crate) fn get_tick_array_keys(
 }
 
 #[derive(Clone, Debug, Default, Copy)]
+#[serde_as]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Tick {
     // 1
     pub initialized: bool,
     // 16
+    #[serde_as(as = "DisplayFromStr")]
     pub liquidity_net: i128,
     // 16
+    #[serde_as(as = "DisplayFromStr")]
     pub liquidity_gross: u128,
     // 16
     // fee_a
