@@ -1,3 +1,4 @@
+use crate::dex::{get_account_data, DexType, MintVault};
 use crate::executor::Executor;
 use crate::graph::HopPath;
 use crate::grpc_processor::BalanceChangeInfo;
@@ -91,6 +92,11 @@ impl Arb {
                                 })
                                 .collect::<Vec<_>>();
                             if !changed_balances.is_empty() {
+                                #[cfg(feature = "print_data_after_update")]
+                                Self::print_amount_diff(
+                                    transaction_msg.signature.as_slice(),
+                                    changed_balances.as_slice(),
+                                );
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
                                 if let Some(best_path) = Self::trigger_quote(
@@ -169,5 +175,28 @@ impl Arb {
                 )
             })
             .max_by_key(|a| a.profit())
+    }
+
+    fn print_amount_diff(tx: &[u8], balances: &[BalanceChangeInfo]) {
+        balances.iter().for_each(|info| {
+            if info.dex_type == DexType::RaydiumAMM
+                || info.dex_type == DexType::PumpFunAMM
+                || info.dex_type == DexType::RaydiumCPMM
+            {
+                let cache_vault_amount = match get_account_data::<MintVault>(&info.vault_account) {
+                    None => 0,
+                    Some(amount) => amount.amount,
+                };
+                warn!(
+                    "Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}, tx : {:?}",
+                    info.dex_type,
+                    info.pool_id,
+                    info.vault_account,
+                    info.post_account,
+                    cache_vault_amount,
+                    tx.to_base58(),
+                );
+            }
+        })
     }
 }

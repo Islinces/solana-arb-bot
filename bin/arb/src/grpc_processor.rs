@@ -133,6 +133,7 @@ pub struct BalanceChangeInfo {
     pub pool_id: Pubkey,
     pub account_index: usize,
     pub vault_account: Pubkey,
+    pub post_account: String,
     pub change_value: f64,
 }
 
@@ -151,6 +152,7 @@ impl BalanceChangeInfo {
                             pool_id,
                             account_index,
                             vault_account: vault_account.clone(),
+                            post_account: post_amount.amount.clone(),
                             change_value: post_amount.ui_amount.sub(pre_amount.ui_amount),
                         })
                     })
@@ -322,7 +324,7 @@ fn get_diff<Taget: FromCache + Serialize + Debug, F: TryInto<Taget> + Debug>(
 where
     <F as TryInto<Taget>>::Error: Debug,
 {
-    if grpc_data.len()==0 {
+    if grpc_data.len() == 0 {
         return Ok(None);
     }
     let origin_pool = unsafe { read_from::<F>(grpc_data) };
