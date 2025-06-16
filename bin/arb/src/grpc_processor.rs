@@ -1,3 +1,4 @@
+use crate::arb::Arb;
 use crate::dex::meteora_damm_v2::state::pool::Pool;
 use crate::dex::oracle::Oracle;
 use crate::dex::tick_array::TickArray;
@@ -10,8 +11,9 @@ use crate::dex::{
 use crate::dex::{slice_data_auto_get_dex_type, SliceType};
 use crate::dex::{DexType, FromCache};
 use crate::grpc_subscribe::{GrpcMessage, GrpcTransactionMsg};
-use ahash::RandomState;
+use ahash::{AHashMap, AHashSet, RandomState};
 use anyhow::anyhow;
+use base58::ToBase58;
 use borsh::BorshDeserialize;
 use dashmap::DashMap;
 use flume::{Receiver, RecvError, TrySendError};
@@ -31,7 +33,9 @@ use tokio::sync::broadcast;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{error, info};
-use yellowstone_grpc_proto::prelude::TokenBalance;
+use yellowstone_grpc_proto::prelude::{
+    Message, TokenBalance, TransactionStatusMeta, UiTokenAmount,
+};
 
 pub struct MessageProcessor {
     pub process_size: usize,
@@ -59,6 +63,7 @@ impl MessageProcessor {
                         Ok(grpc_message) => match grpc_message {
                             GrpcMessage::Account(account_msg) => {
                                 let _ = Self::update_cache(
+                                    account_msg.tx.as_slice(),
                                     account_msg.owner_key,
                                     account_msg.account_key,
                                     account_msg.data,
@@ -102,7 +107,12 @@ impl MessageProcessor {
         }
     }
 
-    fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, data: Vec<u8>) -> anyhow::Result<()> {
+    fn update_cache(
+        tx: &[u8],
+        owner: Vec<u8>,
+        account_key: Vec<u8>,
+        data: Vec<u8>,
+    ) -> anyhow::Result<()> {
         let account_key = Pubkey::try_from(account_key)
             .map_or(Err(anyhow!("转换account_key失败")), |a| Ok(a))?;
         let owner = Pubkey::try_from(owner).map_or(Err(anyhow!("转换owner失败")), |a| Ok(a))?;
@@ -117,7 +127,7 @@ impl MessageProcessor {
                     SliceType::Subscribed,
                 )?,
             )?;
-            print_data_from_cache(&owner, &account_key, data)?;
+            print_data_from_cache(tx, &owner, &account_key, data)?;
         }
         #[cfg(not(feature = "print_data_after_update"))]
         update_cache(
@@ -138,7 +148,12 @@ pub struct BalanceChangeInfo {
 }
 
 impl BalanceChangeInfo {
-    pub fn new(pre: &TokenBalance, post: &TokenBalance, account_keys: &[Pubkey]) -> Option<Self> {
+    fn new(
+        tx: &[u8],
+        pre: &TokenBalance,
+        post: &TokenBalance,
+        account_keys: &[Pubkey],
+    ) -> Option<Self> {
         let account_index = pre.account_index as usize;
         match (pre.ui_token_amount.as_ref(), post.ui_token_amount.as_ref()) {
             (Some(pre_amount), Some(post_amount)) => {
@@ -147,6 +162,10 @@ impl BalanceChangeInfo {
                 } else {
                     let vault_account = &account_keys[account_index];
                     is_follow_vault(vault_account).map_or(None, |(pool_id, dex_type)| {
+                        // info!(
+                        //     "balance, tx : {:?}, dex : {:?} , pool_id : {:?}, vault : {:?} , amount : {:?}",
+                        //     tx.to_base58(),dex_type, pool_id, vault_account, post_amount.amount
+                        // );
                         Some(Self {
                             dex_type,
                             pool_id,
@@ -160,6 +179,119 @@ impl BalanceChangeInfo {
             }
             _ => None,
         }
+    }
+
+    fn new_from_one(
+        tx: &[u8],
+        is_pre: bool,
+        one: &TokenBalance,
+        account_keys: &[Pubkey],
+    ) -> Option<Self> {
+        let account_index = one.account_index as usize;
+        let vault_account = &account_keys[account_index];
+        match one.ui_token_amount.as_ref() {
+            None => None,
+            Some(token_amount) => {
+                is_follow_vault(vault_account).map_or(None, |(pool_id, dex_type)| {
+                    let (post_amount, change_value) = if is_pre {
+                        ("0".to_string(), -token_amount.ui_amount)
+                    } else {
+                        (token_amount.amount.clone(), token_amount.ui_amount)
+                    };
+                    // info!(
+                    //         "balance, tx : {:?}, dex : {:?} , pool_id : {:?}, vault : {:?} , amount : {:?}",
+                    //         tx.to_base58(),dex_type, pool_id, vault_account, post_amount
+                    //     );
+                    Some(Self {
+                        dex_type,
+                        pool_id,
+                        account_index,
+                        vault_account: vault_account.clone(),
+                        post_account: post_amount,
+                        change_value,
+                    })
+                })
+            }
+        }
+    }
+
+    pub fn collect_balance_change_infos(
+        tx: &[u8],
+        message: Option<Message>,
+        meta: TransactionStatusMeta,
+    ) -> Option<Vec<BalanceChangeInfo>> {
+        let account_keys = message
+            .unwrap()
+            .account_keys
+            .into_iter()
+            .chain(meta.loaded_writable_addresses)
+            .chain(meta.loaded_readonly_addresses)
+            .map(|v| Pubkey::try_from(v).unwrap())
+            .collect::<Vec<_>>();
+        let pre_token_balances = meta.pre_token_balances;
+        let post_token_balances = meta.post_token_balances;
+        let pre_indices = pre_token_balances
+            .iter()
+            .map(|t| t.account_index)
+            .collect::<AHashSet<_>>();
+        let post_indices = post_token_balances
+            .iter()
+            .map(|t| t.account_index)
+            .collect::<AHashSet<_>>();
+        // 交集
+        let common_indices = pre_indices
+            .intersection(&post_indices)
+            .cloned()
+            .collect::<Vec<_>>();
+        // 差集：只在 pre 里有
+        let only_in_pre = pre_indices
+            .difference(&post_indices)
+            .cloned()
+            .collect::<Vec<_>>();
+        // 差集：只在 post 里有
+        let only_in_post = post_indices
+            .difference(&pre_indices)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut changed_balances = pre_token_balances
+            .iter()
+            .filter(|t| common_indices.contains(&t.account_index))
+            .zip(
+                post_token_balances
+                    .iter()
+                    .filter(|t| common_indices.contains(&t.account_index)),
+            )
+            .filter_map(|(pre, post)| BalanceChangeInfo::new(tx, &pre, &post, &account_keys))
+            .collect::<Vec<_>>();
+        if !only_in_pre.is_empty() {
+            changed_balances.extend(
+                pre_token_balances
+                    .into_iter()
+                    .filter_map(|t| {
+                        if only_in_pre.contains(&t.account_index) {
+                            BalanceChangeInfo::new_from_one(tx,true, &t, &account_keys)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+        if !only_in_post.is_empty() {
+            changed_balances.extend(
+                post_token_balances
+                    .into_iter()
+                    .filter_map(|t| {
+                        if only_in_post.contains(&t.account_index) {
+                            BalanceChangeInfo::new_from_one(tx,false, &t, &account_keys)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+        (!changed_balances.is_empty()).then_some(changed_balances)
     }
 }
 
@@ -175,6 +307,7 @@ impl Debug for BalanceChangeInfo {
 }
 
 fn print_data_from_cache(
+    tx: &[u8],
     owner: &Pubkey,
     account_key: &Pubkey,
     grpc_data: Vec<u8>,
@@ -195,11 +328,15 @@ fn print_data_from_cache(
                         grpc_data,
                     ),
                 )),
-                AccountType::MintVault => Ok((
-                    DexType::RaydiumAMM,
-                    AccountType::MintVault,
-                    get_diff::<MintVault, Account>(account_key, grpc_data),
-                )),
+                AccountType::MintVault => {
+                    // let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
+                    // info!("RaydiumAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
+                    Ok((
+                        DexType::RaydiumAMM,
+                        AccountType::MintVault,
+                        get_diff::<MintVault, Account>(account_key, grpc_data),
+                    ))
+                },
                 _ => Err(anyhow!("RaydiumAMM")),
             },
             DexType::RaydiumCLMM => match account_type {
@@ -227,7 +364,11 @@ fn print_data_from_cache(
                 _ => Err(anyhow!("RaydiumCLMM")),
             },
             DexType::PumpFunAMM => match account_type {
-                AccountType::MintVault =>Ok((DexType::PumpFunAMM, AccountType::MintVault, get_diff::<MintVault, Account>(account_key, grpc_data)))
+                AccountType::MintVault =>{
+                    // let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
+                    // info!("PumpFunAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
+                    Ok((DexType::PumpFunAMM, AccountType::MintVault, get_diff::<MintVault, Account>(account_key, grpc_data)))
+                }
                    ,
                 _ => Err(anyhow!("PumpFunAMM")),
             },
