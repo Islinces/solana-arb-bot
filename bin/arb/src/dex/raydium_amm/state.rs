@@ -3,12 +3,13 @@ use crate::dex::utils::read_from;
 use crate::dex::FromCache;
 use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use solana_sdk::pubkey::Pubkey;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
 #[serde_as]
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
 #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct AmmInfo {
     // 分开存储

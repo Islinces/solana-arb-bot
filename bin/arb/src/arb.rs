@@ -5,6 +5,7 @@ use crate::grpc_processor::BalanceChangeInfo;
 use crate::grpc_subscribe::GrpcTransactionMsg;
 use crate::metadata::get_arb_mint_ata_amount;
 use crate::{HopPathSearchResult, HopPathTypes, SearchResult};
+use ahash::AHashSet;
 use base58::ToBase58;
 use parking_lot::RwLock;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -83,10 +84,57 @@ impl Arb {
                                 .chain(meta.loaded_readonly_addresses)
                                 .map(|v| Pubkey::try_from(v).unwrap())
                                 .collect::<Vec<_>>();
-                            let changed_balances = meta
-                                .pre_token_balances
+                            let mut pre_token_balances = meta.pre_token_balances;
+                            let mut post_token_balances = meta.post_token_balances;
+                            if pre_token_balances.len() != post_token_balances.len() {
+                                let pre_account_indices: AHashSet<_> =
+                                    pre_token_balances.iter().map(|t| t.account_index).collect();
+                                let post_account_indices: AHashSet<_> = post_token_balances
+                                    .iter()
+                                    .map(|t| t.account_index)
+                                    .collect();
+
+                                // 找出 post 中 pre 没有的，生成补充项
+                                let mut missing_in_pre = post_token_balances
+                                    .iter()
+                                    .filter(|post| {
+                                        !pre_account_indices.contains(&post.account_index)
+                                    })
+                                    .map(|post| {
+                                        let mut copy = post.clone();
+                                        if let Some(ref mut amount) = copy.ui_token_amount {
+                                            amount.ui_amount = 0_f64;
+                                            amount.ui_amount_string = "0".to_string();
+                                            amount.amount = "0".to_string();
+                                        }
+                                        copy
+                                    })
+                                    .collect::<Vec<_>>();
+
+                                pre_token_balances.append(&mut missing_in_pre);
+
+                                // 找出 pre 中 post 没有的，生成补充项
+                                let mut missing_in_post = pre_token_balances
+                                    .iter()
+                                    .filter(|pre| {
+                                        !post_account_indices.contains(&pre.account_index)
+                                    })
+                                    .map(|pre| {
+                                        let mut copy = pre.clone();
+                                        if let Some(ref mut amount) = copy.ui_token_amount {
+                                            amount.ui_amount = 0_f64;
+                                            amount.ui_amount_string = "0".to_string();
+                                            amount.amount = "0".to_string();
+                                        }
+                                        copy
+                                    })
+                                    .collect::<Vec<_>>();
+
+                                post_token_balances.append(&mut missing_in_post);
+                            }
+                            let changed_balances = pre_token_balances
                                 .into_iter()
-                                .zip(meta.post_token_balances.into_iter())
+                                .zip(post_token_balances.into_iter())
                                 .filter_map(|(pre, post)| {
                                     BalanceChangeInfo::new(&pre, &post, &account_keys)
                                 })
@@ -187,15 +235,17 @@ impl Arb {
                     None => 0,
                     Some(amount) => amount.amount,
                 };
-                warn!(
-                    "Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}, tx : {:?}",
+                if cache_vault_amount.to_string()!=info.post_account {
+                    warn!(
+                    "Arb : tx : {:?}, Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}",
+                    tx.to_base58(),
                     info.dex_type,
                     info.pool_id,
                     info.vault_account,
                     info.post_account,
                     cache_vault_amount,
-                    tx.to_base58(),
-                );
+                    );
+                }
             }
         })
     }
