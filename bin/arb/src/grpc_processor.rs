@@ -28,6 +28,7 @@ use spl_token::state::Account;
 use std::fmt::{Debug, Formatter};
 use std::ops::Sub;
 use std::ptr;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
@@ -81,7 +82,7 @@ impl MessageProcessor {
                                 match cached_message_sender.try_send(transaction_msg) {
                                     Err(TrySendError::Full(msg)) => {
                                         cached_msg_drop_receiver.try_recv().ok();
-                                        info!("Processor_{index} Channel丢弃消息");
+                                        // info!("Processor_{index} Channel丢弃消息");
                                         let mut retry_count = 3;
                                         loop {
                                             if retry_count != 0 {
@@ -366,9 +367,8 @@ fn print_data_from_cache(
                     ),
                 )),
                 AccountType::MintVault => {
-                    let key=account_key.to_string();
-                    if key == "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz"
-                        || key == "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz"
+                    if account_key == &Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap()
+                        || account_key == &Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap()
                         {
                         let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
                         info!("RaydiumAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
@@ -407,9 +407,8 @@ fn print_data_from_cache(
             },
             DexType::PumpFunAMM => match account_type {
                 AccountType::MintVault =>{
-                    let key=account_key.to_string();
-                    if key == "9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu"
-                        || key == "9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw" {
+                    if account_key == &Pubkey::from_str("9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu").unwrap()
+                        || account_key == &Pubkey::from_str("9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw").unwrap() {
                         let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
                         info!("PumpFunAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
                     }

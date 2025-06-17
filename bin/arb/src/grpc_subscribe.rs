@@ -107,14 +107,15 @@ impl From<SubscribeUpdateAccount> for GrpcAccountMsg {
         let time = Local::now();
         let account = subscribe_update_account.account.unwrap();
         let tx = account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
-        let account_key = Pubkey::try_from(account.pubkey.as_slice())
-            .unwrap()
-            .to_string();
-        let account_key=account_key.as_str();
-        if account_key == "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz"
-            || account_key == "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz"
-            || account_key == "9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu"
-            || account_key == "9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw"
+        let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
+
+        if account_key == Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap()
+            || account_key
+                == Pubkey::from_str("HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz").unwrap()
+            || account_key
+                == Pubkey::from_str("9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu").unwrap()
+            || account_key
+                == Pubkey::from_str("9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw").unwrap()
         {
             let amount = spl_token::state::Account::unpack(account.data.as_slice())
                 .unwrap()

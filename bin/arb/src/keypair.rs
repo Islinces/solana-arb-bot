@@ -13,7 +13,7 @@ use std::str::FromStr;
 pub fn get_keypair(keypair_path: String) -> anyhow::Result<Keypair> {
     loop {
         println!("请输入密码：");
-        let input_password = read_password().expect("读取密码失败");
+        let input_password = "1".to_string();
         let keypair_vault = KeypairVault::load(PathBuf::from_str(&keypair_path)?)?;
         if let Ok(k) = keypair_vault.decrypt(&input_password) {
             let wallet = &k.pubkey();
