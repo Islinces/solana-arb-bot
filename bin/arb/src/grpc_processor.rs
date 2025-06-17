@@ -76,7 +76,7 @@ impl MessageProcessor {
                                     transaction_msg.transaction.as_ref().unwrap().message.clone(),
                                     transaction_msg.meta.clone().unwrap(),
                                 ){
-                                    BalanceChangeInfo::print_amount_diff(transaction_msg.signature.as_slice(), changed_balances.as_slice());
+                                    // BalanceChangeInfo::print_amount_diff(transaction_msg.signature.as_slice(), changed_balances.as_slice());
                                 }
                                 match cached_message_sender.try_send(transaction_msg) {
                                     Err(TrySendError::Full(msg)) => {
