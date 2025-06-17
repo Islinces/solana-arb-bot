@@ -111,19 +111,17 @@ impl From<(Timestamp, SubscribeUpdateAccount)> for GrpcAccountMsg {
         let naive = NaiveDateTime::from_timestamp_opt(created_at.seconds, created_at.nanos as u32)
             .unwrap_or_else(|| NaiveDateTime::from_timestamp(0, 0));
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+        let tx=account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
         info!(
             "grpc消息, tx : {:?} account : {:?}, create_at : {:?}",
-            account
-                .txn_signature
-                .as_ref()
-                .unwrap()
+            tx
                 .as_slice()
                 .to_base58(),
             Pubkey::try_from(account.pubkey.as_slice()).unwrap(),
             datetime.format("%Y-%m-%d %H:%M:%S%.6f UTC").to_string()
         );
         Self {
-            tx: account.txn_signature.unwrap_or([0; 64].try_into().unwrap()),
+            tx,
             account_key: account.pubkey,
             owner_key: account.owner,
             data: account.data,
