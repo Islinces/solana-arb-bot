@@ -83,8 +83,8 @@ impl BaseFeeStruct {
 }
 
 #[derive(Debug)]
-#[serde_as]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+// #[serde_as]
+// #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct DynamicFeeStruct {
     // 56，1
     pub initialized: u8, // 0, ignore for dynamic fee
@@ -101,13 +101,13 @@ pub struct DynamicFeeStruct {
     // 80,8
     pub last_update_timestamp: u64,
     // 104,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub sqrt_price_reference: u128, // reference sqrt price
     // 120,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub volatility_accumulator: u128,
     // 136,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub volatility_reference: u128, // decayed volatility accumulator
 }
 

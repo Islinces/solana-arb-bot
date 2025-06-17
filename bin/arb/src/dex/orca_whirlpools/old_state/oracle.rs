@@ -5,15 +5,15 @@ use solana_sdk::pubkey::Pubkey;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
-#[serde_as]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+// #[serde_as]
+// #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Oracle {
     pub discriminator: [u8; 8],
     pub whirlpool: Pubkey,
     pub trade_enable_timestamp: u64,
     pub adaptive_fee_constants: AdaptiveFeeConstants,
     pub adaptive_fee_variables: AdaptiveFeeVariables,
-    #[serde_as(as = "[_; 128]")]
+    // #[serde_as(as = "[_; 128]")]
     pub reserved: [u8; 128],
 }
 

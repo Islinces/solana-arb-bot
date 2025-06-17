@@ -107,26 +107,6 @@ impl From<SubscribeUpdateAccount> for GrpcAccountMsg {
         let time = Local::now();
         let account = subscribe_update_account.account.unwrap();
         let tx = account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
-        let account_key = Pubkey::try_from(account.pubkey.as_slice()).unwrap();
-
-        if account_key == Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap()
-            || account_key
-                == Pubkey::from_str("HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz").unwrap()
-            || account_key
-                == Pubkey::from_str("9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu").unwrap()
-            || account_key
-                == Pubkey::from_str("9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw").unwrap()
-        {
-            let amount = spl_token::state::Account::unpack(account.data.as_slice())
-                .unwrap()
-                .amount;
-            info!(
-                "grpc消息1, tx : {:?} vault : {:?} , amount: {:?}",
-                tx.as_slice().to_base58(),
-                Pubkey::try_from(account.pubkey.as_slice()).unwrap(),
-                amount
-            );
-        }
         Self {
             tx,
             account_key: account.pubkey,

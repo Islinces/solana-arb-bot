@@ -45,8 +45,8 @@ pub enum PoolType {
 }
 
 #[derive(Debug)]
-#[serde_as]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+// #[serde_as]
+// #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Pool {
     /// Pool fee
     // 8,40
@@ -54,28 +54,28 @@ pub struct Pool {
     // 56,96
     pub dynamic_fee: DynamicFeeStruct,
     // 168,32
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub token_a_mint: Pubkey,
     // 200,32
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub token_b_mint: Pubkey,
     // 232,32
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub token_a_vault: Pubkey,
     // 264,32
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub token_b_vault: Pubkey,
     // 360,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub liquidity: u128,
     // 424,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub sqrt_min_price: u128,
     // 440,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub sqrt_max_price: u128,
     // 456,16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub sqrt_price: u128,
     // 472,8
     pub activation_point: u64,

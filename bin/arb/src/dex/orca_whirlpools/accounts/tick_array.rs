@@ -26,16 +26,16 @@ pub const MAX_TICK_INDEX: i32 = 443636;
 
 #[repr(C, packed)]
 #[derive(Clone, Debug)]
-#[serde_as]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+// #[serde_as]
+// #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct TickArray {
     // 8,4
     pub start_tick_index: i32,
     // 12,113*88
-    #[serde_as(as = "[_; 88]")]
+    // #[serde_as(as = "[_; 88]")]
     pub ticks: [Tick; TICK_ARRAY_SIZE],
     // 9956,32
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub whirlpool: Pubkey,
 }
 
@@ -143,16 +143,16 @@ pub(crate) fn get_tick_array_keys(
 }
 
 #[derive(Clone, Debug, Default, Copy)]
-#[serde_as]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+// #[serde_as]
+// #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
 pub struct Tick {
     // 1
     pub initialized: bool,
     // 16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub liquidity_net: i128,
     // 16
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     pub liquidity_gross: u128,
     // 16
     // fee_a
