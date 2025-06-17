@@ -109,8 +109,8 @@ impl From<SubscribeUpdateAccount> for GrpcAccountMsg {
         let tx = account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
         let account_key = Pubkey::try_from(account.pubkey.as_slice())
             .unwrap()
-            .to_string()
-            .as_str();
+            .to_string();
+        let account_key=account_key.as_str();
         if account_key == "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz"
             || account_key == "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz"
             || account_key == "9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu"
