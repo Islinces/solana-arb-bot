@@ -9,7 +9,9 @@ use flume::Sender;
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::SysvarId;
+use spl_token::solana_program::program_pack::Pack;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tokio_stream::{Stream, StreamExt};
 use tracing::{error, info};
@@ -45,12 +47,9 @@ impl GrpcSubscribe {
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
-                    let created_at = data.created_at.unwrap();
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         match message_sender
-                            .send_async(GrpcMessage::Account(GrpcAccountMsg::from((
-                                created_at, account,
-                            ))))
+                            .send_async(GrpcMessage::Account(GrpcAccountMsg::from(account)))
                             .await
                         {
                             Ok(_) => {}
@@ -65,7 +64,7 @@ impl GrpcSubscribe {
                             Some(tx) => {
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
-                                        (tx, slot, created_at),
+                                        (tx, slot),
                                     )))
                                     .await
                                 {
@@ -103,23 +102,30 @@ pub struct GrpcAccountMsg {
     pub received_timestamp: DateTime<Local>,
 }
 
-impl From<(Timestamp, SubscribeUpdateAccount)> for GrpcAccountMsg {
-    fn from(subscribe_update_account: (Timestamp, SubscribeUpdateAccount)) -> Self {
+impl From<SubscribeUpdateAccount> for GrpcAccountMsg {
+    fn from(subscribe_update_account: SubscribeUpdateAccount) -> Self {
         let time = Local::now();
-        let account = subscribe_update_account.1.account.unwrap();
-        let created_at = subscribe_update_account.0;
-        let naive = NaiveDateTime::from_timestamp_opt(created_at.seconds, created_at.nanos as u32)
-            .unwrap_or_else(|| NaiveDateTime::from_timestamp(0, 0));
-        let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
-        let tx=account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
-        info!(
-            "grpc消息1, tx : {:?} account : {:?}, create_at : {:?}",
-            tx
-                .as_slice()
-                .to_base58(),
-            Pubkey::try_from(account.pubkey.as_slice()).unwrap(),
-            datetime.format("%Y-%m-%d %H:%M:%S%.6f UTC").to_string()
-        );
+        let account = subscribe_update_account.account.unwrap();
+        let tx = account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
+        let account_key = Pubkey::try_from(account.pubkey.as_slice())
+            .unwrap()
+            .to_string()
+            .as_str();
+        if account_key == "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz"
+            || account_key == "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz"
+            || account_key == "9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu"
+            || account_key == "9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw"
+        {
+            let amount = spl_token::state::Account::unpack(account.data.as_slice())
+                .unwrap()
+                .amount;
+            info!(
+                "grpc消息1, tx : {:?} vault : {:?} , amount: {:?}",
+                tx.as_slice().to_base58(),
+                Pubkey::try_from(account.pubkey.as_slice()).unwrap(),
+                amount
+            );
+        }
         Self {
             tx,
             account_key: account.pubkey,
@@ -142,18 +148,9 @@ pub struct GrpcTransactionMsg {
     pub instant: Instant,
 }
 
-impl From<(SubscribeUpdateTransactionInfo, u64, Timestamp)> for GrpcTransactionMsg {
-    fn from(transaction: (SubscribeUpdateTransactionInfo, u64, Timestamp)) -> Self {
+impl From<(SubscribeUpdateTransactionInfo, u64)> for GrpcTransactionMsg {
+    fn from(transaction: (SubscribeUpdateTransactionInfo, u64)) -> Self {
         let time = Local::now();
-        let created_at = transaction.2;
-        let naive = NaiveDateTime::from_timestamp_opt(created_at.seconds, created_at.nanos as u32)
-            .unwrap_or_else(|| NaiveDateTime::from_timestamp(0, 0));
-        let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
-        info!(
-            "grpc消息1, tx : {:?} , create_at : {:?}",
-            transaction.0.signature.as_slice().to_base58(),
-            datetime.format("%Y-%m-%d %H:%M:%S%.6f UTC").to_string()
-        );
         Self {
             signature: transaction.0.signature,
             transaction: transaction.0.transaction,

@@ -316,7 +316,7 @@ impl BalanceChangeInfo {
                     None => 0,
                     Some(amount) => amount.amount,
                 };
-                if cache_vault_amount.to_string()!=info.post_account {
+                if info.pool_id.to_string().as_str()=="58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"||info.pool_id.to_string().as_str()=="9ViX1VductEoC2wERTSp2TuDxXPwAf69aeET8ENPJpsN" {
                     warn!(
                     "Processor : tx : {:?}, Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}",
                     tx.to_base58(),
@@ -366,8 +366,13 @@ fn print_data_from_cache(
                     ),
                 )),
                 AccountType::MintVault => {
-                    // let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
-                    // info!("RaydiumAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
+                    let key=account_key.to_string();
+                    if key == "DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz"
+                        || key == "HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz"
+                        {
+                        let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
+                        info!("RaydiumAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
+                    }
                     Ok((
                         DexType::RaydiumAMM,
                         AccountType::MintVault,
@@ -402,8 +407,12 @@ fn print_data_from_cache(
             },
             DexType::PumpFunAMM => match account_type {
                 AccountType::MintVault =>{
-                    // let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
-                    // info!("PumpFunAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
+                    let key=account_key.to_string();
+                    if key == "9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu"
+                        || key == "9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw" {
+                        let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
+                        info!("PumpFunAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
+                    }
                     Ok((DexType::PumpFunAMM, AccountType::MintVault, get_diff::<MintVault, Account>(account_key, grpc_data)))
                 }
                    ,
