@@ -71,13 +71,13 @@ impl MessageProcessor {
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
                                 #[cfg(feature = "print_data_after_update")]
-                                let _ =
-                                    BalanceChangeInfo::collect_balance_change_infos(
-                                        transaction_msg.signature.as_slice(),
-                                        transaction_msg.transaction.as_ref().unwrap().message.clone(),
-                                        transaction_msg.meta.clone().unwrap(),
-                                    );
-
+                                if let Some(changed_balances)=BalanceChangeInfo::collect_balance_change_infos(
+                                    transaction_msg.signature.as_slice(),
+                                    transaction_msg.transaction.as_ref().unwrap().message.clone(),
+                                    transaction_msg.meta.clone().unwrap(),
+                                ){
+                                    BalanceChangeInfo::print_amount_diff(transaction_msg.signature.as_slice(), changed_balances.as_slice());
+                                }
                                 match cached_message_sender.try_send(transaction_msg) {
                                     Err(TrySendError::Full(msg)) => {
                                         cached_msg_drop_receiver.try_recv().ok();
@@ -302,7 +302,6 @@ impl BalanceChangeInfo {
         if changed_balances.is_empty() {
             None
         } else {
-            Self::print_amount_diff(tx, changed_balances.as_slice());
             Some(changed_balances)
         }
     }
