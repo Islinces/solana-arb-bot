@@ -82,20 +82,20 @@ impl MessageProcessor {
                                     Err(TrySendError::Full(msg)) => {
                                         cached_msg_drop_receiver.try_recv().ok();
                                         info!("Processor_{index} Channel丢弃消息");
-                                        let mut retry_count = 3;
-                                        loop {
-                                            if retry_count != 0 {
-                                                match cached_message_sender.try_send(msg.clone()) {
-                                                    Err(TrySendError::Full(_)) => {
-                                                        cached_msg_drop_receiver.try_recv().ok();
-                                                        retry_count -= 1;
-                                                    }
-                                                    _ => {
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        // let mut retry_count = 3;
+                                        // loop {
+                                        //     if retry_count != 0 {
+                                        //         match cached_message_sender.try_send(msg.clone()) {
+                                        //             Err(TrySendError::Full(_)) => {
+                                        //                 cached_msg_drop_receiver.try_recv().ok();
+                                        //                 retry_count -= 1;
+                                        //             }
+                                        //             _ => {
+                                        //                 break;
+                                        //             }
+                                        //         }
+                                        //     }
+                                        // }
                                     }
                                     Err(TrySendError::Disconnected(_)) => {
                                         error!("Processor_{index} 发送消息到Arb失败，原因：所有Arb关闭");
