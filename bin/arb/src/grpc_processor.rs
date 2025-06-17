@@ -367,8 +367,10 @@ fn print_data_from_cache(
                     ),
                 )),
                 AccountType::MintVault => {
-                    if account_key == &Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap()
-                        || account_key == &Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap()
+                    let a = Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz").unwrap();
+                    let b = Pubkey::from_str("HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz").unwrap();
+                    if account_key == &a
+                        || account_key == &b
                         {
                         let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
                         info!("RaydiumAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
@@ -407,8 +409,10 @@ fn print_data_from_cache(
             },
             DexType::PumpFunAMM => match account_type {
                 AccountType::MintVault =>{
-                    if account_key == &Pubkey::from_str("9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu").unwrap()
-                        || account_key == &Pubkey::from_str("9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw").unwrap() {
+                    let a = Pubkey::from_str("9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu").unwrap();
+                    let b = Pubkey::from_str("9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw").unwrap();
+                    if account_key == &a
+                        || account_key == &b {
                         let amount=get_account_data::<MintVault>(account_key).unwrap().amount;
                         info!("PumpFunAMM after cache , tx : {:?} , account : {:?} , amount : {}",tx.to_base58(),account_key,amount);
                     }
