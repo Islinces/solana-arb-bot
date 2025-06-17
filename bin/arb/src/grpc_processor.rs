@@ -319,7 +319,7 @@ impl BalanceChangeInfo {
                 };
                 if cache_vault_amount.to_string()!=info.post_account {
                     warn!(
-                    "Arb : tx : {:?}, Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}",
+                    "Processor : tx : {:?}, Dex类型: {:?}, 池子: {:?}, 金库: {:?}, Tx金库余额: {:?}, 缓存金库余额: {:?}",
                     tx.to_base58(),
                     info.dex_type,
                     info.pool_id,
