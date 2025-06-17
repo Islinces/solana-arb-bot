@@ -113,7 +113,7 @@ impl From<(Timestamp, SubscribeUpdateAccount)> for GrpcAccountMsg {
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
         let tx=account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
         info!(
-            "grpc消息, tx : {:?} account : {:?}, create_at : {:?}",
+            "grpc消息1, tx : {:?} account : {:?}, create_at : {:?}",
             tx
                 .as_slice()
                 .to_base58(),
@@ -150,7 +150,7 @@ impl From<(SubscribeUpdateTransactionInfo, u64, Timestamp)> for GrpcTransactionM
             .unwrap_or_else(|| NaiveDateTime::from_timestamp(0, 0));
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
         info!(
-            "grpc消息, tx : {:?} , create_at : {:?}",
+            "grpc消息1, tx : {:?} , create_at : {:?}",
             transaction.0.signature.as_slice().to_base58(),
             datetime.format("%Y-%m-%d %H:%M:%S%.6f UTC").to_string()
         );
