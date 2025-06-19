@@ -1,16 +1,12 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::raydium_clmm::big_num::{U1024, U512};
 use crate::dex::raydium_clmm::tick_math::{MAX_TICK, MIN_TICK};
 use crate::dex::utils::read_from;
 use crate::dex::{DexType, FromCache};
 use crate::{require, require_gt};
 use anyhow::anyhow;
-use parking_lot::RwLockReadGuard;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
 use solana_sdk::pubkey::Pubkey;
 use std::ptr;
+use std::sync::Arc;
 
 pub const AMM_CONFIG_SEED: &str = "amm_config";
 /// Seed to derive account address and signature
@@ -27,16 +23,16 @@ pub struct AmmConfig {
 
 impl FromCache for AmmConfig {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        _dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        _dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(account_key)?;
+        let static_data = static_cache.ok_or(anyhow!(""))?;
+        let static_data=static_data.as_slice();
         unsafe {
-            Some(Self {
+            Ok(Self {
                 protocol_fee_rate: read_from::<u32>(&static_data[0..4]),
                 trade_fee_rate: read_from::<u32>(&static_data[4..8]),
                 fund_fee_rate: read_from::<u32>(&static_data[8..12]),
@@ -92,17 +88,16 @@ pub struct PoolState {
 
 impl FromCache for PoolState {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let pool_static_data = static_cache.get(&account_key)?;
-        let pool_dynamic_data = dynamic_cache.get(&account_key)?;
-        Some(PoolState::from_slice_data(
-            pool_static_data,
+        let pool_static_data = static_cache.ok_or(anyhow!(""))?;
+        let pool_dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(PoolState::from_slice_data(
+            pool_static_data.as_slice(),
             pool_dynamic_data.as_slice(),
         ))
     }
@@ -274,19 +269,19 @@ pub struct TickArrayState {
 
 impl FromCache for TickArrayState {
     fn from_cache(
-        account_key: &Pubkey,
-        _static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        _static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let dynamic_slice_data = dynamic_cache.get(account_key)?;
+        let dynamic_slice_data = dynamic_cache.ok_or(anyhow!(""))?;
+        let dynamic_slice_data=dynamic_slice_data.as_slice();
         unsafe {
             let pool_id = read_from::<Pubkey>(&dynamic_slice_data[0..32]);
             let start_tick_index = read_from::<i32>(&dynamic_slice_data[32..36]);
             let ticks = read_from::<[TickState; TICK_ARRAY_SIZE_USIZE]>(&dynamic_slice_data[36..]);
-            Some(Self {
+            Ok(Self {
                 pool_id,
                 start_tick_index,
                 ticks,
@@ -576,15 +571,14 @@ pub struct TickArrayBitmapExtension {
 
 impl FromCache for TickArrayBitmapExtension {
     fn from_cache(
-        account_key: &Pubkey,
-        _static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        _static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let dynamic_slice_data = dynamic_cache.get(&account_key)?;
-        Some(TickArrayBitmapExtension::from_slice_data(
+        let dynamic_slice_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(TickArrayBitmapExtension::from_slice_data(
             dynamic_slice_data.as_slice(),
         ))
     }

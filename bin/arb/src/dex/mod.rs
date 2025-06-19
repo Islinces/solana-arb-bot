@@ -1,10 +1,10 @@
 use anyhow::anyhow;
-use parking_lot::RwLockReadGuard;
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::message::AddressLookupTableAccount;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 
 mod account_relation;
 mod data_slice;
@@ -138,10 +138,9 @@ pub(crate) fn get_transfer_fee(mint: &Pubkey, epoch: u64, pre_fee_amount: u64) -
 
 pub trait FromCache {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized;
 }

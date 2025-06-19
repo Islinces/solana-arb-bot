@@ -161,10 +161,10 @@ pub async fn init_program(
     let mut dex_data = crate::dex_data::load_dex_json(dex_json_path, follow_mints)?;
     // 3.各个Dex的Account切片规则(需要订阅的，不需要订阅的)
     init_data_slice_config()?;
-    // 4.初始化全局缓存，未填充数据
-    init_global_cache();
-    // 5.初始化Snapshot，填充全局缓存，移除无效DexJson
-    init_snapshot(&mut dex_data, rpc_client.clone(), get_global_cache()).await?;
+    // 4.初始化Snapshot，填充全局缓存，移除无效DexJson
+    let global_cache = init_snapshot(&mut dex_data, rpc_client.clone()).await?;
+    // 5.初始化全局缓存，未填充数据
+    init_global_cache(global_cache);
     // 初始化钱包关联的ATA账户余额
     // 初始化blockhash
     init_metadata(keypair, arb_mint, dex_data.as_slice(), rpc_client.clone()).await?;

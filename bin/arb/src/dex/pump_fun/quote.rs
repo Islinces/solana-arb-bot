@@ -2,6 +2,7 @@ use crate::dex::global_cache::get_account_data;
 use crate::dex::pump_fun::state::Pool;
 use crate::dex::quoter::{QuoteResult, Quoter};
 use crate::dex::utils::CheckedCeilDiv;
+use crate::dex::MintVault;
 use solana_sdk::pubkey::Pubkey;
 use std::ops::{Add, Div, Mul, Sub};
 
@@ -11,8 +12,10 @@ pub struct PumpFunAMMQuoter;
 impl Quoter for PumpFunAMMQuoter {
     fn quote(&self, amount_in: u64, swap_direction: bool, pool_id: &Pubkey) -> Option<QuoteResult> {
         let pool = get_account_data::<Pool>(pool_id)?;
-        let base_vault_amount = u128::from(pool.base_vault_amount);
-        let quote_vault_amount = u128::from(pool.quote_vault_amount);
+        let base_vault_amount =
+            u128::from(get_account_data::<MintVault>(&pool.pool_base_token_account)?.amount);
+        let quote_vault_amount =
+            u128::from(get_account_data::<MintVault>(&pool.pool_quote_token_account)?.amount);
         let amount_in = u128::from(amount_in);
         let lp_fee = amount_in
             .mul(u128::from(pool.lp_fee_basis_points))

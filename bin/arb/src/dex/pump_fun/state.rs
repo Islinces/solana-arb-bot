@@ -1,8 +1,8 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::utils::read_from;
 use crate::dex::{DexType, FromCache};
-use parking_lot::RwLockReadGuard;
+use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::Arc;
 
 /// 字段顺序不要动
 #[derive(Default, Debug)]
@@ -20,22 +20,18 @@ pub struct Pool {
     // 池子data里没有，在初始化缓存的时候计算之后设置进来的
     pub coin_creator_vault_authority: Pubkey,
     pub coin_creator_vault_ata: Pubkey,
-    // ============= dynamic data =================
-    // 金库
-    pub base_vault_amount: u64,
-    pub quote_vault_amount: u64,
 }
 
 impl FromCache for Pool {
     fn from_cache(
-        pool_id: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        _dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let pool_static_data = static_cache.get(pool_id)?;
+        let pool_static_data = static_cache.ok_or(anyhow!(""))?;
+        let pool_static_data = pool_static_data.as_slice();
         unsafe {
             let base_mint = read_from::<Pubkey>(&pool_static_data[0..32]);
             let quote_mint = read_from::<Pubkey>(&pool_static_data[32..64]);
@@ -48,14 +44,7 @@ impl FromCache for Pool {
 
             let coin_creator_vault_authority = read_from::<Pubkey>(&pool_static_data[176..208]);
             let coin_creator_vault_ata = read_from::<Pubkey>(&pool_static_data[208..240]);
-
-            let base_vault_amount_bytes = dynamic_cache.get(&pool_base_token_account)?;
-            let quote_vault_amount_bytes = dynamic_cache.get(&pool_quote_token_account)?;
-
-            let base_vault_amount = read_from::<u64>(&base_vault_amount_bytes[0..8]);
-            let quote_vault_amount = read_from::<u64>(&quote_vault_amount_bytes[0..8]);
-
-            Some(Self {
+            Ok(Self {
                 base_mint,
                 quote_mint,
                 pool_base_token_account,
@@ -65,8 +54,6 @@ impl FromCache for Pool {
                 protocol_fee_basis_points,
                 coin_creator_vault_authority,
                 coin_creator_vault_ata,
-                base_vault_amount,
-                quote_vault_amount,
             })
         }
     }

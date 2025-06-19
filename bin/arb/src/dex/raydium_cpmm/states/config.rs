@@ -1,7 +1,7 @@
 use crate::dex::utils::read_from;
-use crate::dex::{DynamicCache, FromCache, StaticCache};
-use parking_lot::RwLockReadGuard;
-use solana_sdk::pubkey::Pubkey;
+use crate::dex::FromCache;
+use anyhow::anyhow;
+use std::sync::Arc;
 
 const AMM_CONFIG_SEED: &str = "amm_config";
 
@@ -14,15 +14,14 @@ pub struct AmmConfig {
 
 impl FromCache for AmmConfig {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        _dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        _dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(account_key)?;
+        let static_data = static_cache.ok_or(anyhow!(""))?;
         let trade_fee_rate = unsafe { read_from::<u64>(&static_data[0..8]) };
-        Some(Self { trade_fee_rate })
+        Ok(Self { trade_fee_rate })
     }
 }

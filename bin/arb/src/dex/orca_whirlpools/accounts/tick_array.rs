@@ -1,15 +1,13 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::orca_whirlpools::{get_tick_array_start_tick_index, WHIRLPOOL_ID};
 use crate::dex::utils::read_from;
 use crate::dex::whirlpool::Whirlpool;
 use crate::dex::FromCache;
-use parking_lot::RwLockReadGuard;
+use anyhow::anyhow;
 use serde::de::SeqAccess;
 use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::Arc;
 
 /// The number of ticks in a tick array.
 pub const TICK_ARRAY_SIZE: usize = 88;
@@ -41,16 +39,14 @@ pub struct TickArray {
 
 impl FromCache for TickArray {
     fn from_cache(
-        account_key: &Pubkey,
-        _static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        _static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let dynamic_data = dynamic_cache.get(account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        TickArray::from_slice_data(dynamic_data).map_or(None, |tick_array| Some(tick_array))
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        TickArray::from_slice_data(dynamic_data.as_slice())
     }
 }
 

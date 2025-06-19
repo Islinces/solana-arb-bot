@@ -1,14 +1,11 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::meteora_dlmm::interface::typedefs::{
     Bin, StaticParameters, VariableParameters, S_PARAMETER_LEN, V_PARAMETER_LEN,
 };
 use crate::dex::utils::read_from;
 use crate::dex::FromCache;
-use parking_lot::RwLockReadGuard;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::Arc;
 use std::{mem, ptr};
 
 pub const BIN_ARRAY_BITMAP_EXTENSION_ACCOUNT_DISCM: [u8; 8] = [80, 111, 124, 113, 55, 237, 18, 5];
@@ -31,16 +28,14 @@ impl BinArrayBitmapExtension {
 
 impl FromCache for BinArrayBitmapExtension {
     fn from_cache(
-        account_key: &Pubkey,
-        _static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        _static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let dynamic_data = dynamic_cache.get(&account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        Some(BinArrayBitmapExtension::from_slice_data(dynamic_data))
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(BinArrayBitmapExtension::from_slice_data(dynamic_data.as_slice()))
     }
 }
 pub const BIN_ARRAY_ACCOUNT_DISCM: [u8; 8] = [92, 142, 92, 220, 5, 148, 70, 181];
@@ -58,16 +53,14 @@ pub struct BinArray {
 
 impl FromCache for BinArray {
     fn from_cache(
-        account_key: &Pubkey,
-        _static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        _static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let dynamic_data = dynamic_cache.get(&account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        Some(BinArray::from_slice_data(dynamic_data))
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(BinArray::from_slice_data(dynamic_data.as_slice()))
     }
 }
 
@@ -119,17 +112,15 @@ pub struct LbPair {
 
 impl FromCache for LbPair {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(&account_key);
-        let dynamic_data = dynamic_cache.get(&account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        Some(LbPair::from_slice_data(static_data?, dynamic_data))
+        let static_data = static_cache.ok_or(anyhow!(""))?;
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(LbPair::from_slice_data(static_data.as_slice(), dynamic_data.as_slice()))
     }
 }
 

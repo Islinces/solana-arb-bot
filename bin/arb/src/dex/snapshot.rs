@@ -104,9 +104,9 @@ pub enum SnapshotType {
 pub async fn init_snapshot(
     dex_data: &mut Vec<DexJson>,
     rpc_client: Arc<RpcClient>,
-    cache: &'static GlobalCache,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<GlobalCache> {
     info!("开始初始化Snapshot...");
+    let mut cache = GlobalCache::init();
     for snapshot in vec![
         SnapshotType::from(MeteoraDLMMSnapshotInitializer),
         SnapshotType::from(MeteoraDAMMV2SnapshotLoader),
@@ -131,7 +131,7 @@ pub async fn init_snapshot(
     // 加载alt
     cache_lookup_table_accounts(dex_data.as_slice(), rpc_client.clone(), &cache).await;
     // 加载token2022
-    cache_token_2022(dex_data.as_slice(), rpc_client.clone(), &cache).await;
+    cache_token_2022(dex_data.as_slice(), rpc_client.clone(), &mut cache).await;
     // 加载clock
     cache_clock(rpc_client.clone(), &cache).await;
     info!("初始化Snapshot结束, 数量 : {}", dex_data.len());
@@ -140,7 +140,7 @@ pub async fn init_snapshot(
     if dex_data.is_empty() {
         Err(anyhow!("所有DexJson均加载失败"))
     } else {
-        Ok(())
+        Ok(cache)
     }
 }
 
@@ -221,7 +221,7 @@ async fn cache_lookup_table_accounts(
     }
 }
 
-async fn cache_token_2022(dex_data: &[DexJson], rpc_client: Arc<RpcClient>, cache: &GlobalCache) {
+async fn cache_token_2022(dex_data: &[DexJson], rpc_client: Arc<RpcClient>, cache: &mut GlobalCache) {
     let all_tokens = dex_data
         .iter()
         .flat_map(|json| vec![json.mint_a, json.mint_b])

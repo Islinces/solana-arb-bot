@@ -63,12 +63,18 @@ impl MessageProcessor {
                     match grpc_message_receiver.recv_async().await {
                         Ok(grpc_message) => match grpc_message {
                             GrpcMessage::Account(account_msg) => {
-                                let _ = Self::update_cache(
+                                match Self::update_cache(
                                     account_msg.tx.as_slice(),
                                     account_msg.owner_key,
                                     account_msg.account_key,
                                     account_msg.data,
-                                );
+                                    account_msg.write_version,
+                                ) {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("更新缓存失败，{}", e);
+                                    }
+                                }
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
                                 // #[cfg(feature = "print_data_after_update")]
@@ -121,6 +127,7 @@ impl MessageProcessor {
         owner: Vec<u8>,
         account_key: Vec<u8>,
         data: Vec<u8>,
+        write_version: u64,
     ) -> anyhow::Result<()> {
         let account_key = Pubkey::try_from(account_key)
             .map_or(Err(anyhow!("转换account_key失败")), |a| Ok(a))?;

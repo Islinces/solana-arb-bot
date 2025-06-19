@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::u64;
 
 use super::fee::{BaseFeeStruct, DynamicFeeStruct, FeeMode, FeeOnAmountResult};
@@ -11,13 +12,10 @@ use crate::dex::meteora_damm_v2::math::u128x128_math::Rounding;
 use crate::dex::meteora_damm_v2::math::utils_math::safe_mul_div_cast_u64;
 use crate::dex::meteora_damm_v2::TradeDirection;
 use crate::dex::utils::read_from;
-use crate::dex::{DynamicCache, FromCache, StaticCache};
+use crate::dex::FromCache;
 use anyhow::{anyhow, Result};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use parking_lot::RwLockReadGuard;
-use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use serde_with::{serde_as, DisplayFromStr};
 
 /// collect fee mode
 #[repr(u8)]
@@ -94,17 +92,15 @@ pub struct Pool {
 
 impl FromCache for Pool {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(account_key)?;
-        let dynamic_data = dynamic_cache.get(account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        Some(Self::from_slice_data(static_data, dynamic_data))
+        let static_data = static_cache.ok_or(anyhow!(""))?;
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(Self::from_slice_data(static_data.as_slice(), dynamic_data.as_slice()))
     }
 }
 

@@ -1,10 +1,8 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::utils::read_from;
 use crate::dex::FromCache;
-use parking_lot::RwLockReadGuard;
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::Arc;
 
 #[repr(C, packed)]
 #[derive(Clone, Debug)]
@@ -41,18 +39,15 @@ pub struct Whirlpool {
 
 impl FromCache for Whirlpool {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(&account_key)?;
-        let dynamic_data = dynamic_cache.get(&account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        Whirlpool::from_slice_data(static_data, dynamic_data)
-            .map_or(None, |whirlpool| Some(whirlpool))
+        let static_data = static_cache.ok_or(anyhow!(""))?;
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Whirlpool::from_slice_data(static_data.as_slice(), dynamic_data.as_slice())
     }
 }
 

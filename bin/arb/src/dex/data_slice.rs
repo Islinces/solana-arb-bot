@@ -6,17 +6,17 @@ use crate::dex::raydium_amm::RaydiumAMMDataSlicer;
 use crate::dex::raydium_clmm::RaydiumCLMMDataSlicer;
 use crate::dex::raydium_cpmm::RaydiumCPMMDataSlicer;
 use crate::dex::utils::read_from;
-use crate::dex::{AccountType, DexType, DynamicCache, FromCache, StaticCache};
+use crate::dex::{AccountType, DexType, FromCache};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use enum_dispatch::enum_dispatch;
-use parking_lot::RwLockReadGuard;
 use serde::{Deserialize, Serialize};
 use solana_sdk::clock::Clock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::sysvar::SysvarId;
 use spl_token::state::Account;
 use std::ptr;
+use std::sync::Arc;
 use tokio::sync::{OnceCell, SetError};
 
 static DATA_SLICE_PROCESSOR: OnceCell<AHashMap<DexType, DataSlice>> = OnceCell::const_new();
@@ -178,8 +178,7 @@ pub fn retain_intervals_unsafe(
     result
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MintVault {
     pub amount: u64,
 }
@@ -196,16 +195,15 @@ impl TryFrom<Account> for MintVault {
 
 impl FromCache for MintVault {
     fn from_cache(
-        account_key: &Pubkey,
-        _static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        _static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let dynamic_data = dynamic_cache.get(account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        let dynamic_data = dynamic_data.as_slice();
         let amount = unsafe { read_from::<u64>(&dynamic_data[0..8]) };
-        Some(Self { amount })
+        Ok(Self { amount })
     }
 }

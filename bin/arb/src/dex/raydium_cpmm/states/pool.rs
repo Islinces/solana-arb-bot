@@ -1,9 +1,8 @@
 use crate::dex::utils::read_from;
-use crate::dex::{DynamicCache, FromCache, StaticCache};
-use parking_lot::RwLockReadGuard;
-use serde::{Deserialize, Serialize};
+use crate::dex::FromCache;
+use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
-use serde_with::{serde_as, DisplayFromStr};
+use std::sync::Arc;
 
 /// Seed to derive account address and signature
 const POOL_SEED: &str = "pool";
@@ -85,17 +84,15 @@ pub struct PoolState {
 
 impl FromCache for PoolState {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(account_key)?;
-        let dynamic_data = dynamic_cache.get(account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
-        Some(Self::from_slice_data(static_data, dynamic_data))
+        let static_data = static_cache.ok_or(anyhow!(""))?;
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        Ok(Self::from_slice_data(static_data.as_slice(), dynamic_data.as_slice()))
     }
 }
 

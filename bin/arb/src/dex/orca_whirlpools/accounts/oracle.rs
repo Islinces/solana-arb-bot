@@ -1,12 +1,11 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::orca_whirlpools::WHIRLPOOL_ID;
 use crate::dex::utils::read_from;
 use crate::dex::FromCache;
-use parking_lot::RwLockReadGuard;
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use solana_sdk::program_error::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use serde_with::{serde_as, DisplayFromStr};
+use std::sync::Arc;
 
 /// This constant is used to scale the value of the volatility accumulator.
 pub const VOLATILITY_ACCUMULATOR_SCALE_FACTOR: u16 = 10_000;
@@ -49,16 +48,16 @@ pub struct Oracle {
 
 impl FromCache for Oracle {
     fn from_cache(
-        account_key: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let static_data = static_cache.get(account_key)?;
-        let dynamic_data = dynamic_cache.get(account_key)?;
-        let dynamic_data = dynamic_data.value().as_slice();
+        let static_data = static_cache.ok_or(anyhow!(""))?;
+        let static_data=static_data.as_slice();
+        let dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        let dynamic_data=dynamic_data.as_slice();
         unsafe {
             let whirlpool = read_from::<Pubkey>(&static_data[0..32]);
             // adaptive_fee_constants
@@ -91,7 +90,7 @@ impl FromCache for Oracle {
                 tick_group_index_reference,
                 volatility_accumulator,
             };
-            Some(Self {
+            Ok(Self {
                 whirlpool,
                 adaptive_fee_constants,
                 adaptive_fee_variables,

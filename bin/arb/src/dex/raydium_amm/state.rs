@@ -1,11 +1,8 @@
-use crate::dex::global_cache::{DynamicCache, StaticCache};
 use crate::dex::utils::read_from;
 use crate::dex::FromCache;
-use parking_lot::RwLockReadGuard;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use anyhow::anyhow;
 use solana_sdk::pubkey::Pubkey;
+use std::sync::Arc;
 
 #[repr(C, packed)]
 // #[serde_as]
@@ -34,17 +31,16 @@ pub struct AmmInfo {
 
 impl FromCache for AmmInfo {
     fn from_cache(
-        pool_id: &Pubkey,
-        static_cache: RwLockReadGuard<StaticCache>,
-        dynamic_cache: &DynamicCache,
-    ) -> Option<Self>
+        static_cache: Option<Arc<Vec<u8>>>,
+        dynamic_cache: Option<Arc<Vec<u8>>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let pool_static_data = static_cache.get(pool_id)?;
-        let pool_dynamic_data_ref = dynamic_cache.get(pool_id)?;
-        let pool_dynamic_data = pool_dynamic_data_ref.value().as_slice();
-
+        let pool_static_data = static_cache.ok_or(anyhow!(""))?;
+        let pool_dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
+        let pool_static_data=pool_static_data.as_slice();
+        let pool_dynamic_data=pool_dynamic_data.as_slice();
         unsafe {
             let swap_fee_numerator = read_from::<u64>(&pool_static_data[0..8]);
             let swap_fee_denominator = read_from::<u64>(&pool_static_data[8..16]);
@@ -55,7 +51,7 @@ impl FromCache for AmmInfo {
 
             let need_take_pnl_coin = read_from::<u64>(&pool_dynamic_data[0..8]);
             let need_take_pnl_pc = read_from::<u64>(&pool_dynamic_data[8..16]);
-            Some(Self {
+            Ok(Self {
                 swap_fee_numerator,
                 swap_fee_denominator,
                 coin_vault,
