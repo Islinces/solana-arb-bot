@@ -53,6 +53,7 @@ yellowstone-grpc-proto = "6.0.0"
 
 enum_dispatch = "0.3.13"
 
+num_cpus = "1.17.0"
 num_enum = "0.7.0"
 num-integer = "0.1.45"
 num-traits = "0.2.19"

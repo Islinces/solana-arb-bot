@@ -12,6 +12,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
 use std::ops::{Div, Mul};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
@@ -69,10 +70,19 @@ impl Arb {
             let arb_mint_bps_denominator = self.arb_mint_bps_denominator.clone();
             let mut receiver = cached_message_receiver.clone();
             let best_hop_path_searcher = self.hop_paths.clone();
+            static COUNT: AtomicUsize = AtomicUsize::new(0);
             join_set.spawn(async move {
                 loop {
                     match receiver.recv_async().await {
                         Ok(transaction_msg) => {
+                            let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                            let log_info = if c % 500 == 0 {
+                                let tx = transaction_msg.signature.as_slice().to_base58();
+                                warn!("Arb_{index}接收到Tx， tx : {:?}", tx);
+                                Some(tx)
+                            } else {
+                                None
+                            };
                             let tx = transaction_msg.transaction.unwrap();
                             let meta = transaction_msg.meta.unwrap();
                             let balance_change_infos =
@@ -82,9 +92,11 @@ impl Arb {
                                     meta,
                                 );
                             if let Some(changed_balances) = balance_change_infos {
-
                                 // 触发路由计算
                                 let trigger_instant = Instant::now();
+                                if let Some(tx) = log_info.as_ref() {
+                                    warn!("Arb_{index}持有Tx开始寻找套利路径， tx : {:?}", tx);
+                                }
                                 if let Some(best_path) = Self::trigger_quote(
                                     best_hop_path_searcher.clone(),
                                     arb_mint.clone(),
@@ -124,6 +136,13 @@ impl Arb {
                                             .received_timestamp
                                             .format("%Y-%m-%d %H:%M:%S.%3f")
                                     );
+                                } else {
+                                    if let Some(tx) = log_info.as_ref() {
+                                        warn!(
+                                            "Arb_{index}持有Tx未寻找到可套利路径， tx : {:?}",
+                                            tx
+                                        );
+                                    }
                                 }
                             }
                         }

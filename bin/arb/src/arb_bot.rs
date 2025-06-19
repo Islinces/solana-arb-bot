@@ -171,6 +171,6 @@ pub async fn init_program(
     // 初始化account之间的关系，用于解析GRPC推送数据
     init_account_relations(dex_data.as_slice())?;
     // 构建图
-    init_graph(dex_data.as_slice(), follow_mints, hop_paths)?;
+    // init_graph(dex_data.as_slice(), follow_mints, hop_paths)?;
     Ok(dex_data)
 }

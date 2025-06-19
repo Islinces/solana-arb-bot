@@ -1,6 +1,7 @@
 use arb::arb_bot;
 use chrono::Local;
 use mimalloc::MiMalloc;
+use rayon::ThreadPoolBuilder;
 use tracing_appender::non_blocking;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -21,6 +22,9 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // ThreadPoolBuilder::new()
+    //     .num_threads(num_cpus::get() / 4) // 或者你机器核心数/2
+    //     .build_global()?;
     let (non_blocking_writer, _guard) = {
         #[cfg(feature = "log_file")]
         {

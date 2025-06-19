@@ -15,8 +15,11 @@ use solana_sdk::pubkey::Pubkey;
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use std::collections::hash_map::Entry;
 use std::fmt::{Display, Formatter};
+use std::panic;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
+use tracing::error;
 
 /// 后续针对多hop可以改成枚举，针对不同的枚举实现不同的Trigger和Quoter
 static GRAPH: OnceCell<Arc<AHashMap<usize, Arc<Vec<Arc<Path>>>>>> = OnceCell::const_new();
@@ -110,7 +113,6 @@ impl HopPath for TwoHopPath {
 
         let amount_in_mint_index = find_mint_position(arb_mint.as_ref())?;
 
-        // 并行执行两种报价逻辑
         let (res1, res2) = rayon::join(
             || {
                 if let Some(path) = normal_hop_path {
@@ -133,12 +135,18 @@ impl HopPath for TwoHopPath {
                 }
             },
         );
-
-        [res1, res2]
-            .into_iter()
-            .flatten()
-            .map(|a| HopPathSearchResult::from(TwoHop(a)))
-            .max_by_key(|a| a.profit())
+        // 并行执行两种报价逻辑
+        let result = panic::catch_unwind(AssertUnwindSafe(|| {
+            [res1, res2]
+                .into_iter()
+                .flatten()
+                .map(|a| HopPathSearchResult::from(TwoHop(a)))
+                .max_by_key(|a| a.profit())
+        }));
+        if let Err(err) = result {
+            error!("Rayon 线程 panic: {:?}", err);
+        }
+        None
     }
 }
 

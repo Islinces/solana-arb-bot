@@ -29,6 +29,7 @@ use std::fmt::{Debug, Formatter};
 use std::ops::Sub;
 use std::ptr;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::task::JoinSet;
@@ -58,25 +59,52 @@ impl MessageProcessor {
             let cached_message_sender = cached_message_sender.clone();
             let cached_msg_drop_receiver = cached_message_receiver.clone();
             let grpc_message_receiver = grpc_message_receiver.clone();
+            static COUNT: AtomicUsize = AtomicUsize::new(0);
             join_set.spawn(async move {
                 loop {
                     match grpc_message_receiver.recv_async().await {
                         Ok(grpc_message) => match grpc_message {
                             GrpcMessage::Account(account_msg) => {
+                                let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                                let log_info=if c % 500 == 0 {
+                                    let tx = account_msg.tx.as_slice().to_base58();
+                                    let account_key = Pubkey::try_from(
+                                        account_msg.account_key.as_slice(),
+                                    )
+                                        .unwrap();
+                                    warn!("Processor接收到Account， tx : {:?} , account_key : {:?}",
+                                        tx, account_key
+                                    );
+                                    Some((tx, account_key))
+                                } else {
+                                    None
+                                };
                                 match Self::update_cache(
-                                    account_msg.tx.as_slice(),
                                     account_msg.owner_key,
                                     account_msg.account_key,
                                     account_msg.data,
-                                    account_msg.write_version,
                                 ) {
-                                    Ok(_) => {}
+                                    Ok(_) => {
+                                        if let Some((tx,acc))=log_info{
+                                            warn!("Processor更新Account缓存成功， tx : {:?} , account_key : {:?}",
+                                                tx, acc
+                                            );
+                                        }
+                                    }
                                     Err(e) => {
                                         error!("更新缓存失败，{}", e);
                                     }
                                 }
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
+                                let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                                let log_info=if c % 500 == 0 {
+                                    let tx = transaction_msg.signature.as_slice().to_base58();
+                                    warn!("Processor接收到Tx， tx : {:?}",tx);
+                                    Some(tx)
+                                }else {
+                                    None
+                                };
                                 // #[cfg(feature = "print_data_after_update")]
                                 // if let Some(changed_balances)=BalanceChangeInfo::collect_balance_change_infos(
                                 //     transaction_msg.signature.as_slice(),
@@ -108,7 +136,11 @@ impl MessageProcessor {
                                         error!("Processor_{index} 发送消息到Arb失败，原因：所有Arb关闭");
                                         break;
                                     }
-                                    _ => {}
+                                    Ok(_) => {
+                                        if let Some(tx)=log_info{
+                                            warn!("Processor发送Tx成功， tx : {:?}",tx);
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -122,30 +154,10 @@ impl MessageProcessor {
         }
     }
 
-    fn update_cache(
-        tx: &[u8],
-        owner: Vec<u8>,
-        account_key: Vec<u8>,
-        data: Vec<u8>,
-        write_version: u64,
-    ) -> anyhow::Result<()> {
+    fn update_cache(owner: Vec<u8>, account_key: Vec<u8>, data: Vec<u8>) -> anyhow::Result<()> {
         let account_key = Pubkey::try_from(account_key)
             .map_or(Err(anyhow!("转换account_key失败")), |a| Ok(a))?;
         let owner = Pubkey::try_from(owner).map_or(Err(anyhow!("转换owner失败")), |a| Ok(a))?;
-        // #[cfg(feature = "print_data_after_update")]
-        // {
-        //     update_cache(
-        //         account_key,
-        //         slice_data_auto_get_dex_type(
-        //             &account_key,
-        //             &owner,
-        //             data.clone(),
-        //             SliceType::Subscribed,
-        //         )?,
-        //     )?;
-        //     print_data_from_cache(tx, &owner, &account_key, data)?;
-        // }
-        // #[cfg(not(feature = "print_data_after_update"))]
         update_cache(
             account_key,
             slice_data_auto_get_dex_type(&account_key, &owner, data, SliceType::Subscribed)?,
