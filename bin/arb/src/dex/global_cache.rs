@@ -73,9 +73,7 @@ impl DynamicCache {
     }
 
     pub fn get(&self, account_key: &Pubkey) -> Option<Arc<Vec<u8>>> {
-        self.0
-            .get(account_key)
-            .map_or(None, |v| Some(v.value().clone()))
+        self.0.get(account_key).map(|v| v.value().clone())
     }
 
     pub fn insert(&self, account_key: Pubkey, data: Vec<u8>) -> Option<Arc<Vec<u8>>> {
