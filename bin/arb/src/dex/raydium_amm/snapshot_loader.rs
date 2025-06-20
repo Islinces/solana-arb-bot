@@ -133,3 +133,126 @@ impl SnapshotInitializer for RaydiumAmmSnapshotInitializer {
         Ok(())
     }
 }
+
+mod test {
+    use crate::dex::raydium_amm::{old_state, RaydiumAMMDataSlicer};
+    use crate::dex::{AccountType, AmmInfo, DataSliceInitializer, FromCache, MintVault, SliceType};
+    use serde::{Deserialize, Serialize};
+    use solana_rpc_client::rpc_client::RpcClient;
+    use solana_sdk::program_pack::Pack;
+    use solana_sdk::pubkey::Pubkey;
+    use spl_token::state::Account;
+    use std::fs::File;
+    use std::io::Write;
+    use std::str::FromStr;
+    use std::sync::Arc;
+
+    #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
+    struct TestData {
+        pool_id: Pubkey,
+        amm_info: old_state::pool::AmmInfo,
+        vault_a: Pubkey,
+        vault_a_data: Vec<u8>,
+        vault_b: Pubkey,
+        vault_b_data: Vec<u8>,
+    }
+    const FILE_PATH: &str = "test_data/raydium_amm_test_data.json";
+
+    // #[test]
+    fn test_init_test_data() -> anyhow::Result<()> {
+        let pool_id = Pubkey::from_str("9ViX1VductEoC2wERTSp2TuDxXPwAf69aeET8ENPJpsN")?;
+        let vault_a = Pubkey::from_str("9jbyBXHinaAah2SthksJTYGzTQNRLA7HdT2A7VMF91Wu")?;
+        let vault_b = Pubkey::from_str("9v9FpQYd46LS9zHJitTtnPDDQrHfkSdW2PRbbEbKd2gw")?;
+        let rpc_client = RpcClient::new("https://solana-rpc.publicnode.com");
+        let account_data = rpc_client.get_account_data(&pool_id)?;
+        let amm_info =
+            bytemuck::from_bytes::<old_state::pool::AmmInfo>(account_data.as_slice()).clone();
+        let vault_a_data = rpc_client.get_account_data(&vault_a)?;
+        let vault_b_data = rpc_client.get_account_data(&vault_b)?;
+        let test_data = TestData {
+            pool_id,
+            amm_info,
+            vault_a,
+            vault_a_data,
+            vault_b,
+            vault_b_data,
+        };
+        // println!("{:#?}", test_data);
+        let mut file = File::create(FILE_PATH)?;
+        let json_string = serde_json::to_string_pretty(&test_data)?;
+        file.write_all(json_string.as_bytes())?;
+        let from_file = serde_json::from_reader::<File, TestData>(File::open(FILE_PATH)?)?;
+        assert!(from_file.eq(&test_data));
+        Ok(())
+    }
+
+    #[test]
+    fn test_snapshot_load() -> anyhow::Result<()> {
+        let test_data = serde_json::from_reader::<File, TestData>(File::open(FILE_PATH)?)?;
+        let test_amm_info = test_data.amm_info;
+        let data_slicer = RaydiumAMMDataSlicer;
+        data_slicer.try_init_data_slice_config()?;
+        let amm_info_bytes = bytemuck::bytes_of(&test_amm_info);
+        let amm_info_dynamic_data = data_slicer.try_slice_data(
+            AccountType::Pool,
+            amm_info_bytes.to_vec(),
+            SliceType::Subscribed,
+        )?;
+        let amm_info_static_data = data_slicer.try_slice_data(
+            AccountType::Pool,
+            amm_info_bytes.to_vec(),
+            SliceType::Unsubscribed,
+        )?;
+        let slice_amm_info = AmmInfo::from_cache(
+            Some(Arc::new(amm_info_static_data)),
+            Some(Arc::new(amm_info_dynamic_data)),
+        )?;
+        // 池子校验
+        let slice_data = slice_amm_info.swap_fee_numerator;
+        let data = test_amm_info.fees.swap_fee_numerator;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.swap_fee_denominator;
+        let data = test_amm_info.fees.swap_fee_denominator;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.coin_vault;
+        let data = test_amm_info.coin_vault;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.pc_vault;
+        let data = test_amm_info.pc_vault;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.coin_vault_mint;
+        let data = test_amm_info.coin_vault_mint;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.pc_vault_mint;
+        let data = test_amm_info.pc_vault_mint;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.need_take_pnl_coin;
+        let data = test_amm_info.state_data.need_take_pnl_coin;
+        assert!(slice_data.eq(&data));
+        let slice_data = slice_amm_info.need_take_pnl_pc;
+        let data = test_amm_info.state_data.need_take_pnl_pc;
+        assert!(slice_data.eq(&data));
+        // 金库校验
+        let vault_data = test_data.vault_a_data;
+        let vault_amount = Account::unpack(vault_data.as_slice())?.amount;
+        let vault_bytes = data_slicer.try_slice_data(
+            AccountType::MintVault,
+            vault_data,
+            SliceType::Subscribed,
+        )?;
+        let slice_vault_amount = MintVault::from_cache(None, Some(Arc::new(vault_bytes)))?.amount;
+        assert!(slice_vault_amount.eq(&vault_amount));
+
+        let vault_data = test_data.vault_b_data;
+        let vault_amount = Account::unpack(vault_data.as_slice())?.amount;
+        let vault_bytes = data_slicer.try_slice_data(
+            AccountType::MintVault,
+            vault_data,
+            SliceType::Subscribed,
+        )?;
+        let slice_vault_amount = MintVault::from_cache(None, Some(Arc::new(vault_bytes)))?.amount;
+        assert!(slice_vault_amount.eq(&vault_amount));
+
+        Ok(())
+    }
+}

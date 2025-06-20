@@ -65,7 +65,7 @@ base64 = "0.22.1"
 base58 = "0.2.0"
 ruint = "1.3.0"
 uint = "0.9.5"
-#bytemuck = { version = "^1.16", features = ["derive", "min_const_generics"] }
+bytemuck = { version = "^1.16", features = ["derive", "min_const_generics"] }
 clap = { version = "4.5.37", features = ["derive"] }
 ahash = "0.8.12"
 flume = "0.11.1"
@@ -96,8 +96,9 @@ lto = "fat"              # 全程序链接时优化
 codegen-units = 1        # 单线程生成代码，优化一致性
 panic = "abort"          # panic 时直接终止，提高速度
 incremental = false      # 禁用增量编译，确保完整优化
-debug = false            # 禁用调试信息
+debug = true            # 禁用调试信息
 strip = "symbols"        # 去除符号表，减小体积（需要 Rust 1.60
+
 
 [[bench]]
 name = "quote_bench"
