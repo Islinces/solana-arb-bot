@@ -113,40 +113,47 @@ impl HopPath for TwoHopPath {
 
         let amount_in_mint_index = find_mint_position(arb_mint.as_ref())?;
 
-        let (res1, res2) = rayon::join(
-            || {
-                if let Some(path) = normal_hop_path {
-                    normal_quote(
-                        path,
-                        pool_index,
-                        amount_in_mint_index,
-                        amount_in,
-                        min_profit,
-                    )
-                } else {
-                    None
-                }
-            },
-            || {
-                if let Some(path) = use_ternary_search_hop_path {
-                    ternary_search_quote(path, max_amount_in, min_profit)
-                } else {
-                    None
-                }
-            },
-        );
-        // 并行执行两种报价逻辑
-        let result = panic::catch_unwind(AssertUnwindSafe(|| {
-            [res1, res2]
-                .into_iter()
-                .flatten()
-                .map(|a| HopPathSearchResult::from(TwoHop(a)))
-                .max_by_key(|a| a.profit())
-        }));
-        if let Err(err) = result {
-            error!("Rayon 线程 panic: {:?}", err);
+        match normal_quote(
+            normal_hop_path.unwrap(),
+            pool_index,
+            amount_in_mint_index,
+            amount_in,
+            min_profit,
+        ) {
+            None => None,
+            Some(res) => Some(HopPathSearchResult::from(TwoHop(res))),
         }
-        None
+
+        // let (res1, res2) = rayon::join(
+        //     || {
+        //         if let Some(path) = normal_hop_path {
+        //             normal_quote(
+        //                 path,
+        //                 pool_index,
+        //                 amount_in_mint_index,
+        //                 amount_in,
+        //                 min_profit,
+        //             )
+        //         } else {
+        //             None
+        //         }
+        //     },
+        //     || {
+        //         if let Some(path) = use_ternary_search_hop_path {
+        //             ternary_search_quote(path, max_amount_in, min_profit)
+        //         } else {
+        //             None
+        //         }
+        //     },
+        // );
+        // // 并行执行两种报价逻辑
+        // let result = panic::catch_unwind(AssertUnwindSafe(|| {
+        //     [res1, res2]
+        //         .into_iter()
+        //         .flatten()
+        //         .map(|a| HopPathSearchResult::from(TwoHop(a)))
+        //         .max_by_key(|a| a.profit())
+        // }));
     }
 }
 

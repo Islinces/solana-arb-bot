@@ -22,9 +22,9 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // ThreadPoolBuilder::new()
-    //     .num_threads(num_cpus::get() / 4) // 或者你机器核心数/2
-    //     .build_global()?;
+    ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get() / 4)
+        .build_global()?;
     let (non_blocking_writer, _guard) = {
         #[cfg(feature = "log_file")]
         {

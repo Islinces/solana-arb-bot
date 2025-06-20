@@ -52,23 +52,20 @@ impl GrpcSubscribe {
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         let c = COUNT.fetch_add(1, Ordering::Relaxed);
                         if c % 500 == 0 {
-                            let tx = account
+                            if let Some(a)=account
                                 .account
                                 .as_ref()
                                 .unwrap()
-                                .txn_signature
-                                .as_ref()
-                                .unwrap()
-                                .as_slice()
-                                .to_base58();
-                            let account_key = Pubkey::try_from(
-                                account.account.as_ref().unwrap().pubkey.as_slice(),
-                            )
-                            .unwrap();
-                            warn!(
+                                .txn_signature.as_ref(){
+                                let account_key = Pubkey::try_from(
+                                    account.account.as_ref().unwrap().pubkey.as_slice(),
+                                )
+                                    .unwrap();
+                                warn!(
                                 "GRPC推送Account， tx : {:?} , account_key : {:?}",
-                                tx, account_key
+                                a.as_slice().to_base58(), account_key
                             );
+                            }
                         }
                         match message_sender
                             .send_async(GrpcMessage::Account(GrpcAccountMsg::from(account)))
