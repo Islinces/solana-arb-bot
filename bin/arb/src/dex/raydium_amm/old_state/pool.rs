@@ -5,15 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 #[derive(Clone, Debug)]
 #[cfg_attr(
     test,
-    derive(
-        Eq,
-        PartialEq,
-        serde::Serialize,
-        serde::Deserialize,
-        Copy,
-        Pod,
-        Zeroable
-    )
+    derive(serde::Serialize, serde::Deserialize, Copy, Pod, Zeroable)
 )]
 pub struct AmmInfo {
     /// Initialized status.
@@ -107,10 +99,7 @@ impl TryInto<crate::dex::AmmInfo> for AmmInfo {
 
 #[repr(C, packed)]
 #[derive(Clone, Debug, Copy)]
-#[cfg_attr(
-    test,
-    derive(Eq, PartialEq, serde::Serialize, serde::Deserialize, Pod, Zeroable)
-)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize, Pod, Zeroable))]
 pub struct Fees {
     /// numerator of the min_separate
     pub min_separate_numerator: u64,
@@ -136,10 +125,7 @@ pub struct Fees {
 
 #[repr(C, packed)]
 #[derive(Clone, Debug, Copy)]
-#[cfg_attr(
-    test,
-    derive(Eq, PartialEq, serde::Serialize, serde::Deserialize, Pod, Zeroable)
-)]
+#[cfg_attr(test, derive(serde::Serialize, serde::Deserialize, Pod, Zeroable))]
 pub struct StateData {
     /// delay to take pnl coin
     pub need_take_pnl_coin: u64,
