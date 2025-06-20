@@ -213,9 +213,10 @@ impl Path {
     pub fn use_ternary_search(&self, pool_index: usize) -> bool {
         use DexType::{PumpFunAMM, RaydiumAMM};
 
-        (self.first.pool == pool_index || self.second.pool == pool_index)
-            && matches!(self.first.dex_type, PumpFunAMM | RaydiumAMM)
-            && matches!(self.second.dex_type, PumpFunAMM | RaydiumAMM)
+        // (self.first.pool == pool_index || self.second.pool == pool_index)
+        //     && matches!(self.first.dex_type, PumpFunAMM | RaydiumAMM)
+        //     && matches!(self.second.dex_type, PumpFunAMM | RaydiumAMM)
+        false
     }
 
     #[inline]
