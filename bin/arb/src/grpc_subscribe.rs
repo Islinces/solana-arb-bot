@@ -45,28 +45,28 @@ impl GrpcSubscribe {
     ) {
         let mut stream = grpc_subscribe(grpc_url, dex_data).await.unwrap();
         info!("GRPC订阅成功, 等待GRPC推送数据");
-        static COUNT: AtomicUsize = AtomicUsize::new(0);
+        // static COUNT: AtomicUsize = AtomicUsize::new(0);
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                        let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                        if c % 500 == 0 {
-                            if let Some(a)=account
-                                .account
-                                .as_ref()
-                                .unwrap()
-                                .txn_signature.as_ref(){
-                                let account_key = Pubkey::try_from(
-                                    account.account.as_ref().unwrap().pubkey.as_slice(),
-                                )
-                                    .unwrap();
-                                warn!(
-                                "GRPC推送Account， tx : {:?} , account_key : {:?}",
-                                a.as_slice().to_base58(), account_key
-                            );
-                            }
-                        }
+                        // let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                        // if c % 500 == 0 {
+                        //     if let Some(a)=account
+                        //         .account
+                        //         .as_ref()
+                        //         .unwrap()
+                        //         .txn_signature.as_ref(){
+                        //         let account_key = Pubkey::try_from(
+                        //             account.account.as_ref().unwrap().pubkey.as_slice(),
+                        //         )
+                        //             .unwrap();
+                        //         warn!(
+                        //         "GRPC推送Account， tx : {:?} , account_key : {:?}",
+                        //         a.as_slice().to_base58(), account_key
+                        //     );
+                        //     }
+                        // }
                         match message_sender
                             .send_async(GrpcMessage::Account(GrpcAccountMsg::from(account)))
                             .await
@@ -81,11 +81,11 @@ impl GrpcSubscribe {
                         match transaction.transaction {
                             None => {}
                             Some(tx) => {
-                                let txn = tx.signature.as_slice().to_base58();
-                                let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                                if c % 500 == 0 {
-                                    warn!("GRPC推送Tx， tx : {:?}", txn);
-                                }
+                                // let txn = tx.signature.as_slice().to_base58();
+                                // let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                                // if c % 500 == 0 {
+                                //     warn!("GRPC推送Tx， tx : {:?}", txn);
+                                // }
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
                                         (tx, slot),

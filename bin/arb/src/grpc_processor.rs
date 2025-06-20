@@ -59,37 +59,37 @@ impl MessageProcessor {
             let cached_message_sender = cached_message_sender.clone();
             let cached_msg_drop_receiver = cached_message_receiver.clone();
             let grpc_message_receiver = grpc_message_receiver.clone();
-            static COUNT: AtomicUsize = AtomicUsize::new(0);
+            // static COUNT: AtomicUsize = AtomicUsize::new(0);
             join_set.spawn(async move {
                 loop {
                     match grpc_message_receiver.recv_async().await {
                         Ok(grpc_message) => match grpc_message {
                             GrpcMessage::Account(account_msg) => {
-                                let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                                let log_info=if c % 500 == 0 {
-                                    let tx = account_msg.tx.as_slice().to_base58();
-                                    let account_key = Pubkey::try_from(
-                                        account_msg.account_key.as_slice(),
-                                    )
-                                        .unwrap();
-                                    warn!("Processor接收到Account， tx : {:?} , account_key : {:?}",
-                                        tx, account_key
-                                    );
-                                    Some((tx, account_key))
-                                } else {
-                                    None
-                                };
+                                // let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                                // let log_info=if c % 500 == 0 {
+                                //     let tx = account_msg.tx.as_slice().to_base58();
+                                //     let account_key = Pubkey::try_from(
+                                //         account_msg.account_key.as_slice(),
+                                //     )
+                                //         .unwrap();
+                                //     warn!("Processor接收到Account， tx : {:?} , account_key : {:?}",
+                                //         tx, account_key
+                                //     );
+                                //     Some((tx, account_key))
+                                // } else {
+                                //     None
+                                // };
                                 match Self::update_cache(
                                     account_msg.owner_key,
                                     account_msg.account_key,
                                     account_msg.data,
                                 ) {
                                     Ok(_) => {
-                                        if let Some((tx,acc))=log_info{
-                                            warn!("Processor更新Account缓存成功， tx : {:?} , account_key : {:?}",
-                                                tx, acc
-                                            );
-                                        }
+                                        // if let Some((tx,acc))=log_info{
+                                        //     warn!("Processor更新Account缓存成功， tx : {:?} , account_key : {:?}",
+                                        //         tx, acc
+                                        //     );
+                                        // }
                                     }
                                     Err(e) => {
                                         error!("更新缓存失败，{}", e);
@@ -97,14 +97,14 @@ impl MessageProcessor {
                                 }
                             }
                             GrpcMessage::Transaction(transaction_msg) => {
-                                let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                                let log_info=if c % 500 == 0 {
-                                    let tx = transaction_msg.signature.as_slice().to_base58();
-                                    warn!("Processor接收到Tx， tx : {:?}",tx);
-                                    Some(tx)
-                                }else {
-                                    None
-                                };
+                                // let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                                // let log_info=if c % 500 == 0 {
+                                //     let tx = transaction_msg.signature.as_slice().to_base58();
+                                //     warn!("Processor接收到Tx， tx : {:?}",tx);
+                                //     Some(tx)
+                                // }else {
+                                //     None
+                                // };
                                 // #[cfg(feature = "print_data_after_update")]
                                 // if let Some(changed_balances)=BalanceChangeInfo::collect_balance_change_infos(
                                 //     transaction_msg.signature.as_slice(),
@@ -137,9 +137,9 @@ impl MessageProcessor {
                                         break;
                                     }
                                     Ok(_) => {
-                                        if let Some(tx)=log_info{
-                                            warn!("Processor发送Tx成功， tx : {:?}",tx);
-                                        }
+                                        // if let Some(tx)=log_info{
+                                        //     warn!("Processor发送Tx成功， tx : {:?}",tx);
+                                        // }
                                     }
                                 }
                             }
