@@ -23,7 +23,8 @@ const SERUM_PROGRAM_ID: Pubkey = pubkey!("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81E
 
 mod test {
     use crate::dex::{
-        init_data_slice_config, init_global_cache, init_snapshot, DataSliceInitializer, FromCache,
+        init_account_relations, init_data_slice_config, init_global_cache, init_snapshot,
+        DataSliceInitializer, FromCache,
     };
     use crate::dex_data::DexJson;
     use serde::{Deserialize, Serialize};
@@ -34,7 +35,7 @@ mod test {
     use std::str::FromStr;
     use std::sync::Arc;
 
-    async fn test_init_program(rpc_client: Arc<RpcClient>) -> anyhow::Result<Vec<DexJson>> {
+    async fn setup(rpc_client: Arc<RpcClient>) -> anyhow::Result<Vec<DexJson>> {
         let mut dex_json = vec![DexJson {
             pool: Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2")?,
             owner: Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?,
@@ -49,14 +50,18 @@ mod test {
         init_data_slice_config()?;
         let global_cache = init_snapshot(&mut dex_json, rpc_client.clone()).await?;
         init_global_cache(global_cache);
+        init_account_relations(dex_json.as_slice())?;
         assert!(!dex_json.is_empty());
         Ok(dex_json)
     }
 
     pub(super) mod test_snapshot {
         use crate::dex::raydium_amm::old_state;
-        use crate::dex::raydium_amm::test::test_init_program;
-        use crate::dex::{get_account_data, AmmInfo, MintVault};
+        use crate::dex::raydium_amm::test::setup;
+        use crate::dex::{
+            get_account_data, slice_data_auto_get_dex_type, update_cache, AmmInfo, MintVault,
+            SliceType,
+        };
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
         use solana_sdk::program_pack::Pack;
         use spl_token::state::Account;
@@ -67,11 +72,11 @@ mod test {
             let rpc_client = Arc::new(RpcClient::new(
                 "https://solana-rpc.publicnode.com".to_string(),
             ));
-            let dex_json = test_init_program(rpc_client.clone()).await?;
+            let dex_json = setup(rpc_client.clone()).await?;
             let dex_json = dex_json.first().unwrap();
             let account_data = rpc_client.get_account_data(&dex_json.pool).await?;
-            let test_amm_info =
-                bytemuck::from_bytes::<old_state::pool::AmmInfo>(account_data.as_slice());
+            let mut test_amm_info =
+                bytemuck::from_bytes::<old_state::pool::AmmInfo>(account_data.as_slice()).clone();
             let slice_amm_info = get_account_data::<AmmInfo>(&dex_json.pool).unwrap();
             // 池子校验
             let slice_data = slice_amm_info.swap_fee_numerator;
@@ -98,6 +103,31 @@ mod test {
             let slice_data = slice_amm_info.need_take_pnl_pc;
             let data = test_amm_info.state_data.need_take_pnl_pc;
             assert!(slice_data.eq(&data));
+
+            // 修改池子数据，更新缓存，验证缓存更新正确
+            {
+                let state_data = &mut test_amm_info.state_data;
+                state_data.need_take_pnl_coin = 100;
+                state_data.need_take_pnl_pc = 200;
+            }
+            let update_pool_data = bytemuck::bytes_of(&test_amm_info);
+            update_cache(
+                dex_json.pool,
+                slice_data_auto_get_dex_type(
+                    &dex_json.pool,
+                    &dex_json.owner,
+                    update_pool_data.to_vec(),
+                    SliceType::Subscribed,
+                )?,
+            )?;
+            let update_amm_info = get_account_data::<AmmInfo>(&dex_json.pool).unwrap();
+            let cache_data = update_amm_info.need_take_pnl_coin;
+            let origin_data = test_amm_info.state_data.need_take_pnl_coin;
+            assert_eq!(cache_data, origin_data);
+            let cache_data = update_amm_info.need_take_pnl_pc;
+            let origin_data = test_amm_info.state_data.need_take_pnl_pc;
+            assert_eq!(cache_data, origin_data);
+
             // 金库校验
             let vault_amount = Account::unpack(
                 rpc_client
@@ -111,17 +141,35 @@ mod test {
                 .amount;
             assert!(slice_vault_amount.eq(&vault_amount));
 
-            let vault_amount = Account::unpack(
+            let mut vault_account = Account::unpack(
                 rpc_client
                     .get_account_data(&dex_json.vault_b)
                     .await?
                     .as_slice(),
-            )?
-            .amount;
+            )?;
+            let vault_amount = vault_account.amount;
             let slice_vault_amount = get_account_data::<MintVault>(&dex_json.vault_b)
                 .unwrap()
                 .amount;
             assert!(slice_vault_amount.eq(&vault_amount));
+
+            // 修改金库数据，更新缓存，验证缓存更新正确
+            vault_account.amount = 1000;
+            let mut account_data = [0_u8; 165];
+            vault_account.pack_into_slice(&mut account_data);
+            update_cache(
+                dex_json.vault_b,
+                slice_data_auto_get_dex_type(
+                    &dex_json.vault_b,
+                    &dex_json.owner,
+                    account_data.to_vec(),
+                    SliceType::Subscribed,
+                )?,
+            )?;
+            let update_amount = get_account_data::<MintVault>(&dex_json.vault_b)
+                .unwrap()
+                .amount;
+            assert!(update_amount.eq(&vault_account.amount));
             Ok(())
         }
     }
