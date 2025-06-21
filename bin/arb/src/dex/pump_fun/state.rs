@@ -66,3 +66,8 @@ pub fn global_config_key() -> Pubkey {
     )
     .0
 }
+
+#[test]
+fn test(){
+    println!("{:?}",global_config_key());
+}
