@@ -21,7 +21,7 @@ use std::time::Duration;
 use tokio::sync::OnceCell;
 use tracing::{error, info};
 
-static KEYPAIR: OnceCell<Arc<Keypair>> = OnceCell::const_new();
+pub static KEYPAIR: OnceCell<Arc<Keypair>> = OnceCell::const_new();
 static WALLET_OF_ATA_AMOUNT: OnceCell<Arc<RwLock<AHashMap<Pubkey, u64>>>> = OnceCell::const_new();
 static ARB_MINT_ATA_ACCOUNT: OnceCell<Pubkey> = OnceCell::const_new();
 static LAST_BLOCK_HASH: OnceCell<Arc<RwLock<Hash>>> = OnceCell::const_new();

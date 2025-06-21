@@ -1,13 +1,14 @@
 use crate::dex::utils::read_from;
 use crate::dex::FromCache;
 use anyhow::anyhow;
+use bytemuck::{Pod, Zeroable};
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 
 #[repr(C, packed)]
 // #[serde_as]
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
-// #[cfg_attr(feature = "print_data_after_update", derive(Serialize, Deserialize))]
+#[cfg_attr(test, derive(Pod, Zeroable))]
 pub struct AmmInfo {
     // 分开存储
     // static data 未订阅的属性
@@ -39,8 +40,8 @@ impl FromCache for AmmInfo {
     {
         let pool_static_data = static_cache.ok_or(anyhow!(""))?;
         let pool_dynamic_data = dynamic_cache.ok_or(anyhow!(""))?;
-        let pool_static_data=pool_static_data.as_slice();
-        let pool_dynamic_data=pool_dynamic_data.as_slice();
+        let pool_static_data = pool_static_data.as_slice();
+        let pool_dynamic_data = pool_dynamic_data.as_slice();
         unsafe {
             let swap_fee_numerator = read_from::<u64>(&pool_static_data[0..8]);
             let swap_fee_denominator = read_from::<u64>(&pool_static_data[8..16]);

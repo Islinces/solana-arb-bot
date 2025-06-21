@@ -37,8 +37,12 @@ fn get_fee_account_with_rand() -> Pubkey {
     Pubkey::from_str(PUMPSWAP_FEE_ACCOUNTS[rand::rng().random_range(0..=7)]).unwrap()
 }
 
+#[cfg(test)]
 mod test {
-    use crate::dex::{init_account_relations, init_data_slice_config, init_global_cache, init_snapshot, DataSliceInitializer, FromCache};
+    use crate::dex::{
+        init_account_relations, init_data_slice_config, init_global_cache, init_snapshot,
+        DataSliceInitializer, FromCache,
+    };
     use crate::dex_data::DexJson;
     use serde::{Deserialize, Serialize};
     use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -72,7 +76,10 @@ mod test {
         use crate::dex::pump_fun::old_state;
         use crate::dex::pump_fun::old_state::global_config;
         use crate::dex::pump_fun::test::setup;
-        use crate::dex::{get_account_data, global_config_key, slice_data_auto_get_dex_type, update_cache, MintVault, Pool, SliceType};
+        use crate::dex::{
+            get_account_data, global_config_key, slice_data_auto_get_dex_type, update_cache,
+            MintVault, Pool, SliceType,
+        };
         use solana_rpc_client::nonblocking::rpc_client::RpcClient;
         use solana_sdk::program_pack::Pack;
         use spl_token::state::Account;
@@ -141,7 +148,15 @@ mod test {
             vault_account.amount = 10000000;
             let mut vault_account_slice = [0; 165];
             vault_account.pack_into_slice(vault_account_slice.as_mut_slice());
-            update_cache(dex_json.vault_a, slice_data_auto_get_dex_type(&dex_json.vault_a, &dex_json.owner, vault_account_slice.to_vec(), SliceType::Subscribed)?)?;
+            update_cache(
+                dex_json.vault_a,
+                slice_data_auto_get_dex_type(
+                    &dex_json.vault_a,
+                    &dex_json.owner,
+                    vault_account_slice.to_vec(),
+                    SliceType::Subscribed,
+                )?,
+            )?;
             let slice_vault_amount = get_account_data::<MintVault>(&dex_json.vault_a)
                 .unwrap()
                 .amount;

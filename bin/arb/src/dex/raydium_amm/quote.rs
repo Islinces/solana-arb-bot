@@ -41,3 +41,63 @@ impl Quoter for RaydiumAMMQuoter {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::dex::raydium_amm::quote::RaydiumAMMQuoter;
+    use crate::dex::{init_global_cache, AmmInfo, GlobalCache, MintVault, Quoter};
+    use crate::dex_data::DexJson;
+    use solana_sdk::pubkey::Pubkey;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_raydium_amm_quote() -> anyhow::Result<()> {
+        let dex_json = DexJson {
+            pool: Pubkey::from_str("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2")?,
+            owner: Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?,
+            mint_a: Pubkey::from_str("So11111111111111111111111111111111111111112")?,
+            mint_b: Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")?,
+            vault_a: Pubkey::from_str("DQyrAcCrDXQ7NeoqGgDCZwBvWDcYmFCjSb9JtteuvPpz")?,
+            vault_b: Pubkey::from_str("HLmqeL62xR1QoZ1HKKbXRrdN1p3phKpxRMb2VVopvBBz")?,
+            address_lookup_table_address: Some(Pubkey::from_str(
+                "E59uBXGqn83xN17kMbBVfU1M7T4wHG91eiygHb88Aovb",
+            )?),
+        };
+        let amm_info = AmmInfo {
+            need_take_pnl_coin: 10,
+            need_take_pnl_pc: 20,
+            swap_fee_numerator: 10,
+            swap_fee_denominator: 20,
+            coin_vault: dex_json.vault_a,
+            pc_vault: dex_json.vault_b,
+            ..Default::default()
+        };
+        let data = bytemuck::bytes_of(&amm_info);
+        let static_data = &data[0..144];
+        let dynamic_data = &data[144..];
+        let mut global_cache = GlobalCache::init();
+        global_cache.upsert_static(dex_json.pool, static_data.to_vec());
+        global_cache.upsert_dynamic(dex_json.pool, dynamic_data.to_vec());
+
+        let coin_vault_amount = MintVault {
+            amount: 1000000000000,
+        };
+        global_cache.upsert_dynamic(
+            dex_json.vault_a,
+            bytemuck::bytes_of(&coin_vault_amount).to_vec(),
+        );
+        let pc_vault_amount = MintVault {
+            amount: 1000000000000000,
+        };
+        global_cache.upsert_dynamic(
+            dex_json.vault_b,
+            bytemuck::bytes_of(&pc_vault_amount).to_vec(),
+        );
+        init_global_cache(global_cache);
+        let quote_result = RaydiumAMMQuoter
+            .quote(10_u64.pow(9), true, &dex_json.pool)
+            .unwrap();
+        assert_eq!(quote_result.amount_out, 499750124942);
+        Ok(())
+    }
+}

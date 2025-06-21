@@ -114,10 +114,10 @@ pub fn get_dex_type_and_account_type(
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AccountInfo {
-    dex_type: DexType,
-    account_type: AccountType,
-    account_key: Pubkey,
-    pool_id: Pubkey,
+    pub dex_type: DexType,
+    pub account_type: AccountType,
+    pub account_key: Pubkey,
+    pub pool_id: Pubkey,
 }
 
 impl AccountInfo {

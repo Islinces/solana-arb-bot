@@ -21,6 +21,7 @@ pub(super) const RAYDIUM_AMM_PROGRAM_ID: Pubkey =
 const RAYDIUM_AMM_VAULT_OWNER: Pubkey = pubkey!("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1");
 const SERUM_PROGRAM_ID: Pubkey = pubkey!("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb");
 
+#[cfg(test)]
 mod test {
     use crate::dex::{
         init_account_relations, init_data_slice_config, init_global_cache, init_snapshot,

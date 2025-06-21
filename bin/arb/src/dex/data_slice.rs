@@ -9,6 +9,7 @@ use crate::dex::utils::read_from;
 use crate::dex::{AccountType, DexType, FromCache};
 use ahash::AHashMap;
 use anyhow::anyhow;
+use bytemuck::{Pod, Zeroable};
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use solana_sdk::clock::Clock;
@@ -41,11 +42,7 @@ pub trait DataSliceInitializer {
 
     fn try_init_mint_vault_data_slice(&self) -> anyhow::Result<()> {
         // amount
-        match DYNAMIC_MINT_VAULT_SLICE.set(([(64, 64 + 8)], 8)) {
-            Ok(_) => Ok(()),
-            Err(SetError::AlreadyInitializedError(_)) => Ok(()),
-            Err(e) => Err(anyhow!(e)),
-        }
+        try_init_mint_vault_data_slice()
     }
 
     fn try_mint_vault_slice_data(&self, data: Vec<u8>) -> anyhow::Result<Vec<u8>> {
@@ -64,6 +61,14 @@ pub trait DataSliceInitializer {
             SliceType::Subscribed => Ok(Some(DYNAMIC_MINT_VAULT_SLICE.get().unwrap().1)),
             SliceType::Unsubscribed => Ok(None),
         }
+    }
+}
+
+fn try_init_mint_vault_data_slice() -> anyhow::Result<()> {
+    match DYNAMIC_MINT_VAULT_SLICE.set(([(64, 64 + 8)], 8)) {
+        Ok(_) => Ok(()),
+        Err(SetError::AlreadyInitializedError(_)) => Ok(()),
+        Err(e) => Err(anyhow!(e)),
     }
 }
 
@@ -178,7 +183,9 @@ pub fn retain_intervals_unsafe(
     result
 }
 
+#[repr(C, packed)]
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Copy, Clone, Pod, Zeroable))]
 pub struct MintVault {
     pub amount: u64,
 }
@@ -205,5 +212,41 @@ impl FromCache for MintVault {
         let dynamic_data = dynamic_data.as_slice();
         let amount = unsafe { read_from::<u64>(&dynamic_data[0..8]) };
         Ok(Self { amount })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::dex::data_slice::try_init_mint_vault_data_slice;
+    use crate::dex::{read_from, retain_intervals_unsafe, DataSliceInitializer};
+    use solana_sdk::program_pack::Pack;
+    use spl_token::state::Account;
+
+    #[test]
+    fn test_retain_intervals_unsafe() -> anyhow::Result<()> {
+        let mint_vault = Account {
+            mint: Default::default(),
+            owner: Default::default(),
+            amount: 100,
+            delegate: Default::default(),
+            state: Default::default(),
+            is_native: Default::default(),
+            delegated_amount: 200,
+            close_authority: Default::default(),
+        };
+        let mut data = [0_u8; 176];
+        mint_vault.pack_into_slice(data.as_mut_slice());
+        try_init_mint_vault_data_slice()?;
+        let amount_data = retain_intervals_unsafe(
+            data.to_vec(),
+            vec![(64, 64 + 8), (121, 121 + 8)].as_slice(),
+            16,
+        );
+        let amount_data = amount_data.as_slice();
+        let amount = { unsafe { read_from::<u64>(&amount_data[0..8]) } };
+        assert_eq!(amount, 100);
+        let delegated_amount = { unsafe { read_from::<u64>(&amount_data[8..16]) } };
+        assert_eq!(delegated_amount, 200);
+        Ok(())
     }
 }

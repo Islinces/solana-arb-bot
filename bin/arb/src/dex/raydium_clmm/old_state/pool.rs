@@ -1,8 +1,10 @@
+use bytemuck::{Pod, Zeroable};
 use solana_sdk::pubkey::Pubkey;
 
 const REWARD_NUM: usize = 3;
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(test, derive(Pod, Zeroable))]
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: [u8; 1],
@@ -112,6 +114,7 @@ impl TryInto<crate::dex::raydium_clmm::PoolState> for PoolState {
 
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(test, derive(Pod, Zeroable))]
 pub struct RewardInfo {
     /// Reward state
     pub reward_state: u8,

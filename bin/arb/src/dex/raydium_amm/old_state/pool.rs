@@ -2,7 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use solana_sdk::pubkey::Pubkey;
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(
     test,
     derive(serde::Serialize, serde::Deserialize, Copy, Pod, Zeroable)
@@ -98,7 +98,7 @@ impl TryInto<crate::dex::AmmInfo> for AmmInfo {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Default)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize, Pod, Zeroable))]
 pub struct Fees {
     /// numerator of the min_separate
@@ -124,7 +124,7 @@ pub struct Fees {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Default)]
 #[cfg_attr(test, derive(serde::Serialize, serde::Deserialize, Pod, Zeroable))]
 pub struct StateData {
     /// delay to take pnl coin
