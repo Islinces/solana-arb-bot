@@ -66,8 +66,8 @@ mod test {
         let amm_info = AmmInfo {
             need_take_pnl_coin: 10,
             need_take_pnl_pc: 20,
-            swap_fee_numerator: 10,
-            swap_fee_denominator: 20,
+            swap_fee_numerator: 25,
+            swap_fee_denominator: 10_000,
             coin_vault: dex_json.vault_a,
             pc_vault: dex_json.vault_b,
             ..Default::default()
@@ -80,14 +80,14 @@ mod test {
         global_cache.upsert_dynamic(dex_json.pool, dynamic_data.to_vec());
 
         let coin_vault_amount = MintVault {
-            amount: 1000000000000,
+            amount: 26_324 * 10_u64.pow(9),
         };
         global_cache.upsert_dynamic(
             dex_json.vault_a,
             bytemuck::bytes_of(&coin_vault_amount).to_vec(),
         );
         let pc_vault_amount = MintVault {
-            amount: 1000000000000000,
+            amount: 3_524_576 * 10_u64.pow(6),
         };
         global_cache.upsert_dynamic(
             dex_json.vault_b,
@@ -97,7 +97,7 @@ mod test {
         let quote_result = RaydiumAMMQuoter
             .quote(10_u64.pow(9), true, &dex_json.pool)
             .unwrap();
-        assert_eq!(quote_result.amount_out, 499750124942);
+        assert_eq!(quote_result.amount_out, 133552322);
         Ok(())
     }
 }
