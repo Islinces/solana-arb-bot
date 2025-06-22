@@ -1,10 +1,11 @@
 use bytemuck::{Pod, Zeroable};
 use solana_sdk::pubkey::Pubkey;
 
-#[repr(C,packed)]
-#[derive(Debug, Clone)]
+#[repr(C, packed)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(test, derive(Copy, Pod, Zeroable))]
 pub struct Pool {
+    pub discriminator: [u8; 8],
     pub pool_bump: u8,
     pub index: u16,
     pub creator: Pubkey,
