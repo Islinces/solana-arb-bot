@@ -64,7 +64,7 @@ impl GrpcSubscribe {
                     });
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                        if c % 1 == 0 {
+                        if c % 100 == 0 {
                             if let Some(a) =
                                 account.account.as_ref().unwrap().txn_signature.as_ref()
                             {
@@ -94,7 +94,7 @@ impl GrpcSubscribe {
                             Some(tx) => {
                                 let txn = tx.signature.as_slice().to_base58();
                                 let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                                if c % 1 == 0 {
+                                if c % 100 == 0 {
                                     warn!(
                                         "GRPC推送Tx， tx : {:?}, current : {}, created_at : {}",
                                         txn,
