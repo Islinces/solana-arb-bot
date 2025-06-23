@@ -45,7 +45,7 @@ impl Quoter for OrcaWhirlQuoter {
                 amount_out: quote_result.token_est_out,
             }),
             Err(e) => {
-                error!("【OracWhirl】[{pool_id}]Quote失败，原因：{}", e);
+                // error!("【OracWhirl】[{pool_id}]Quote失败，原因：{}", e);
                 None
             }
         }
