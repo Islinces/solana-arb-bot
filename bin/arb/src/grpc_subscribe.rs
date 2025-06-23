@@ -49,6 +49,7 @@ impl GrpcSubscribe {
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
+                    let created_at = data.created_at;
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         // let c = COUNT.fetch_add(1, Ordering::Relaxed);
                         // if c % 500 == 0 {
@@ -88,7 +89,7 @@ impl GrpcSubscribe {
                                 // }
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
-                                        (tx, slot),
+                                        (tx, slot, created_at.unwrap()),
                                     )))
                                     .await
                                 {
@@ -151,10 +152,11 @@ pub struct GrpcTransactionMsg {
     pub received_timestamp: DateTime<Local>,
     pub slot: u64,
     pub instant: Instant,
+    pub created_at: Timestamp,
 }
 
-impl From<(SubscribeUpdateTransactionInfo, u64)> for GrpcTransactionMsg {
-    fn from(transaction: (SubscribeUpdateTransactionInfo, u64)) -> Self {
+impl From<(SubscribeUpdateTransactionInfo, u64, Timestamp)> for GrpcTransactionMsg {
+    fn from(transaction: (SubscribeUpdateTransactionInfo, u64, Timestamp)) -> Self {
         let time = Local::now();
         Self {
             signature: transaction.0.signature,
@@ -164,6 +166,7 @@ impl From<(SubscribeUpdateTransactionInfo, u64)> for GrpcTransactionMsg {
             received_timestamp: time,
             slot: transaction.1,
             instant: Instant::now(),
+            created_at: transaction.2,
         }
     }
 }

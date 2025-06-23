@@ -7,6 +7,7 @@ use crate::metadata::get_arb_mint_ata_amount;
 use crate::{HopPathSearchResult, HopPathTypes, SearchResult};
 use ahash::AHashSet;
 use base58::ToBase58;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use parking_lot::RwLock;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use solana_sdk::pubkey::Pubkey;
@@ -122,10 +123,13 @@ impl Arb {
                                         .unwrap_or_else(|e| format!("发送交易失败，原因：{}", e));
                                     let all_cost = transaction_msg.instant.elapsed().as_millis();
                                     let quote_cost = trigger_quote_cost.as_micros();
+                                    let timestamp = transaction_msg.created_at;
+                                    let datetime: DateTime<
+                                        Utc> = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp_opt(timestamp.seconds, timestamp.nanos as u32).unwrap(), Utc);
                                     info!(
                                         "\nArb_{index} ==> 耗时 : {:>4.2}ms, \
                                         路由 : {:>4.2}μs, \
-                                        {} \n路径 : {}, tx : {},  Slot : {}, Time: {}",
+                                        {} \n路径 : {}, tx : {},  Slot : {}, Time: {}, Created_at : {}",
                                         all_cost,
                                         quote_cost,
                                         msg,
@@ -134,7 +138,8 @@ impl Arb {
                                         transaction_msg.slot,
                                         transaction_msg
                                             .received_timestamp
-                                            .format("%Y-%m-%d %H:%M:%S.%3f")
+                                            .format("%Y-%m-%d %H:%M:%S.%3f"),
+                                        datetime.format("%Y-%m-%d %H:%M:%S.%3f")
                                     );
                                 }
                                 // else {
