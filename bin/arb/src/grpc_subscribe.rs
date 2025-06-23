@@ -65,7 +65,18 @@ impl GrpcSubscribe {
                         // 计算相差毫秒数
                         let duration = now.signed_duration_since(ts_datetime_local);
                         let diff_ms = duration.num_milliseconds();
-                        Some(diff_ms)
+                        let datetime: DateTime<Utc> = DateTime::<Utc>::from_utc(
+                            NaiveDateTime::from_timestamp_opt(
+                                timestamp.seconds,
+                                timestamp.nanos as u32,
+                            )
+                            .unwrap(),
+                            Utc,
+                        );
+                        Some((
+                            datetime.format("%Y-%m-%d %H:%M:%S.%3f").to_string(),
+                            diff_ms,
+                        ))
                     });
 
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
@@ -74,11 +85,13 @@ impl GrpcSubscribe {
                             if let Some(a) =
                                 account.account.as_ref().unwrap().txn_signature.as_ref()
                             {
-                                let account_key = Pubkey::try_from(
-                                    account.account.as_ref().unwrap().pubkey.as_slice(),
-                                )
-                                .unwrap();
-                                warn!("Account -> diff_ms : {}ms", diff_ms.unwrap());
+                                let (created_at, diff) = diff_ms.unwrap();
+                                warn!(
+                                    "Account -> current : {}, created_at : {}, diff_ms : {}ms",
+                                    now.format("%Y-%m-%d %H:%M:%S.%3f"),
+                                    created_at,
+                                    diff
+                                );
                             }
                         }
                         match message_sender
@@ -95,10 +108,10 @@ impl GrpcSubscribe {
                         match transaction.transaction {
                             None => {}
                             Some(tx) => {
-                                let txn = tx.signature.as_slice().to_base58();
                                 let c = COUNT.fetch_add(1, Ordering::Relaxed);
                                 if c % 100 == 0 {
-                                    warn!("Transaction -> diff_ms : {}ms", diff_ms.unwrap());
+                                    let (created_at, diff) = diff_ms.unwrap();
+                                    warn!("Transaction -> current : {}, created_at : {}, diff_ms : {}ms",now.format("%Y-%m-%d %H:%M:%S.%3f"),created_at,diff);
                                 }
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
