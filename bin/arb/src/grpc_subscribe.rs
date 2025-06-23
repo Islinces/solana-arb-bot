@@ -49,19 +49,25 @@ impl GrpcSubscribe {
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
-                    let now = Local::now().format("%Y-%m-%d %H:%M:%S.%3f");
+                    let now = Local::now();
                     let created_at = data.created_at;
-                    let created_at_str = created_at.clone().and_then(|timestamp| {
-                        let datetime: DateTime<Utc> = DateTime::<Utc>::from_utc(
-                            NaiveDateTime::from_timestamp_opt(
-                                timestamp.seconds,
-                                timestamp.nanos as u32,
-                            )
-                            .unwrap(),
-                            Utc,
-                        );
-                        Some(datetime.format("%Y-%m-%d %H:%M:%S.%3f").to_string())
+                    let diff_ms = created_at.clone().and_then(|timestamp| {
+                        // 转为 chrono::DateTime<Utc>
+                        let naive = NaiveDateTime::from_timestamp_opt(
+                            timestamp.seconds,
+                            timestamp.nanos as u32,
+                        )
+                        .unwrap();
+                        let ts_datetime_utc: DateTime<Utc> = DateTime::<Utc>::from_utc(naive, Utc);
+                        // 转为 Local 方便比较
+                        let ts_datetime_local: DateTime<Local> =
+                            ts_datetime_utc.with_timezone(&Local);
+                        // 计算相差毫秒数
+                        let duration = now.signed_duration_since(ts_datetime_local);
+                        let diff_ms = duration.num_milliseconds();
+                        Some(diff_ms)
                     });
+
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         let c = COUNT.fetch_add(1, Ordering::Relaxed);
                         if c % 100 == 0 {
@@ -72,10 +78,7 @@ impl GrpcSubscribe {
                                     account.account.as_ref().unwrap().pubkey.as_slice(),
                                 )
                                 .unwrap();
-                                warn!(
-                                "GRPC推送Account， tx : {:?}, current : {}, created_at : {}",
-                                a.as_slice().to_base58(), now, created_at_str.unwrap()
-                                );
+                                warn!("Account -> diff_ms : {}ms", diff_ms.unwrap());
                             }
                         }
                         match message_sender
@@ -95,12 +98,7 @@ impl GrpcSubscribe {
                                 let txn = tx.signature.as_slice().to_base58();
                                 let c = COUNT.fetch_add(1, Ordering::Relaxed);
                                 if c % 100 == 0 {
-                                    warn!(
-                                        "GRPC推送Tx， tx : {:?}, current : {}, created_at : {}",
-                                        txn,
-                                        now,
-                                        created_at_str.unwrap()
-                                    );
+                                    warn!("Transaction -> diff_ms : {}ms", diff_ms.unwrap());
                                 }
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
