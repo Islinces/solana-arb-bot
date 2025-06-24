@@ -45,52 +45,74 @@ impl GrpcSubscribe {
     ) {
         let mut stream = grpc_subscribe(grpc_url, dex_data).await.unwrap();
         info!("GRPC订阅成功, 等待GRPC推送数据");
-        // static COUNT: AtomicUsize = AtomicUsize::new(0);
+        #[cfg(feature = "monitor_grpc_delay")]
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
-                    let now = Local::now();
                     let created_at = data.created_at;
-                    // let diff_ms = created_at.clone().and_then(|timestamp| {
-                    //     // 转为 chrono::DateTime<Utc>
-                    //     let naive = NaiveDateTime::from_timestamp_opt(
-                    //         timestamp.seconds,
-                    //         timestamp.nanos as u32,
-                    //     )
-                    //     .unwrap();
-                    //     let ts_datetime_utc: DateTime<Utc> = DateTime::<Utc>::from_utc(naive, Utc);
-                    //     // 转为 Local 方便比较
-                    //     let ts_datetime_local: DateTime<Local> =
-                    //         ts_datetime_utc.with_timezone(&Local);
-                    //     // 计算相差毫秒数
-                    //     let duration = now.signed_duration_since(ts_datetime_local);
-                    //     let diff_ms = duration.num_milliseconds();
-                    //     let datetime: DateTime<Utc> = DateTime::<Utc>::from_utc(
-                    //         NaiveDateTime::from_timestamp_opt(
-                    //             timestamp.seconds,
-                    //             timestamp.nanos as u32,
-                    //         )
-                    //         .unwrap(),
-                    //         Utc,
-                    //     );
-                    //     Some((
-                    //         datetime.format("%Y-%m-%d %H:%M:%S.%3f").to_string(),
-                    //         diff_ms,
-                    //     ))
-                    // });
-
+                    let now = Local::now();
+                    let diff_ms = created_at.clone().and_then(|timestamp| {
+                        let naive = NaiveDateTime::from_timestamp_opt(
+                            timestamp.seconds,
+                            timestamp.nanos as u32,
+                        )
+                        .unwrap();
+                        let ts_datetime_utc: DateTime<Utc> = DateTime::<Utc>::from_utc(naive, Utc);
+                        let ts_datetime_local: DateTime<Local> =
+                            ts_datetime_utc.with_timezone(&Local);
+                        let duration = now.signed_duration_since(ts_datetime_local);
+                        let diff_ms = duration.num_milliseconds();
+                        let datetime: DateTime<Utc> = DateTime::<Utc>::from_utc(
+                            NaiveDateTime::from_timestamp_opt(
+                                timestamp.seconds,
+                                timestamp.nanos as u32,
+                            )
+                            .unwrap(),
+                            Utc,
+                        );
+                        Some((
+                            datetime.format("%Y-%m-%d %H:%M:%S.%3f").to_string(),
+                            diff_ms,
+                        ))
+                    });
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                        // if let Some(a) =
-                        //     account.account.as_ref().unwrap().txn_signature.as_ref()
-                        // {
-                        //     let (created_at, diff) = diff_ms.unwrap();
-                        //     warn!(
-                        //             "Account -> current : {}, created_at : {}, diff_ms : {}ms",
-                        //             now.format("%Y-%m-%d %H:%M:%S.%3f"),
-                        //             created_at,
-                        //             diff
-                        //         );
-                        // }
+                        if let Some(a) = account.account.as_ref().unwrap().txn_signature.as_ref() {
+                            let (created_at, diff) = diff_ms.unwrap();
+                            warn!(
+                                "Account -> current : {}, created_at : {}, diff_ms : {}ms",
+                                now.format("%Y-%m-%d %H:%M:%S.%3f"),
+                                created_at,
+                                diff
+                            );
+                        }
+                    } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
+                        let slot = transaction.slot;
+                        match transaction.transaction {
+                            None => {}
+                            Some(tx) => {
+                                let (created_at, diff) = diff_ms.unwrap();
+                                warn!(
+                                    "Transaction -> current : {}, created_at : {}, diff_ms : {}ms",
+                                    now.format("%Y-%m-%d %H:%M:%S.%3f"),
+                                    created_at,
+                                    diff
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("接收grpc推送消息失败，原因：{}", e);
+                    break;
+                }
+            }
+        }
+        #[cfg(not(feature = "monitor_grpc_delay"))]
+        while let Some(message) = stream.next().await {
+            match message {
+                Ok(data) => {
+                    let created_at = data.created_at;
+                    if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         match message_sender
                             .send_async(GrpcMessage::Account(GrpcAccountMsg::from(account)))
                             .await
@@ -105,11 +127,6 @@ impl GrpcSubscribe {
                         match transaction.transaction {
                             None => {}
                             Some(tx) => {
-                                // let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                                // if c % 100 == 0 {
-                                //     let (created_at, diff) = diff_ms.unwrap();
-                                //     warn!("Transaction -> current : {}, created_at : {}, diff_ms : {}ms",now.format("%Y-%m-%d %H:%M:%S.%3f"),created_at,diff);
-                                // }
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
                                         (tx, slot, created_at.unwrap()),
