@@ -45,7 +45,7 @@ impl GrpcSubscribe {
     ) {
         let mut stream = grpc_subscribe(grpc_url, dex_data).await.unwrap();
         info!("GRPC订阅成功, 等待GRPC推送数据");
-        static COUNT: AtomicUsize = AtomicUsize::new(0);
+        // static COUNT: AtomicUsize = AtomicUsize::new(0);
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
