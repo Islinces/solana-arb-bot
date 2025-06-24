@@ -80,19 +80,20 @@ impl GrpcSubscribe {
                     });
 
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                        let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                        if c % 100 == 0 {
-                            if let Some(a) =
-                                account.account.as_ref().unwrap().txn_signature.as_ref()
-                            {
-                                let (created_at, diff) = diff_ms.unwrap();
-                                warn!(
+                        // let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                        // if c % 100 == 0 {
+                        //
+                        // }
+                        if let Some(a) =
+                            account.account.as_ref().unwrap().txn_signature.as_ref()
+                        {
+                            let (created_at, diff) = diff_ms.unwrap();
+                            warn!(
                                     "Account -> current : {}, created_at : {}, diff_ms : {}ms",
                                     now.format("%Y-%m-%d %H:%M:%S.%3f"),
                                     created_at,
                                     diff
                                 );
-                            }
                         }
                         // match message_sender
                         //     .send_async(GrpcMessage::Account(GrpcAccountMsg::from(account)))
@@ -108,11 +109,11 @@ impl GrpcSubscribe {
                         match transaction.transaction {
                             None => {}
                             Some(tx) => {
-                                let c = COUNT.fetch_add(1, Ordering::Relaxed);
-                                if c % 100 == 0 {
+                                // let c = COUNT.fetch_add(1, Ordering::Relaxed);
+                                // if c % 100 == 0 {
                                     let (created_at, diff) = diff_ms.unwrap();
                                     warn!("Transaction -> current : {}, created_at : {}, diff_ms : {}ms",now.format("%Y-%m-%d %H:%M:%S.%3f"),created_at,diff);
-                                }
+                                // }
                                 // match message_sender
                                 //     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
                                 //         (tx, slot, created_at.unwrap()),
