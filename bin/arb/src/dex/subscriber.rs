@@ -57,12 +57,12 @@ pub async fn grpc_subscribe(
     grpc_url: String,
     dex_json: Vec<DexJson>,
 ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
-    let mut account_map = HashMap::with_capacity(dex_json.len() * 3);
-    let mut transactions = HashMap::new();
-    // let mut unified_accounts: AHashSet<Pubkey> = AHashSet::with_capacity(dex_json.len() * 3);
-    // let mut account_with_owner_and_filter: HashMap<String, SubscribeRequestFilterAccounts> =
-    //     HashMap::with_capacity(dex_json.len());
-    // let mut tx_include_accounts: Vec<Pubkey> = Vec::with_capacity(dex_json.len() * 3);
+    // let mut account_map = HashMap::with_capacity(dex_json.len() * 3);
+    // let mut transactions = HashMap::new();
+    let mut unified_accounts: AHashSet<Pubkey> = AHashSet::with_capacity(dex_json.len() * 3);
+    let mut account_with_owner_and_filter: HashMap<String, SubscribeRequestFilterAccounts> =
+        HashMap::with_capacity(dex_json.len());
+    let mut tx_include_accounts: Vec<Pubkey> = Vec::with_capacity(dex_json.len() * 3);
     for sub in vec![
         Subscriber::from(MeteoraDLMMAccountSubscriber),
         Subscriber::from(MeteoraDAMMV2AccountSubscriber),
@@ -81,84 +81,84 @@ pub async fn grpc_subscribe(
                 {
                     continue;
                 }
-                account_map.insert(
-                    format!("{}", sub),
-                    SubscribeRequestFilterAccounts {
-                        account: accounts
-                            .unified_accounts
-                            .into_iter()
-                            .map(|k| k.to_string())
-                            .collect::<Vec<_>>(),
-                        ..Default::default()
-                    },
-                );
-                accounts
-                    .account_with_owner_and_filter
-                    .unwrap_or(HashMap::new())
-                    .into_iter()
-                    .for_each(|(k, v)| {
-                        account_map.insert(k, v);
-                    });
-                transactions.insert(
-                    format!("{}", sub),
-                    SubscribeRequestFilterTransactions {
-                        vote: Some(false),
-                        failed: Some(false),
-                        account_include: accounts
-                            .tx_include_accounts
-                            .into_iter()
-                            .map(|k| k.to_string())
-                            .collect(),
-                        ..Default::default()
-                    },
-                );
-                // unified_accounts.extend(accounts.unified_accounts);
-                // tx_include_accounts.extend(accounts.tx_include_accounts);
+                // account_map.insert(
+                //     format!("{}", sub),
+                //     SubscribeRequestFilterAccounts {
+                //         account: accounts
+                //             .unified_accounts
+                //             .into_iter()
+                //             .map(|k| k.to_string())
+                //             .collect::<Vec<_>>(),
+                //         ..Default::default()
+                //     },
+                // );
                 // accounts
                 //     .account_with_owner_and_filter
                 //     .unwrap_or(HashMap::new())
                 //     .into_iter()
                 //     .for_each(|(k, v)| {
-                //         account_with_owner_and_filter.insert(k, v);
+                //         account_map.insert(k, v);
                 //     });
+                // transactions.insert(
+                //     format!("{}", sub),
+                //     SubscribeRequestFilterTransactions {
+                //         vote: Some(false),
+                //         failed: Some(false),
+                //         account_include: accounts
+                //             .tx_include_accounts
+                //             .into_iter()
+                //             .map(|k| k.to_string())
+                //             .collect(),
+                //         ..Default::default()
+                //     },
+                // );
+                unified_accounts.extend(accounts.unified_accounts);
+                tx_include_accounts.extend(accounts.tx_include_accounts);
+                accounts
+                    .account_with_owner_and_filter
+                    .unwrap_or(HashMap::new())
+                    .into_iter()
+                    .for_each(|(k, v)| {
+                        account_with_owner_and_filter.insert(k, v);
+                    });
             }
         }
     }
-    // if unified_accounts.is_empty() {
-    //     return Err(anyhow!("没有订阅账户"));
-    // }
-    // let mut accounts = HashMap::with_capacity(dex_json.len() * 3);
-    // accounts.insert(
-    //     "unified_accounts".to_string(),
-    //     SubscribeRequestFilterAccounts {
-    //         account: unified_accounts
-    //             .into_iter()
-    //             .map(|k| k.to_string())
-    //             .collect::<Vec<_>>(),
-    //         ..Default::default()
-    //     },
-    // );
-    // for (k, v) in account_with_owner_and_filter {
-    //     accounts.insert(k, v);
-    // }
-    // if tx_include_accounts.is_empty() {
-    //     return Err(anyhow!("未订阅tx"));
-    // }
-    // let mut transactions = HashMap::new();
-    // transactions.insert(
-    //     "transactions".to_string(),
-    //     SubscribeRequestFilterTransactions {
-    //         vote: Some(false),
-    //         failed: Some(false),
-    //         account_include: tx_include_accounts
-    //             .into_iter()
-    //             .map(|k| k.to_string())
-    //             .collect(),
-    //         ..Default::default()
-    //     },
-    // );
+    if unified_accounts.is_empty() {
+        return Err(anyhow!("没有订阅账户"));
+    }
+    let mut accounts = HashMap::with_capacity(dex_json.len() * 3);
+    accounts.insert(
+        "unified_accounts".to_string(),
+        SubscribeRequestFilterAccounts {
+            account: unified_accounts
+                .into_iter()
+                .map(|k| k.to_string())
+                .collect::<Vec<_>>(),
+            ..Default::default()
+        },
+    );
+    for (k, v) in account_with_owner_and_filter {
+        accounts.insert(k, v);
+    }
+    if tx_include_accounts.is_empty() {
+        return Err(anyhow!("未订阅tx"));
+    }
+    let mut transactions = HashMap::new();
+    transactions.insert(
+        "transactions".to_string(),
+        SubscribeRequestFilterTransactions {
+            vote: Some(false),
+            failed: Some(false),
+            account_include: tx_include_accounts
+                .into_iter()
+                .map(|k| k.to_string())
+                .collect(),
+            ..Default::default()
+        },
+    );
     let subscribe_request = SubscribeRequest {
-        accounts: account_map,
+        accounts,
         transactions,
         commitment: Some(CommitmentLevel::Processed).map(|x| x as i32),
         ..Default::default()
