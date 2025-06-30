@@ -25,8 +25,9 @@ use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use spl_token::solana_program::program_pack::Pack;
 use spl_token::state::Account;
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
-use std::ops::Sub;
+use std::ops::{BitAnd, Sub};
 use std::ptr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -254,20 +255,17 @@ impl BalanceChangeInfo {
             .into_iter()
             .chain(meta.loaded_writable_addresses)
             .chain(meta.loaded_readonly_addresses)
+            .map(|v| Pubkey::try_from(v).unwrap())
             .collect::<Vec<_>>();
         if GRPC_SUBSCRIBED_ACCOUNTS
-            .get()
-            .intersection(&account_keys)
+            .get()?
+            .bitand(&account_keys.to_vec().into_iter().collect::<AHashSet<_>>())
             .iter()
             .next()
             .is_none()
         {
             return None;
         }
-        let account_keys = account_keys
-            .into_iter()
-            .map(|v| Pubkey::try_from(v).unwrap())
-            .collect::<Vec<_>>();
         let pre_token_balances = meta.pre_token_balances;
         let post_token_balances = meta.post_token_balances;
         let pre_indices = pre_token_balances

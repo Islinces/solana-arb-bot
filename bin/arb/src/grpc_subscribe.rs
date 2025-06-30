@@ -45,7 +45,7 @@ impl GrpcSubscribe {
         message_sender: Sender<GrpcMessage>,
     ) {
         let mut stream = grpc_subscribe(grpc_url, dex_data).await.unwrap();
-        let subscribed_accounts = GRPC_SUBSCRIBED_ACCOUNTS.get().clone();
+        let subscribed_accounts = GRPC_SUBSCRIBED_ACCOUNTS.get().unwrap().clone();
         info!("GRPC订阅成功, 等待GRPC推送数据");
         while let Some(message) = stream.next().await {
             match message {
@@ -53,14 +53,18 @@ impl GrpcSubscribe {
                     let created_at = data.created_at;
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         match account.account {
-                            Some(acc) if subscribed_accounts.contains(&acc.data) => {
-                                match message_sender
-                                    .send_async(GrpcMessage::Account(GrpcAccountMsg::from(acc)))
-                                    .await
+                            Some(acc) => {
+                                if subscribed_accounts
+                                    .contains(&Pubkey::try_from(acc.pubkey.as_slice()).unwrap())
                                 {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        error!("推送GRPC Account消息失败, 原因 : {}", e);
+                                    match message_sender
+                                        .send_async(GrpcMessage::Account(GrpcAccountMsg::from(acc)))
+                                        .await
+                                    {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            error!("推送GRPC Account消息失败, 原因 : {}", e);
+                                        }
                                     }
                                 }
                             }
