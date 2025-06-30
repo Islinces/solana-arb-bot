@@ -15,8 +15,10 @@ impl AccountSubscriber for PumpFunAMMAccountSubscriber {
         }
         let mut subscribed_accounts = Vec::with_capacity(dex_json.len() * 2);
         let mut account_subscribe_owners = Vec::with_capacity(dex_json.len() + 1);
+        let mut vault_subscribe_owners = Vec::with_capacity(dex_json.len());
         account_subscribe_owners.push(PUMP_FUN_AMM_PROGRAM_ID);
         for json in dex_json.iter() {
+            vault_subscribe_owners.push(json.pool);
             account_subscribe_owners.push(json.pool);
             subscribed_accounts.push(json.vault_a);
             subscribed_accounts.push(json.vault_b);
@@ -24,6 +26,7 @@ impl AccountSubscriber for PumpFunAMMAccountSubscriber {
         Some(SubscriptionAccounts {
             tx_include_accounts: vec![PUMP_FUN_AMM_PROGRAM_ID],
             account_subscribe_owners,
+            vault_subscribe_owners,
             subscribed_accounts,
             need_clock: false,
         })

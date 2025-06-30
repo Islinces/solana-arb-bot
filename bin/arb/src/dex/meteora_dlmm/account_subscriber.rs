@@ -46,6 +46,7 @@ impl AccountSubscriber for MeteoraDLMMAccountSubscriber {
             account_subscribe_owners: vec![METEORA_DLMM_PROGRAM_ID],
             subscribed_accounts,
             need_clock: true,
+            ..Default::default()
         })
     }
 }

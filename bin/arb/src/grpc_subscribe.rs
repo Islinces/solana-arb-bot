@@ -54,9 +54,13 @@ impl GrpcSubscribe {
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
                         match account.account {
                             Some(acc) => {
-                                if subscribed_accounts
-                                    .contains(&Pubkey::try_from(acc.pubkey.as_slice()).unwrap())
-                                {
+                                let pubkey = Pubkey::try_from(acc.pubkey.as_slice()).unwrap();
+                                if subscribed_accounts.contains(&pubkey) {
+                                    // info!(
+                                    //     "tx {:?}, account : {:?}",
+                                    //     acc.txn_signature.as_ref().map_or("11".to_string(),|t|t.as_slice().to_base58()),
+                                    //     pubkey
+                                    // );
                                     match message_sender
                                         .send_async(GrpcMessage::Account(GrpcAccountMsg::from(acc)))
                                         .await
@@ -75,6 +79,10 @@ impl GrpcSubscribe {
                         match transaction.transaction {
                             None => {}
                             Some(tx) => {
+                                // info!(
+                                //     "tx {:?}",
+                                //     tx.signature.as_slice().to_base58(),
+                                // );
                                 match message_sender
                                     .send_async(GrpcMessage::Transaction(GrpcTransactionMsg::from(
                                         (tx, slot, created_at.unwrap()),

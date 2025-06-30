@@ -20,8 +20,9 @@ impl AccountSubscriber for RaydiumAMMAccountSubscriber {
             subscribed_accounts.push(json.vault_b);
         }
         Some(SubscriptionAccounts {
-            tx_include_accounts: vec![RAYDIUM_AMM_PROGRAM_ID, RAYDIUM_AMM_VAULT_OWNER],
-            account_subscribe_owners: vec![RAYDIUM_AMM_PROGRAM_ID, RAYDIUM_AMM_VAULT_OWNER],
+            tx_include_accounts: vec![RAYDIUM_AMM_PROGRAM_ID],
+            account_subscribe_owners: vec![RAYDIUM_AMM_PROGRAM_ID],
+            vault_subscribe_owners: vec![RAYDIUM_AMM_VAULT_OWNER],
             subscribed_accounts,
             need_clock: false,
         })

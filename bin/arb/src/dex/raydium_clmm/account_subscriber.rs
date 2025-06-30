@@ -51,6 +51,7 @@ impl AccountSubscriber for RaydiumCLMMAccountSubscriber {
             account_subscribe_owners: vec![RAYDIUM_CLMM_PROGRAM_ID],
             subscribed_accounts,
             need_clock: false,
+            ..Default::default()
         })
     }
 }

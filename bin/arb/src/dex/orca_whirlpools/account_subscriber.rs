@@ -70,6 +70,7 @@ impl AccountSubscriber for OrcaWhirlAccountSubscriber {
             account_subscribe_owners: vec![WHIRLPOOL_ID],
             subscribed_accounts: vec![],
             need_clock: true,
+            ..Default::default()
         })
     }
 }

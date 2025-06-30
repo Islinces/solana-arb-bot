@@ -23,6 +23,7 @@ impl AccountSubscriber for RaydiumCPMMAccountSubscriber {
         Some(SubscriptionAccounts {
             tx_include_accounts: vec![RAYDIUM_CPMM_PROGRAM_ID, RAYDIUM_CPMM_AUTHORITY_ID],
             account_subscribe_owners: vec![RAYDIUM_CPMM_PROGRAM_ID],
+            vault_subscribe_owners: vec![RAYDIUM_CPMM_AUTHORITY_ID],
             subscribed_accounts,
             need_clock: false,
         })

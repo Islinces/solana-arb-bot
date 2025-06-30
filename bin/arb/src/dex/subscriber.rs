@@ -5,7 +5,7 @@ use crate::dex::pump_fun::PumpFunAMMAccountSubscriber;
 use crate::dex::raydium_amm::RaydiumAMMAccountSubscriber;
 use crate::dex::raydium_clmm::RaydiumCLMMAccountSubscriber;
 use crate::dex::raydium_cpmm::RaydiumCPMMAccountSubscriber;
-use crate::dex::{DexType, GlobalCache, CLOCK_ID};
+use crate::dex::{DexType, GlobalCache, CLOCK_ID, MINT_PROGRAM_ID};
 use crate::dex_data::DexJson;
 use ahash::AHashSet;
 use anyhow::anyhow;
@@ -19,9 +19,12 @@ use std::time::Duration;
 use tokio::sync::OnceCell;
 use tracing::error;
 use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcClient, Interceptor};
+use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
 use yellowstone_grpc_proto::geyser::{
-    CommitmentLevel, SubscribeRequest, SubscribeRequestFilterAccounts,
-    SubscribeRequestFilterTransactions, SubscribeUpdate,
+    subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
+    SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter,
+    SubscribeRequestFilterAccountsFilterMemcmp, SubscribeRequestFilterTransactions,
+    SubscribeUpdate,
 };
 use yellowstone_grpc_proto::tonic::Status;
 
@@ -68,6 +71,7 @@ pub async fn grpc_subscribe(
     let mut account_subscribe_owners: AHashSet<Pubkey> =
         AHashSet::with_capacity(dex_json.len() * 3);
     let mut tx_include_owners = AHashSet::with_capacity(dex_json.len() * 3);
+    let mut vault_subscribe_owners = AHashSet::with_capacity(dex_json.len());
     let mut subscribe_accounts = AHashSet::with_capacity(10_000_000);
     let mut need_clock = false;
     for sub in vec![
@@ -88,6 +92,7 @@ pub async fn grpc_subscribe(
                 {
                     continue;
                 }
+                vault_subscribe_owners.extend(accounts.vault_subscribe_owners);
                 account_subscribe_owners.extend(
                     accounts
                         .account_subscribe_owners
@@ -125,6 +130,30 @@ pub async fn grpc_subscribe(
             ..Default::default()
         },
     );
+    for vault_owner_id in vault_subscribe_owners {
+        accounts.insert(
+            vault_owner_id.to_string(),
+            SubscribeRequestFilterAccounts {
+                owner: vec![MINT_PROGRAM_ID.to_string()],
+                filters: vec![
+                    SubscribeRequestFilterAccountsFilter {
+                        filter: Some(Filter::Datasize(165)),
+                    },
+                    SubscribeRequestFilterAccountsFilter {
+                        filter: Some(Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
+                            offset: 32,
+                            data: Some(
+                                subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
+                                    vault_owner_id.to_bytes().into_iter().collect(),
+                                ),
+                            ),
+                        })),
+                    },
+                ],
+                ..Default::default()
+            },
+        );
+    }
     let mut transactions = HashMap::new();
     transactions.insert(
         "transactions".to_string(),
@@ -170,6 +199,7 @@ pub async fn grpc_subscribe(
 pub struct SubscriptionAccounts {
     pub tx_include_accounts: Vec<Pubkey>,
     pub account_subscribe_owners: Vec<Pubkey>,
+    pub vault_subscribe_owners: Vec<Pubkey>,
     pub subscribed_accounts: Vec<Pubkey>,
     pub need_clock: bool,
 }

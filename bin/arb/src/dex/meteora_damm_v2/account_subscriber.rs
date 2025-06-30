@@ -19,6 +19,7 @@ impl AccountSubscriber for MeteoraDAMMV2AccountSubscriber {
             account_subscribe_owners: vec![DAMM_V2_PROGRAM_ID],
             subscribed_accounts,
             need_clock: true,
+            ..Default::default()
         })
     }
 }
