@@ -195,32 +195,47 @@ impl Executor for JitoExecutor {
                         "encoding": "base64"
                     }
                 ]);
-                let data = Arc::new(json!({
+                let data = json!({
                     "id": 1,
                     "jsonrpc": "2.0",
                     "method":"sendBundle",
                     "params": params
-                }));
+                });
                 match self.pick_jito_url() {
                     None => Err(anyhow!("获取JitoUrl失败")),
-                    Some(jito_urls) => {
-                        let jito_urls = jito_urls.clone();
-                        jito_urls.into_iter().for_each(|jito_url| {
-                            let cloned_data = data.clone();
-                            let client = self.client.clone();
-                            tokio::spawn(async move {
-                                let _ = client
-                                    .post(jito_url)
-                                    .header("Content-Type", "application/json")
-                                    .json(cloned_data.as_ref())
-                                    .send()
-                                    .await;
-                            });
-                        });
+                    Some(jito_url) => {
+                        let jito_response = self
+                            .client
+                            .post(jito_url)
+                            .header("Content-Type", "application/json")
+                            .json(&data)
+                            .send()
+                            .await;
+
+                        let bundle_id = match jito_response {
+                            Ok(response) => {
+                                let v: Value = response.json().await?;
+                                if let Some(id) = v.get("result").and_then(|r| r.as_str()) {
+                                    id.to_owned()
+                                } else if let Some(msg) = v
+                                    .get("error")
+                                    .and_then(|e| e.get("message"))
+                                    .and_then(|m| m.as_str())
+                                {
+                                    format!("Jito returned error: {}", msg)
+                                } else {
+                                    format!("Unknown response format: {}", v)
+                                }
+                            }
+                            Err(e) => {
+                                format!("Jito returned error: {}", e)
+                            }
+                        };
                         Ok(format!(
-                            "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, \nBase64 : {}",
+                            "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, BundleId : {} \n\nBase64 : {}",
                             instruction_cost.as_nanos() as f64 / 1000.0,
                             jito_request_start.elapsed().as_micros() as f64 / 1000.0,
+                            bundle_id,
                             bundles.first().unwrap_or(&"".to_string()),
                         ))
                     }
@@ -232,8 +247,16 @@ impl Executor for JitoExecutor {
 }
 
 impl JitoExecutor {
-    fn pick_jito_url(&self) -> Option<Vec<String>> {
-        Some(self.jito_url.clone())
+    fn pick_jito_url(&self) -> Option<&str> {
+        let len = self.jito_url.len();
+        if len == 0 {
+            return None;
+        }
+        let index = match self.used_url_index.as_ref() {
+            None => 0,
+            Some(url_index) => url_index.fetch_add(1, Ordering::Relaxed) % len,
+        };
+        self.jito_url.get(index).map(|s| s.as_str())
     }
 
     fn calculate_jito_tips(&self, _profit: i64) -> Result<u64> {
