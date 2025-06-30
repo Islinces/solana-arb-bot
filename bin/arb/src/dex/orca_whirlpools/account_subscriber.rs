@@ -25,7 +25,6 @@ impl AccountSubscriber for OrcaWhirlAccountSubscriber {
         }
         let mut orca_whirl_account_keys = Vec::with_capacity(dex_json.len());
         let mut orca_whirl_oracle_account_keys = Vec::with_capacity(dex_json.len());
-
         for json in dex_json.iter() {
             // pool
             orca_whirl_account_keys.push(json.pool);
@@ -66,10 +65,11 @@ impl AccountSubscriber for OrcaWhirlAccountSubscriber {
         orca_whirl_account_keys.extend(orca_whirl_oracle_account_keys);
         let mut unified_accounts = Vec::from(orca_whirl_account_keys.clone());
         unified_accounts.push(Clock::id());
-        Some(SubscriptionAccounts::new(
-            unified_accounts,
-            Some(tick_array_sub_accounts),
-            orca_whirl_account_keys,
-        ))
+        Some(SubscriptionAccounts{
+            tx_include_accounts: vec![WHIRLPOOL_ID],
+            account_subscribe_owners: vec![WHIRLPOOL_ID],
+            subscribed_accounts: vec![],
+            need_clock: true,
+        })
     }
 }

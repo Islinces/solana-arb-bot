@@ -1,15 +1,11 @@
+use crate::dex::meteora_dlmm::commons::{
+    derive_bin_array_pda, BIN_ARRAY_BITMAP_SIZE, EXTENSION_BINARRAY_BITMAP_SIZE,
+};
 use crate::dex::meteora_dlmm::METEORA_DLMM_PROGRAM_ID;
 use crate::dex::subscriber::{AccountSubscriber, SubscriptionAccounts};
 use crate::dex_data::DexJson;
-use solana_sdk::clock::Clock;
-use solana_sdk::sysvar::SysvarId;
-use std::collections::HashMap;
-use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter;
-use yellowstone_grpc_proto::geyser::subscribe_request_filter_accounts_filter::Filter::Datasize;
-use yellowstone_grpc_proto::geyser::{
-    subscribe_request_filter_accounts_filter_memcmp, SubscribeRequestFilterAccounts,
-    SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
-};
+use solana_sdk::pubkey::Pubkey;
+use tracing::error;
 
 pub struct MeteoraDLMMAccountSubscriber;
 
@@ -22,55 +18,49 @@ impl AccountSubscriber for MeteoraDLMMAccountSubscriber {
         if dex_json.is_empty() {
             return None;
         }
-        let mut pool_keys = Vec::with_capacity(dex_json.len() * 2);
-        let mut bitmap_extension_keys = Vec::with_capacity(dex_json.len() * 2);
-
-        for json in dex_json.iter() {
-            // pool
-            pool_keys.push(json.pool);
-            // BinArrayBitmapExtension
-            bitmap_extension_keys.push(
-                crate::dex::meteora_dlmm::commons::derive_bin_array_bitmap_extension(
-                    &json.pool,
-                ),
-            );
-        }
-        let mut bin_array_sub_accounts = HashMap::with_capacity(dex_json.len());
-        for pool_id in pool_keys.iter() {
-            bin_array_sub_accounts.insert(
-                format!("{}:{}","DLMM-BIN",pool_id.to_string()),
-                SubscribeRequestFilterAccounts {
-                    owner: vec![METEORA_DLMM_PROGRAM_ID.to_string()],
-                    filters: vec![
-                        // BinArray data大小为10136
-                        SubscribeRequestFilterAccountsFilter {
-                            filter: Some(Datasize(10136)),
-                        },
-                        // 订阅关注的池子的BinArray
-                        SubscribeRequestFilterAccountsFilter {
-                            filter: Some(
-                                Filter::Memcmp(SubscribeRequestFilterAccountsFilterMemcmp {
-                                    offset: 24,
-                                    data: Some(
-                                        subscribe_request_filter_accounts_filter_memcmp::Data::Bytes(
-                                            pool_id.to_bytes().to_vec(),
-                                        ),
-                                    ),
-                                }),
-                            ),
-                        },
-                    ],
-                    ..Default::default()
-                },
-            );
-        }
-        pool_keys.extend(bitmap_extension_keys);
-        let mut unified_accounts = Vec::from(pool_keys.clone());
-        unified_accounts.push(Clock::id());
-        Some(SubscriptionAccounts::new(
-            unified_accounts,
-            Some(bin_array_sub_accounts),
-            pool_keys,
-        ))
+        let subscribed_accounts = dex_json
+            .iter()
+            .filter_map(|json| {
+                let mut accounts = Vec::with_capacity(13000);
+                match get_all_bin_array_keys(&json.pool) {
+                    Ok(bin_array_keys) => {
+                        accounts.extend(bin_array_keys);
+                    }
+                    Err(_) => {
+                        error!("[MeteoraDLMM]池子[{}]生成BinArray pubkey失败", json.pool);
+                        return None;
+                    }
+                }
+                accounts.push(json.pool);
+                accounts.push(
+                    crate::dex::meteora_dlmm::commons::derive_bin_array_bitmap_extension(
+                        &json.pool,
+                    ),
+                );
+                Some(accounts)
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        Some(SubscriptionAccounts {
+            tx_include_accounts: vec![METEORA_DLMM_PROGRAM_ID],
+            account_subscribe_owners: vec![METEORA_DLMM_PROGRAM_ID],
+            subscribed_accounts,
+            need_clock: true,
+        })
     }
+}
+
+pub fn get_all_bin_array_keys(pool_id: &Pubkey) -> anyhow::Result<Vec<Pubkey>> {
+    let (min_bin_array_start_id, max_bin_array_start_id) = bitmap_range();
+    Ok((min_bin_array_start_id..=max_bin_array_start_id)
+        .into_iter()
+        .map(|bin_start_id| derive_bin_array_pda(pool_id, bin_start_id as i64))
+        .collect::<Vec<_>>())
+}
+
+fn bitmap_range() -> (i32, i32) {
+    (
+        -BIN_ARRAY_BITMAP_SIZE * (EXTENSION_BINARRAY_BITMAP_SIZE as i32 + 1),
+        BIN_ARRAY_BITMAP_SIZE * (EXTENSION_BINARRAY_BITMAP_SIZE as i32 + 1) - 1,
+    )
 }

@@ -6,7 +6,7 @@ use crate::dex::whirlpool::Whirlpool;
 use crate::dex::{
     get_account_data, get_dex_type_and_account_type, is_follow_vault, read_from, update_cache,
     AccountType, AmmInfo, BinArray, BinArrayBitmapExtension, LbPair, MintVault, PoolState,
-    TickArrayBitmapExtension, TickArrayState, CLOCK_ID,
+    TickArrayBitmapExtension, TickArrayState, CLOCK_ID, GRPC_SUBSCRIBED_ACCOUNTS,
 };
 use crate::dex::{slice_data_auto_get_dex_type, SliceType};
 use crate::dex::{DexType, FromCache};
@@ -254,6 +254,18 @@ impl BalanceChangeInfo {
             .into_iter()
             .chain(meta.loaded_writable_addresses)
             .chain(meta.loaded_readonly_addresses)
+            .collect::<Vec<_>>();
+        if GRPC_SUBSCRIBED_ACCOUNTS
+            .get()
+            .intersection(&account_keys)
+            .iter()
+            .next()
+            .is_none()
+        {
+            return None;
+        }
+        let account_keys = account_keys
+            .into_iter()
             .map(|v| Pubkey::try_from(v).unwrap())
             .collect::<Vec<_>>();
         let pre_token_balances = meta.pre_token_balances;

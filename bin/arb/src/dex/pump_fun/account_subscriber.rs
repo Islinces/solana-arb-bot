@@ -13,16 +13,19 @@ impl AccountSubscriber for PumpFunAMMAccountSubscriber {
         if dex_json.is_empty() {
             return None;
         }
-        let mut pump_fun_account_keys = Vec::with_capacity(dex_json.len() * 2);
-
+        let mut subscribed_accounts = Vec::with_capacity(dex_json.len() * 2);
+        let mut account_subscribe_owners = Vec::with_capacity(dex_json.len() + 1);
+        account_subscribe_owners.push(PUMP_FUN_AMM_PROGRAM_ID);
         for json in dex_json.iter() {
-            pump_fun_account_keys.push(json.vault_a);
-            pump_fun_account_keys.push(json.vault_b);
+            account_subscribe_owners.push(json.pool);
+            subscribed_accounts.push(json.vault_a);
+            subscribed_accounts.push(json.vault_b);
         }
-        Some(SubscriptionAccounts::new(
-            pump_fun_account_keys.clone(),
-            None,
-            pump_fun_account_keys,
-        ))
+        Some(SubscriptionAccounts {
+            tx_include_accounts: vec![PUMP_FUN_AMM_PROGRAM_ID],
+            account_subscribe_owners,
+            subscribed_accounts,
+            need_clock: false,
+        })
     }
 }

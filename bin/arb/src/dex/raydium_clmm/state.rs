@@ -30,7 +30,7 @@ impl FromCache for AmmConfig {
         Self: Sized,
     {
         let static_data = static_cache.ok_or(anyhow!(""))?;
-        let static_data=static_data.as_slice();
+        let static_data = static_data.as_slice();
         unsafe {
             Ok(Self {
                 protocol_fee_rate: read_from::<u32>(&static_data[0..4]),
@@ -276,7 +276,7 @@ impl FromCache for TickArrayState {
         Self: Sized,
     {
         let dynamic_slice_data = dynamic_cache.ok_or(anyhow!(""))?;
-        let dynamic_slice_data=dynamic_slice_data.as_slice();
+        let dynamic_slice_data = dynamic_slice_data.as_slice();
         unsafe {
             let pool_id = read_from::<Pubkey>(&dynamic_slice_data[0..32]);
             let start_tick_index = read_from::<i32>(&dynamic_slice_data[32..36]);
@@ -645,6 +645,8 @@ impl TickArrayBitmapExtension {
         }
     }
 
+
+
     /// Check if the tick in tick array bitmap extension
     pub fn check_extension_boundary(tick_index: i32, tick_spacing: u16) -> anyhow::Result<()> {
         let positive_tick_boundary = max_tick_in_tickarray_bitmap(tick_spacing);
@@ -772,4 +774,10 @@ impl TickArrayBitmapExtension {
         }
         tick_array_offset_in_bitmap
     }
+}
+
+#[test]
+fn test() {
+    let a = TickArrayBitmapExtension::get_bitmap_offset(443160, 1).unwrap();
+    println!("{:?}", a);
 }

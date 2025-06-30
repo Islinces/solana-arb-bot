@@ -1,4 +1,4 @@
-use crate::dex::grpc_subscribe;
+use crate::dex::{grpc_subscribe, GRPC_SUBSCRIBED_ACCOUNTS};
 use crate::dex_data::DexJson;
 use crate::grpc_subscribe;
 use ahash::AHashSet;
@@ -24,7 +24,8 @@ use yellowstone_grpc_proto::geyser::{
     subscribe_request_filter_accounts_filter_memcmp, CommitmentLevel, SubscribeRequest,
     SubscribeRequestFilterAccounts, SubscribeRequestFilterAccountsFilter,
     SubscribeRequestFilterAccountsFilterMemcmp, SubscribeRequestFilterTransactions,
-    SubscribeUpdate, SubscribeUpdateAccount, SubscribeUpdateTransactionInfo,
+    SubscribeUpdate, SubscribeUpdateAccount, SubscribeUpdateAccountInfo,
+    SubscribeUpdateTransactionInfo,
 };
 use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
 use yellowstone_grpc_proto::prost_types::Timestamp;
@@ -44,83 +45,26 @@ impl GrpcSubscribe {
         message_sender: Sender<GrpcMessage>,
     ) {
         let mut stream = grpc_subscribe(grpc_url, dex_data).await.unwrap();
+        let subscribed_accounts = GRPC_SUBSCRIBED_ACCOUNTS.get().clone();
         info!("GRPC订阅成功, 等待GRPC推送数据");
-        #[cfg(feature = "monitor_grpc_delay")]
-        while let Some(message) = stream.next().await {
-            match message {
-                Ok(data) => {
-                    let created_at = data.created_at;
-                    let now = Local::now();
-                    let diff_ms = created_at.clone().and_then(|timestamp| {
-                        let naive = NaiveDateTime::from_timestamp_opt(
-                            timestamp.seconds,
-                            timestamp.nanos as u32,
-                        )
-                        .unwrap();
-                        let ts_datetime_utc: DateTime<Utc> = DateTime::<Utc>::from_utc(naive, Utc);
-                        let ts_datetime_local: DateTime<Local> =
-                            ts_datetime_utc.with_timezone(&Local);
-                        let duration = now.signed_duration_since(ts_datetime_local);
-                        let diff_ms = duration.num_milliseconds();
-                        let datetime: DateTime<Utc> = DateTime::<Utc>::from_utc(
-                            NaiveDateTime::from_timestamp_opt(
-                                timestamp.seconds,
-                                timestamp.nanos as u32,
-                            )
-                            .unwrap(),
-                            Utc,
-                        );
-                        Some((
-                            datetime.format("%Y-%m-%d %H:%M:%S.%3f").to_string(),
-                            diff_ms,
-                        ))
-                    });
-                    if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                        if let Some(a) = account.account.as_ref().unwrap().txn_signature.as_ref() {
-                            let (created_at, diff) = diff_ms.unwrap();
-                            warn!(
-                                "Account -> current : {}, created_at : {}, diff_ms : {}ms",
-                                now.format("%Y-%m-%d %H:%M:%S.%3f"),
-                                created_at,
-                                diff
-                            );
-                        }
-                    } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
-                        let slot = transaction.slot;
-                        match transaction.transaction {
-                            None => {}
-                            Some(tx) => {
-                                let (created_at, diff) = diff_ms.unwrap();
-                                warn!(
-                                    "Transaction -> current : {}, created_at : {}, diff_ms : {}ms",
-                                    now.format("%Y-%m-%d %H:%M:%S.%3f"),
-                                    created_at,
-                                    diff
-                                );
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("接收grpc推送消息失败，原因：{}", e);
-                    break;
-                }
-            }
-        }
-        #[cfg(not(feature = "monitor_grpc_delay"))]
         while let Some(message) = stream.next().await {
             match message {
                 Ok(data) => {
                     let created_at = data.created_at;
                     if let Some(UpdateOneof::Account(account)) = data.update_oneof {
-                        match message_sender
-                            .send_async(GrpcMessage::Account(GrpcAccountMsg::from(account)))
-                            .await
-                        {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("推送GRPC Account消息失败, 原因 : {}", e);
+                        match account.account {
+                            Some(acc) if subscribed_accounts.contains(&acc.data) => {
+                                match message_sender
+                                    .send_async(GrpcMessage::Account(GrpcAccountMsg::from(acc)))
+                                    .await
+                                {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        error!("推送GRPC Account消息失败, 原因 : {}", e);
+                                    }
+                                }
                             }
+                            _ => {}
                         }
                     } else if let Some(UpdateOneof::Transaction(transaction)) = data.update_oneof {
                         let slot = transaction.slot;
@@ -167,10 +111,9 @@ pub struct GrpcAccountMsg {
     pub received_timestamp: DateTime<Local>,
 }
 
-impl From<SubscribeUpdateAccount> for GrpcAccountMsg {
-    fn from(subscribe_update_account: SubscribeUpdateAccount) -> Self {
+impl From<SubscribeUpdateAccountInfo> for GrpcAccountMsg {
+    fn from(account: SubscribeUpdateAccountInfo) -> Self {
         let time = Local::now();
-        let account = subscribe_update_account.account.unwrap();
         let tx = account.txn_signature.unwrap_or([0; 64].try_into().unwrap());
         Self {
             tx,

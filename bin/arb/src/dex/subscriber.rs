@@ -5,7 +5,7 @@ use crate::dex::pump_fun::PumpFunAMMAccountSubscriber;
 use crate::dex::raydium_amm::RaydiumAMMAccountSubscriber;
 use crate::dex::raydium_clmm::RaydiumCLMMAccountSubscriber;
 use crate::dex::raydium_cpmm::RaydiumCPMMAccountSubscriber;
-use crate::dex::DexType;
+use crate::dex::{DexType, GlobalCache, CLOCK_ID};
 use crate::dex_data::DexJson;
 use ahash::AHashSet;
 use anyhow::anyhow;
@@ -14,7 +14,9 @@ use futures_util::Stream;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use tracing::error;
 use yellowstone_grpc_client::{ClientTlsConfig, GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::{
@@ -22,6 +24,8 @@ use yellowstone_grpc_proto::geyser::{
     SubscribeRequestFilterTransactions, SubscribeUpdate,
 };
 use yellowstone_grpc_proto::tonic::Status;
+
+pub const GRPC_SUBSCRIBED_ACCOUNTS: OnceCell<Arc<AHashSet<Vec<u8>>>> = OnceCell::const_new();
 
 #[enum_dispatch]
 pub trait AccountSubscriber {
@@ -57,12 +61,11 @@ pub async fn grpc_subscribe(
     grpc_url: String,
     dex_json: Vec<DexJson>,
 ) -> anyhow::Result<impl Stream<Item = Result<SubscribeUpdate, Status>>> {
-    // let mut account_map = HashMap::with_capacity(dex_json.len() * 3);
-    // let mut transactions = HashMap::new();
-    let mut unified_accounts: AHashSet<Pubkey> = AHashSet::with_capacity(dex_json.len() * 3);
-    let mut account_with_owner_and_filter: HashMap<String, SubscribeRequestFilterAccounts> =
-        HashMap::with_capacity(dex_json.len());
-    let mut tx_include_accounts: Vec<Pubkey> = Vec::with_capacity(dex_json.len() * 3);
+    let mut account_subscribe_owners: AHashSet<Pubkey> =
+        AHashSet::with_capacity(dex_json.len() * 3);
+    let mut tx_include_owners = AHashSet::with_capacity(dex_json.len() * 3);
+    let mut subscribe_accounts = AHashSet::with_capacity(10_000_000);
+    let mut need_clock = false;
     for sub in vec![
         Subscriber::from(MeteoraDLMMAccountSubscriber),
         Subscriber::from(MeteoraDAMMV2AccountSubscriber),
@@ -75,82 +78,56 @@ pub async fn grpc_subscribe(
         match sub.get_subscription_accounts(dex_json.as_slice()) {
             None => {}
             Some(accounts) => {
-                if accounts.unified_accounts.is_empty()
+                if accounts.account_subscribe_owners.is_empty()
                     && accounts.tx_include_accounts.is_empty()
-                    && accounts.account_with_owner_and_filter.as_ref().is_none()
+                    && accounts.subscribed_accounts.is_empty()
                 {
                     continue;
                 }
-                // account_map.insert(
-                //     format!("{}", sub),
-                //     SubscribeRequestFilterAccounts {
-                //         account: accounts
-                //             .unified_accounts
-                //             .into_iter()
-                //             .map(|k| k.to_string())
-                //             .collect::<Vec<_>>(),
-                //         ..Default::default()
-                //     },
-                // );
-                // accounts
-                //     .account_with_owner_and_filter
-                //     .unwrap_or(HashMap::new())
-                //     .into_iter()
-                //     .for_each(|(k, v)| {
-                //         account_map.insert(k, v);
-                //     });
-                // transactions.insert(
-                //     format!("{}", sub),
-                //     SubscribeRequestFilterTransactions {
-                //         vote: Some(false),
-                //         failed: Some(false),
-                //         account_include: accounts
-                //             .tx_include_accounts
-                //             .into_iter()
-                //             .map(|k| k.to_string())
-                //             .collect(),
-                //         ..Default::default()
-                //     },
-                // );
-                unified_accounts.extend(accounts.unified_accounts);
-                tx_include_accounts.extend(accounts.tx_include_accounts);
-                accounts
-                    .account_with_owner_and_filter
-                    .unwrap_or(HashMap::new())
-                    .into_iter()
-                    .for_each(|(k, v)| {
-                        account_with_owner_and_filter.insert(k, v);
-                    });
+                account_subscribe_owners.extend(
+                    accounts
+                        .account_subscribe_owners
+                        .into_iter()
+                        .collect::<AHashSet<_>>(),
+                );
+                tx_include_owners.extend(accounts.tx_include_accounts);
+                subscribe_accounts.extend(accounts.subscribed_accounts);
+                need_clock |= accounts.need_clock;
             }
         }
     }
-    if unified_accounts.is_empty() {
+    if account_subscribe_owners.is_empty() || tx_include_owners.is_empty() {
         return Err(anyhow!("没有订阅账户"));
     }
+
     let mut accounts = HashMap::with_capacity(dex_json.len() * 3);
+    if need_clock {
+        accounts.insert(
+            "clock".to_string(),
+            SubscribeRequestFilterAccounts {
+                account: vec![CLOCK_ID.to_string()],
+                ..Default::default()
+            },
+        );
+        subscribe_accounts.insert(CLOCK_ID);
+    }
     accounts.insert(
-        "unified_accounts".to_string(),
+        "account_owner".to_string(),
         SubscribeRequestFilterAccounts {
-            account: unified_accounts
+            owner: account_subscribe_owners
                 .into_iter()
-                .map(|k| k.to_string())
-                .collect::<Vec<_>>(),
+                .map(|t| t.to_string())
+                .collect(),
             ..Default::default()
         },
     );
-    for (k, v) in account_with_owner_and_filter {
-        accounts.insert(k, v);
-    }
-    if tx_include_accounts.is_empty() {
-        return Err(anyhow!("未订阅tx"));
-    }
     let mut transactions = HashMap::new();
     transactions.insert(
         "transactions".to_string(),
         SubscribeRequestFilterTransactions {
             vote: Some(false),
             failed: Some(false),
-            account_include: tx_include_accounts
+            account_include: tx_include_owners
                 .into_iter()
                 .map(|k| k.to_string())
                 .collect(),
@@ -181,30 +158,21 @@ pub async fn grpc_subscribe(
             }
         }
     });
+    GRPC_SUBSCRIBED_ACCOUNTS.set(Arc::new(
+        subscribe_accounts
+            .into_iter()
+            .map(|t| t.to_bytes().to_vec())
+            .collect::<AHashSet<_>>(),
+    ))?;
     Ok(stream)
 }
 
+#[derive(Debug, Default)]
 pub struct SubscriptionAccounts {
-    // 放在一个SubscribeRequestFilterAccounts中
-    pub unified_accounts: Vec<Pubkey>,
-    // 每个value单独一个SubscribeRequestFilterAccounts，TickArray，BinArray等订阅
-    pub account_with_owner_and_filter: Option<HashMap<String, SubscribeRequestFilterAccounts>>,
-    // 订阅tx包含的账户
     pub tx_include_accounts: Vec<Pubkey>,
-}
-
-impl SubscriptionAccounts {
-    pub fn new(
-        unified_accounts: Vec<Pubkey>,
-        account_with_owner_and_filter: Option<HashMap<String, SubscribeRequestFilterAccounts>>,
-        tx_include_accounts: Vec<Pubkey>,
-    ) -> Self {
-        Self {
-            unified_accounts,
-            account_with_owner_and_filter,
-            tx_include_accounts,
-        }
-    }
+    pub account_subscribe_owners: Vec<Pubkey>,
+    pub subscribed_accounts: Vec<Pubkey>,
+    pub need_clock: bool,
 }
 
 async fn create_grpc_client(grpc_url: String) -> GeyserGrpcClient<impl Interceptor + Sized> {
