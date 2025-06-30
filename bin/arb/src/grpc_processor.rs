@@ -3,11 +3,7 @@ use crate::dex::meteora_damm_v2::state::pool::Pool;
 use crate::dex::oracle::Oracle;
 use crate::dex::tick_array::TickArray;
 use crate::dex::whirlpool::Whirlpool;
-use crate::dex::{
-    get_account_data, get_dex_type_and_account_type, is_follow_vault, read_from, update_cache,
-    AccountType, AmmInfo, BinArray, BinArrayBitmapExtension, LbPair, MintVault, PoolState,
-    TickArrayBitmapExtension, TickArrayState, CLOCK_ID, GRPC_SUBSCRIBED_ACCOUNTS,
-};
+use crate::dex::{get_account_data, get_dex_type_and_account_type, get_subscribed_accounts, is_follow_vault, read_from, update_cache, AccountType, AmmInfo, BinArray, BinArrayBitmapExtension, LbPair, MintVault, PoolState, TickArrayBitmapExtension, TickArrayState, CLOCK_ID};
 use crate::dex::{slice_data_auto_get_dex_type, SliceType};
 use crate::dex::{DexType, FromCache};
 use crate::grpc_subscribe::{GrpcMessage, GrpcTransactionMsg};
@@ -257,8 +253,7 @@ impl BalanceChangeInfo {
             .chain(meta.loaded_readonly_addresses)
             .map(|v| Pubkey::try_from(v).unwrap())
             .collect::<Vec<_>>();
-        if GRPC_SUBSCRIBED_ACCOUNTS
-            .get()?
+        if get_subscribed_accounts()
             .bitand(&account_keys.to_vec().into_iter().collect::<AHashSet<_>>())
             .iter()
             .next()

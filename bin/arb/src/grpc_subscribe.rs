@@ -1,4 +1,4 @@
-use crate::dex::{grpc_subscribe, GRPC_SUBSCRIBED_ACCOUNTS};
+use crate::dex::{get_subscribed_accounts, grpc_subscribe};
 use crate::dex_data::DexJson;
 use crate::grpc_subscribe;
 use ahash::AHashSet;
@@ -45,7 +45,7 @@ impl GrpcSubscribe {
         message_sender: Sender<GrpcMessage>,
     ) {
         let mut stream = grpc_subscribe(grpc_url, dex_data).await.unwrap();
-        let subscribed_accounts = GRPC_SUBSCRIBED_ACCOUNTS.get().unwrap().clone();
+        let subscribed_accounts = get_subscribed_accounts();
         info!("GRPC订阅成功, 等待GRPC推送数据");
         while let Some(message) = stream.next().await {
             match message {

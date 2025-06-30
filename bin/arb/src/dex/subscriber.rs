@@ -25,7 +25,11 @@ use yellowstone_grpc_proto::geyser::{
 };
 use yellowstone_grpc_proto::tonic::Status;
 
-pub const GRPC_SUBSCRIBED_ACCOUNTS: OnceCell<Arc<AHashSet<Pubkey>>> = OnceCell::const_new();
+static GRPC_SUBSCRIBED_ACCOUNTS: OnceCell<Arc<AHashSet<Pubkey>>> = OnceCell::const_new();
+
+pub fn get_subscribed_accounts() -> Arc<AHashSet<Pubkey>> {
+    GRPC_SUBSCRIBED_ACCOUNTS.get().unwrap().clone()
+}
 
 #[enum_dispatch]
 pub trait AccountSubscriber {
