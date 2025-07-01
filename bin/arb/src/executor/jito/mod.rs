@@ -178,7 +178,7 @@ impl Executor for JitoExecutor {
         slot: u64,
     ) -> Result<String> {
         match self
-            .create_jito_bundle(hop_path_search_result, tx, slot)
+            .create_jito_bundle(hop_path_search_result, tx.clone(), slot)
             .await
         {
             Ok((bundle, instruction_cost)) => {
@@ -232,7 +232,7 @@ impl Executor for JitoExecutor {
                             }
                         };
                         Ok(format!(
-                            "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, BundleId : {} \n\nBase64 : {}",
+                            "指令 : {:>4.2}μs, 发送 : {:>4.2}ms, tx :{tx}, slot : {slot}, BundleId : {} \n\nBase64 : {}",
                             instruction_cost.as_nanos() as f64 / 1000.0,
                             jito_request_start.elapsed().as_micros() as f64 / 1000.0,
                             bundle_id,
