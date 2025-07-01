@@ -110,7 +110,6 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
     let mut join_set = JoinSet::new();
     // 将GRPC通过过来的数据保存到本地缓存中
     // 缓存数据发生改变，将数据发送出来
-    #[cfg(not(feature = "monitor_grpc_delay"))]
     MessageProcessor::new(processor_size)
         .start(
             &mut join_set,
@@ -120,7 +119,6 @@ pub async fn start_with_custom() -> anyhow::Result<()> {
         )
         .await;
     // 接收更新缓存的Account信息，判断是否需要触发route
-    #[cfg(not(feature = "monitor_grpc_delay"))]
     Arb::new(
         arb_size,
         arb_amount_in,
