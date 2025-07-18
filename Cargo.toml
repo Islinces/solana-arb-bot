@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "bin/*",
+]
+resolver = "2"
+
+[workspace.dependencies]
+
+[profile.release]
+opt-level = 3            # 最高优化
+lto = "fat"              # 全程序链接时优化
+codegen-units = 1        # 单线程生成代码，优化一致性
+panic = "abort"          # panic 时直接终止，提高速度
+incremental = false      # 禁用增量编译，确保完整优化
+debug = false            # 禁用调试信息
+strip = "symbols"        # 去除符号表，减小体积（需要 Rust 1.60

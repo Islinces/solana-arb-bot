@@ -1,0 +1,12 @@
+target/
+
+# eclipse ignore
+.settings/
+.project
+.classpath
+.factorypath
+
+.idea/
+
+# vs code
+.vscode/

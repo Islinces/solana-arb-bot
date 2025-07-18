@@ -1,0 +1,109 @@
+[package]
+name = "arb"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+authors = ["solana"]
+build = "build.rs"
+
+[features]
+print_slice_data = []
+log_file = []
+print_data_after_update = []
+monitor_grpc_delay = []
+
+[lib]
+doctest = false
+
+[profile.bench]
+debug = true
+opt-level = 3 # 启用优化
+
+[dependencies]
+tokio-stream = "0.1.17"
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "sync", "net", "macros"] }
+reqwest = { version = "0.12.15", features = ["json", "gzip", "brotli", "trust-dns"] }
+serde_json = "1.0.140"
+serde_json_diff = "0.2.0"
+serde_with = "3.12.0"
+#serde_valid = "1.0.5"
+serde = { version = "1.0.219", features = ["derive"] }
+anyhow = "1.0.96"
+#thiserror = "2.0.12"
+rand = "0.9.0"
+futures-util = "0.3.30"
+borsh = "1.5.7"
+#bincode = "2.0.1"
+bincode = "1.3.3"
+#base64-simd = "0.8.0"
+rayon = "1.10.0"
+chrono = "0.4.40"
+#url = "2.5.4"
+
+solana-sdk = "2.2.2"
+solana-rpc-client = "2.2.7"
+#solana-transaction-status = "2.2.7"
+#solana-rpc-client-nonce-utils = "2.2.7"
+solana-rpc-client-api = "2.2.7"
+#solana-account-decoder-client-types = "2.2.7"
+spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "8.0.1", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "6.0.0", features = ["no-entrypoint"] }
+yellowstone-grpc-client = "6.0.0"
+yellowstone-grpc-proto = "6.0.0"
+
+enum_dispatch = "0.3.13"
+
+num_cpus = "1.17.0"
+num_enum = "0.7.0"
+num-integer = "0.1.45"
+num-traits = "0.2.19"
+num-derive = "0.4.2"
+#async-channel = "2.3.1"
+async-trait = "0.1.88"
+#async-stream = "0.3.6"
+base64 = "0.22.1"
+base58 = "0.2.0"
+ruint = "1.3.0"
+uint = "0.9.5"
+bytemuck = { version = "^1.16", features = ["derive", "min_const_generics"] }
+clap = { version = "4.5.37", features = ["derive"] }
+ahash = "0.8.12"
+flume = "0.11.1"
+ethnum = { version = "~1.5.0" }
+
+parking_lot = "0.12.3"
+dashmap = "6.1.0"
+mimalloc = "0.1.46"
+
+# keypair
+rand_core = "0.6.4"
+argon2 = "0.5.3"
+aes-gcm = "0.10"
+rpassword = "7.4.0"
+# 日志
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-appender = "0.2.3"
+log = "0.4.27"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
+tempfile = "3.19.1"
+pretty_assertions = "1"
+
+[profile.release]
+opt-level = 3            # 最高优化
+lto = "fat"              # 全程序链接时优化
+codegen-units = 1        # 单线程生成代码，优化一致性
+panic = "abort"          # panic 时直接终止，提高速度
+incremental = false      # 禁用增量编译，确保完整优化
+debug = false            # 禁用调试信息
+strip = "symbols"        # 去除符号表，减小体积（需要 Rust 1.60
+
+
+[[bench]]
+name = "quote_bench"
+harness = false
+
+
